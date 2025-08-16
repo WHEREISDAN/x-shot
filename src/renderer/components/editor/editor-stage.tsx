@@ -1,0 +1,416 @@
+import React from 'react';
+import type { PresentationSettings } from '../../hooks/use-presentation-state';
+import { toCssGradient } from './gradient-presets';
+import type {
+  ArrowShape,
+  EllipseShape,
+  PenShape,
+  RectShape,
+  TextShape,
+  EditorShape,
+} from '../../hooks/use-editor-state';
+
+export function ArrowSvg({ a }: { a: ArrowShape }) {
+  const angle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+  const headLen = Math.max(8, a.strokeWidth * 4);
+  const hx1 = a.x2 - headLen * Math.cos(angle - Math.PI / 6);
+  const hy1 = a.y2 - headLen * Math.sin(angle - Math.PI / 6);
+  const hx2 = a.x2 - headLen * Math.cos(angle + Math.PI / 6);
+  const hy2 = a.y2 - headLen * Math.sin(angle + Math.PI / 6);
+  return (
+    <g>
+      <line
+        x1={a.x1}
+        y1={a.y1}
+        x2={a.x2}
+        y2={a.y2}
+        stroke={a.strokeColor}
+        strokeWidth={a.strokeWidth}
+        strokeLinecap="round"
+      />
+      <line
+        x1={a.x2}
+        y1={a.y2}
+        x2={hx1}
+        y2={hy1}
+        stroke={a.strokeColor}
+        strokeWidth={a.strokeWidth}
+        strokeLinecap="round"
+      />
+      <line
+        x1={a.x2}
+        y1={a.y2}
+        x2={hx2}
+        y2={hy2}
+        stroke={a.strokeColor}
+        strokeWidth={a.strokeWidth}
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+export function ShapeSvg({ shape }: { shape: EditorShape }) {
+  switch (shape.type) {
+    case 'pen':
+    case 'highlighter': {
+      const p = shape as PenShape;
+      const d = p.points
+        .map((pt, idx) => `${idx === 0 ? 'M' : 'L'}${pt.x},${pt.y}`)
+        .join(' ');
+      return (
+        <path
+          d={d}
+          fill="none"
+          stroke={p.strokeColor}
+          strokeWidth={p.strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={p.type === 'highlighter' ? (p.opacity ?? 0.4) : 1}
+        />
+      );
+    }
+    case 'rect': {
+      const r = shape as RectShape;
+      return (
+        <rect
+          x={Math.min(r.x, r.x + r.width)}
+          y={Math.min(r.y, r.y + r.height)}
+          width={Math.abs(r.width)}
+          height={Math.abs(r.height)}
+          fill={r.fillColor ?? 'transparent'}
+          fillOpacity={r.opacity ?? 1}
+          stroke={r.strokeColor}
+          strokeWidth={r.strokeWidth}
+          rx={r.radius ?? 0}
+          ry={r.radius ?? 0}
+        />
+      );
+    }
+    case 'ellipse': {
+      const el = shape as EllipseShape;
+      return (
+        <ellipse
+          cx={el.cx}
+          cy={el.cy}
+          rx={el.rx}
+          ry={el.ry}
+          fill={el.fillColor ?? 'transparent'}
+          fillOpacity={el.opacity ?? 1}
+          stroke={el.strokeColor}
+          strokeWidth={el.strokeWidth}
+        />
+      );
+    }
+    case 'arrow':
+      return <ArrowSvg a={shape as ArrowShape} />;
+    case 'text': {
+      const t = shape as TextShape;
+      const width = (t.text?.length ?? 1) * (t.fontSize * 0.6);
+      const height = t.fontSize * 1.2;
+      return (
+        <g>
+          <rect
+            x={t.x}
+            y={t.y}
+            width={Math.max(1, width)}
+            height={height}
+            fill="transparent"
+            stroke="transparent"
+            pointerEvents="all"
+          />
+          <text
+            x={t.x}
+            y={t.y}
+            fill={t.strokeColor}
+            fontSize={t.fontSize}
+            fontWeight={t.fontWeight ?? 600}
+            fontFamily={
+              t.fontFamily ?? '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto'
+            }
+            dominantBaseline="hanging"
+            pointerEvents="none"
+          >
+            {t.text}
+          </text>
+        </g>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+export interface EditorStageProps {
+  // Natural image dimensions for SVG viewBox
+  natural: { width: number; height: number };
+  // Whether presentation is disabled (no frame/inset/shadow)
+  presentationDisabled: boolean;
+  // Layout metrics when presentation is enabled
+  layout: {
+    frame: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      radius: number;
+    };
+    shot: { x: number; y: number; width: number; height: number };
+    canvas: { width: number; height: number };
+  };
+  // Stage transform
+  pan: { x: number; y: number };
+  viewScale: number;
+  // Visual settings
+  presentation: PresentationSettings;
+  screenshotUrl: string;
+  // Refs and events
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  imgRef: React.RefObject<HTMLImageElement | null>;
+  // eslint-disable-next-line react/require-default-props
+  exportStageRef?: React.RefObject<HTMLDivElement> | null; // Ref to the main stage element for dom-to-image export
+  onWheel: (e: React.WheelEvent) => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
+  onDoubleClick: (e: React.MouseEvent) => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  // Shapes layers
+  shapes: EditorShape[];
+  provisionalShape: EditorShape | null;
+  // OCR overlay
+  showOcrOverlay: boolean;
+  ocrBoxes: Array<{ x: number; y: number; width: number; height: number }>;
+  ocrKeyPrefix: string; // include textSelectLevel in key for stability
+  // Export mode state - when true, hide interactive elements during export
+  // eslint-disable-next-line react/require-default-props
+  isExporting?: boolean;
+  // Optional render prop to inject selection overlay inside the SVG
+  renderSelectionOverlay: (() => React.ReactNode) | undefined;
+}
+
+export function EditorStage({
+  natural,
+  presentationDisabled,
+  layout,
+  pan,
+  viewScale,
+  presentation,
+  screenshotUrl,
+  containerRef,
+  imgRef,
+  exportStageRef = null,
+  onWheel,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onDoubleClick,
+  onKeyDown,
+  onContextMenu,
+  shapes,
+  provisionalShape,
+  showOcrOverlay,
+  ocrBoxes,
+  ocrKeyPrefix,
+  isExporting = false,
+  renderSelectionOverlay,
+}: EditorStageProps) {
+  const canvasW = presentationDisabled ? natural.width : layout.canvas.width;
+  const canvasH = presentationDisabled ? natural.height : layout.canvas.height;
+
+  return (
+    <div
+      ref={containerRef}
+      onWheel={onWheel}
+      style={{
+        position: 'relative',
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+      }}
+    >
+      <div
+        ref={exportStageRef}
+        style={{
+          position: 'relative',
+          width: canvasW,
+          height: canvasH,
+          minWidth: canvasW,
+          minHeight: canvasH,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${viewScale})`,
+          transformOrigin: 'center center',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          background: presentationDisabled
+            ? 'transparent'
+            : toCssGradient(presentation.gradient, canvasW, canvasH),
+          backgroundSize: '100% 100%',
+          backgroundPosition: 'center',
+          borderRadius: presentationDisabled ? 0 : 24,
+        }}
+      >
+        {!presentationDisabled ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: layout.frame.x,
+              top: layout.frame.y,
+              width: layout.frame.width,
+              height: layout.frame.height,
+              borderRadius: layout.frame.radius,
+              boxShadow: presentation.shadow.enabled
+                ? `${presentation.shadow.x}px ${presentation.shadow.y}px ${presentation.shadow.blur}px ${presentation.shadow.spread}px ${presentation.shadow.color}`
+                : 'none',
+              background: presentation.borderColor,
+              overflow: 'hidden',
+            }}
+          >
+            {(() => {
+              const innerRadius = Math.max(
+                0,
+                Math.min(
+                  layout.frame.radius - presentation.inset,
+                  Math.min(layout.shot.width, layout.shot.height) / 2,
+                ),
+              );
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: layout.shot.x - layout.frame.x,
+                    top: layout.shot.y - layout.frame.y,
+                    width: layout.shot.width,
+                    height: layout.shot.height,
+                    borderRadius: innerRadius,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <img
+                    ref={imgRef}
+                    src={screenshotUrl}
+                    alt="Screenshot"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      background: '#0f0f10',
+                    }}
+                  />
+                  <svg
+                    width={layout.shot.width}
+                    height={layout.shot.height}
+                    viewBox={`0 0 ${natural.width} ${natural.height}`}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      pointerEvents: 'auto',
+                    }}
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onDoubleClick={onDoubleClick}
+                    onKeyDown={onKeyDown}
+                    onContextMenu={onContextMenu}
+                  >
+                    {shapes.map((shape) => (
+                      <g key={shape.id}>
+                        <ShapeSvg shape={shape} />
+                      </g>
+                    ))}
+                    {showOcrOverlay && !isExporting && (
+                      <g pointerEvents="none">
+                        {ocrBoxes.map((b) => (
+                          <rect
+                            key={`${ocrKeyPrefix}-${b.x}-${b.y}-${b.width}-${b.height}`}
+                            x={b.x}
+                            y={b.y}
+                            width={b.width}
+                            height={b.height}
+                            fill="transparent"
+                            stroke="rgba(255,255,255,0.35)"
+                            strokeDasharray="4 2"
+                            strokeWidth={1}
+                            rx={2}
+                          />
+                        ))}
+                      </g>
+                    )}
+                    {provisionalShape && <ShapeSvg shape={provisionalShape} />}
+                    {!isExporting && renderSelectionOverlay?.()}
+                  </svg>
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: natural.width,
+              height: natural.height,
+              overflow: 'hidden',
+            }}
+          >
+            <img
+              ref={imgRef}
+              src={screenshotUrl}
+              alt="Screenshot"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                background: '#0f0f10',
+              }}
+            />
+            <svg
+              width={natural.width}
+              height={natural.height}
+              viewBox={`0 0 ${natural.width} ${natural.height}`}
+              style={{ position: 'absolute', inset: 0, pointerEvents: 'auto' }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+            >
+              {shapes.map((shape) => (
+                <g key={shape.id}>
+                  <ShapeSvg shape={shape} />
+                </g>
+              ))}
+              {showOcrOverlay && !isExporting && (
+                <g pointerEvents="none">
+                  {ocrBoxes.map((b) => (
+                    <rect
+                      key={`${ocrKeyPrefix}-${b.x}-${b.y}-${b.width}-${b.height}`}
+                      x={b.x}
+                      y={b.y}
+                      width={b.width}
+                      height={b.height}
+                      fill="transparent"
+                      stroke="rgba(255,255,255,0.35)"
+                      strokeDasharray="4 2"
+                      strokeWidth={1}
+                      rx={2}
+                    />
+                  ))}
+                </g>
+              )}
+              {provisionalShape && <ShapeSvg shape={provisionalShape} />}
+              {!isExporting && renderSelectionOverlay?.()}
+            </svg>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

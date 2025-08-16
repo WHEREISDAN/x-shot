@@ -1,0 +1,185 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { recognize } from 'tesseract.js';
+
+export interface OcrBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface OcrWord {
+  text: string;
+  bbox: OcrBox;
+  confidence: number;
+}
+
+export interface OcrLine {
+  text: string;
+  bbox: OcrBox;
+}
+
+export interface OcrParagraph {
+  text: string;
+  bbox: OcrBox;
+}
+
+export type OcrStatus = 'idle' | 'running' | 'done' | 'error';
+
+const scannedOnce = new Set<string>();
+
+async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = dataUrl;
+  });
+}
+
+function scaleImageToCanvas(
+  img: HTMLImageElement,
+  maxDim: number,
+): { canvas: HTMLCanvasElement; scale: number } {
+  const { naturalWidth, naturalHeight } = img;
+  const maxInput = Math.max(naturalWidth, naturalHeight);
+  const scale = maxInput > maxDim ? maxDim / maxInput : 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(naturalHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2D context');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    img,
+    0,
+    0,
+    naturalWidth,
+    naturalHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  return { canvas, scale };
+}
+
+export interface UseTextDetectionResult {
+  status: OcrStatus;
+  error: string | null;
+  words: OcrWord[];
+  lines: OcrLine[];
+  paragraphs: OcrParagraph[];
+  run: () => Promise<void>;
+  hasRunOnce: boolean;
+}
+
+export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
+  const [status, setStatus] = useState<OcrStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [words, setWords] = useState<OcrWord[]>([]);
+  const [lines, setLines] = useState<OcrLine[]>([]);
+  const [paragraphs, setParagraphs] = useState<OcrParagraph[]>([]);
+  const hasRunOnce = useMemo(
+    () => scannedOnce.has(imageDataUrl),
+    [imageDataUrl],
+  );
+
+  // dantavious.w20@gmail.com
+
+  const run = useCallback(async () => {
+    if (!imageDataUrl) return;
+    setStatus('running');
+    setError(null);
+    try {
+      const img = await loadImage(imageDataUrl);
+      const { canvas, scale } = scaleImageToCanvas(img, 1600);
+      // Use recognize() with explicit CDN paths and fallback to avoid importScripts failures
+      const MAJOR = 'v5';
+      const primaryOpts = {
+        workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${MAJOR}/dist/worker.min.js`,
+        corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+        logger: () => {},
+      } as const;
+      const fallbackOpts = {
+        workerPath: `https://unpkg.com/tesseract.js@${MAJOR}/dist/worker.min.js`,
+        corePath: `https://unpkg.com/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
+        logger: () => {},
+      } as const;
+
+      let data;
+      try {
+        ({ data } = await recognize(canvas, 'eng', primaryOpts));
+      } catch {
+        ({ data } = await recognize(canvas, 'eng', fallbackOpts));
+      }
+
+      const invScale = scale > 0 ? 1 / scale : 1;
+      const toBox = (b: {
+        x0: number;
+        x1: number;
+        y0: number;
+        y1: number;
+      }): OcrBox => ({
+        x: Math.round(b.x0 * invScale),
+        y: Math.round(b.y0 * invScale),
+        width: Math.round((b.x1 - b.x0) * invScale),
+        height: Math.round((b.y1 - b.y0) * invScale),
+      });
+
+      const nextWords: OcrWord[] = (data.words || []).map((w) => ({
+        text: (w.text || '').trim(),
+        bbox: toBox(w.bbox),
+        confidence: Number(w.confidence ?? 0),
+      }));
+      const nextLines: OcrLine[] = (data.lines || []).map((l) => ({
+        text: (l.text || '').trim(),
+        bbox: toBox(l.bbox),
+      }));
+      const nextParagraphs: OcrParagraph[] = (data.paragraphs || []).map(
+        (p) => ({
+          text: (p.text || '').trim(),
+          bbox: toBox(p.bbox),
+        }),
+      );
+
+      setWords(nextWords);
+      setLines(nextLines);
+      setParagraphs(nextParagraphs);
+      scannedOnce.add(imageDataUrl);
+
+      setStatus('done');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus('error');
+    }
+  }, [imageDataUrl]);
+
+  useEffect(() => {
+    // Skip auto-run in test environments to keep Jest stable
+    if (
+      typeof process !== 'undefined' &&
+      process.env &&
+      process.env.NODE_ENV === 'test'
+    ) {
+      return;
+    }
+    // Require DOM & Worker availability
+    if (
+      typeof window === 'undefined' ||
+      typeof document === 'undefined' ||
+      typeof Worker === 'undefined'
+    ) {
+      return;
+    }
+    if (!scannedOnce.has(imageDataUrl)) {
+      // run once per image URL
+      run().catch(() => {});
+    }
+  }, [imageDataUrl, run]);
+
+  return { status, error, words, lines, paragraphs, run, hasRunOnce };
+}
