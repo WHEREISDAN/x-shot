@@ -52,7 +52,9 @@ export default function registerWindowIpcHandlers(): void {
   ipcMain.handle('get-window-state', async () => {
     return snapshotWindowState();
   });
+}
 
+export function setupWindowStateEvents(): void {
   const win = getMainWindow();
   if (!win) return;
 

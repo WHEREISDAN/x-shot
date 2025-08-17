@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import safeLocalStorage from '../utils/storage';
 
 export type AspectPreset =
@@ -81,21 +81,57 @@ export function usePresentationState(): [
     setBorderColor: (color: string) => void;
   },
 ] {
-  const [settings, setSettings] = useState<PresentationSettings>(() => {
-    const raw = safeLocalStorage.getItem('xshot:presentation');
-    if (raw) {
-      try {
-        return JSON.parse(raw) as PresentationSettings;
-      } catch (error) {
-        console.warn('Failed to parse stored presentation settings:', error);
-      }
-    }
-    return defaultSettings;
-  });
+  const [settings, setSettings] =
+    useState<PresentationSettings>(defaultSettings);
 
-  const save = useCallback((next: PresentationSettings) => {
+  // Load presentation settings from preferences
+  useEffect(() => {
+    const loadPresentationPreferences = async () => {
+      try {
+        const api = window?.electron?.ipcRenderer;
+        if (!api) {
+          // Fall back to localStorage for testing or if IPC not available
+          const raw = safeLocalStorage.getItem('xshot:presentation');
+          if (raw) {
+            const parsed = JSON.parse(raw) as PresentationSettings;
+            setSettings(parsed);
+          }
+          return;
+        }
+
+        const preferences = await api.invoke('get-preferences', {});
+        if (preferences?.presentation) {
+          setSettings(preferences.presentation);
+        }
+      } catch (error) {
+        console.warn('Failed to load presentation preferences:', error);
+      }
+    };
+
+    loadPresentationPreferences();
+  }, []);
+
+  const save = useCallback(async (next: PresentationSettings) => {
     setSettings(next);
-    safeLocalStorage.setItem('xshot:presentation', JSON.stringify(next));
+
+    try {
+      const api = window?.electron?.ipcRenderer;
+      if (!api) {
+        // Fall back to localStorage for testing
+        safeLocalStorage.setItem('xshot:presentation', JSON.stringify(next));
+        return;
+      }
+
+      await api.invoke('set-preferences', {
+        preferences: {
+          presentation: next,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to save presentation preferences:', error);
+      // Fall back to localStorage
+      safeLocalStorage.setItem('xshot:presentation', JSON.stringify(next));
+    }
   }, []);
 
   const actions = useMemo(

@@ -16,6 +16,7 @@ class AppUpdater {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let preferencesWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
 
 export function createMainWindow(): BrowserWindow {
@@ -220,3 +221,67 @@ export const showScreenshotOverlays = (): void => {
 };
 
 export const areOverlaysOpen = (): boolean => screenshotWindows.length > 0;
+
+export async function createPreferencesWindow(): Promise<BrowserWindow> {
+  // If preferences window already exists, show and focus it
+  if (preferencesWindow && !preferencesWindow.isDestroyed()) {
+    preferencesWindow.show();
+    preferencesWindow.focus();
+    return preferencesWindow;
+  }
+
+  const RESOURCES_PATH = getResourcesPath();
+  const getAssetPath = (...paths: string[]): string =>
+    path.join(RESOURCES_PATH, ...paths);
+
+  preferencesWindow = new BrowserWindow({
+    title: 'X-Shot Preferences',
+    width: 600,
+    height: 700,
+    minWidth: 500,
+    minHeight: 600,
+    show: false,
+    resizable: true,
+    icon: getAssetPath('icon.png'),
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    titleBarOverlay: {
+      color: '#111111',
+      symbolColor: '#ffffff',
+      height: 36,
+    },
+    webPreferences: {
+      preload: app.isPackaged
+        ? path.join(__dirname, 'preload.js')
+        : path.join(__dirname, '../../.erb/dll/preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  // Load the preferences route
+  const baseUrl = resolveHtmlPath('index.html');
+  const url = `${baseUrl}#/preferences`;
+  preferencesWindow.loadURL(url);
+
+  preferencesWindow.on('ready-to-show', () => {
+    if (!preferencesWindow) return;
+    preferencesWindow.show();
+    preferencesWindow.focus();
+  });
+
+  preferencesWindow.on('closed', () => {
+    preferencesWindow = null;
+  });
+
+  // Prevent external links from opening in preferences window
+  preferencesWindow.webContents.setWindowOpenHandler((edata) => {
+    shell.openExternal(edata.url);
+    return { action: 'deny' } as const;
+  });
+
+  return preferencesWindow;
+}
+
+export function getPreferencesWindow(): BrowserWindow | null {
+  return preferencesWindow;
+}

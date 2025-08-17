@@ -16,15 +16,22 @@ import {
   showScreenshotOverlays,
   areOverlaysOpen,
 } from './windows';
-import { createTray } from './tray';
+import { createTray, updateTrayVisibility } from './tray';
 import registerFileIpcHandlers from './ipc/files';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
-import registerWindowIpcHandlers from './ipc/window';
+import registerWindowIpcHandlers, {
+  setupWindowStateEvents,
+} from './ipc/window';
+import registerPreferencesIpcHandlers, {
+  setHotkeyChangeCallback,
+  setTrayVisibilityChangeCallback,
+} from './ipc/preferences';
 import {
   DEFAULT_SCREENSHOT_ACCELERATOR,
   registerScreenshotHotkey,
   unregisterAllHotkeys,
 } from './hotkeys';
+import { loadPreferences } from './preferences';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -41,7 +48,7 @@ app.on('window-all-closed', () => {
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
     const triggerScreenshot = async () => {
       const main = getMainWindow();
       if (main) main.hide();
@@ -49,16 +56,42 @@ app
       else await createScreenshotOverlays();
     };
 
-    createTray(getMainWindow, triggerScreenshot);
-    registerScreenshotHotkey(DEFAULT_SCREENSHOT_ACCELERATOR, triggerScreenshot);
-    createMainWindow();
+    // Register IPC handlers first
     registerFileIpcHandlers();
     registerScreenshotIpcHandlers();
     registerWindowIpcHandlers();
+    registerPreferencesIpcHandlers();
+
+    // Load preferences to get the correct settings
+    const preferences = await loadPreferences();
+
+    // Create tray only if enabled in preferences
+    if (preferences.system.showInTray) {
+      createTray(getMainWindow, triggerScreenshot);
+    }
+
+    const hotkey = preferences.capture.hotkey || DEFAULT_SCREENSHOT_ACCELERATOR;
+    registerScreenshotHotkey(hotkey, triggerScreenshot);
+
+    createMainWindow();
+
+    // Set up window state events after creating the main window
+    setupWindowStateEvents();
+
+    // Set up hotkey change callback
+    setHotkeyChangeCallback((newHotkey: string) => {
+      registerScreenshotHotkey(newHotkey, triggerScreenshot);
+    });
+
+    // Set up tray visibility change callback
+    setTrayVisibilityChangeCallback((show: boolean) => {
+      updateTrayVisibility(show, getMainWindow, triggerScreenshot);
+    });
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
       if (getMainWindow() === null) createMainWindow();
+      app.disableHardwareAcceleration();
     });
   })
   .catch(console.log);

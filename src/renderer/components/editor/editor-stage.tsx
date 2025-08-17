@@ -72,6 +72,66 @@ export function ShapeSvg({ shape }: { shape: EditorShape }) {
     }
     case 'rect': {
       const r = shape as RectShape;
+      // Check if this is a PII blur mask
+      const isPiiBlur = r.tag?.startsWith('pii-') && r.fillColor === '#808080';
+
+      if (isPiiBlur) {
+        // For PII blur masks, use CSS backdrop-filter with feathered edges
+        const featherSize = 6; // Consistent feather size
+
+        return (
+          <foreignObject
+            x={Math.min(r.x, r.x + r.width) - featherSize}
+            y={Math.min(r.y, r.y + r.height) - featherSize}
+            width={Math.abs(r.width) + featherSize * 2}
+            height={Math.abs(r.height) + featherSize * 2}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: `${featherSize}px`,
+                boxSizing: 'border-box',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backdropFilter: 'blur(15px) saturate(1.2)',
+                  WebkitBackdropFilter: 'blur(15px) saturate(1.2)',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  borderRadius: `${(r.radius ?? 0) + featherSize}px`,
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  boxShadow: `
+                    inset 0 0 20px rgba(255, 255, 255, 0.1),
+                    0 0 ${featherSize * 3}px rgba(255, 255, 255, 0.3)
+                  `,
+                  // CSS mask for feathered edges
+                  mask: `
+                    radial-gradient(
+                      ellipse 120% 120% at center,
+                      black 75%,
+                      transparent 100%
+                    )
+                  `,
+                  WebkitMask: `
+                    radial-gradient(
+                      ellipse 120% 120% at center,
+                      black 75%,
+                      transparent 100%
+                    )
+                  `,
+                  // Additional soft edge filter
+                  filter: 'blur(1px)',
+                }}
+              />
+            </div>
+          </foreignObject>
+        );
+      }
+
+      // Regular rectangle rendering
       return (
         <rect
           x={Math.min(r.x, r.x + r.width)}

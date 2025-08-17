@@ -2,6 +2,80 @@
 
 export type CaptureSourceType = 'window' | 'screen';
 
+// Preferences System Types
+export interface CapturePreferences {
+  hotkey: string;
+  defaultSaveLocation: string;
+  autoCopyToClipboard: boolean;
+  defaultFormat: 'png' | 'jpg';
+}
+
+export interface EditorPreferences {
+  defaultStrokeColor: string;
+  defaultFillColor: string;
+  defaultStrokeWidth: number;
+  defaultTextSize: number;
+}
+
+export interface ExportPreferences {
+  filenamePattern: string;
+  autoSave: boolean;
+  defaultScale: number;
+}
+
+export interface SystemPreferences {
+  launchAtStartup: boolean;
+  showInTray: boolean;
+}
+
+export interface PiiPreferences {
+  autoDetect: boolean;
+  defaultStyle: 'blur' | 'black';
+}
+
+// Import presentation types (will be migrated from use-presentation-state.ts)
+export interface PresentationSettings {
+  gradient: {
+    kind: 'linear' | 'radial';
+    angleDeg: number;
+    stops: Array<{ offset: number; color: string }>;
+  };
+  padding: number;
+  inset: number;
+  radius: number;
+  shadow: {
+    enabled: boolean;
+    x: number;
+    y: number;
+    blur: number;
+    spread: number;
+    color: string;
+  };
+  aspect: {
+    preset: 'auto' | '1:1' | '4:3' | '3:2' | '16:9' | '9:16' | 'custom';
+    custom?: { w: number; h: number };
+  };
+  exportScale: number;
+  borderColor: string;
+}
+
+export interface AppPreferences {
+  capture: CapturePreferences;
+  editor: EditorPreferences;
+  export: ExportPreferences;
+  system: SystemPreferences;
+  pii: PiiPreferences;
+  presentation: PresentationSettings;
+}
+
+export interface GetPreferencesRequest {
+  // Empty for now, could add specific keys later
+}
+
+export interface SetPreferencesRequest {
+  preferences: Partial<AppPreferences>;
+}
+
 export interface ListCaptureSourcesRequest {
   type?: CaptureSourceType;
 }
@@ -136,6 +210,26 @@ export interface IpcInvokes {
   'get-window-state': {
     req: undefined;
     res: WindowState;
+  };
+  'get-preferences': {
+    req: GetPreferencesRequest;
+    res: AppPreferences;
+  };
+  'set-preferences': {
+    req: SetPreferencesRequest;
+    res: boolean;
+  };
+  'open-preferences-window': {
+    req: undefined;
+    res: boolean;
+  };
+  'reset-preferences': {
+    req: undefined;
+    res: AppPreferences;
+  };
+  'select-folder': {
+    req: { defaultPath?: string };
+    res: { filePath: string | null; canceled: boolean };
   };
 }
 

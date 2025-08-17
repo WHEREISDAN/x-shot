@@ -10,6 +10,8 @@ import ScreenshotCapture from './ScreenshotCapture';
 import './App.css';
 import ScreenshotEditor from './components/editor/ScreenshotEditor';
 import TitleBar from './components/TitleBar';
+import PreferencesWindow from './components/preferences/PreferencesWindow';
+import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
 
 function Hello() {
   const [screenshotData, setScreenshotData] = useState<ScreenshotResult | null>(
@@ -17,11 +19,24 @@ function Hello() {
   );
 
   useEffect(() => {
+    // Run migration check on app load
+    checkAndMigrateIfNeeded();
+
     // Listen for screenshot data if bridge is available (not in tests)
     const api = window?.electron?.ipcRenderer;
     if (!api) return () => {};
-    const unsubscribe = api.on('screenshot-data', (data) => {
+    const unsubscribe = api.on('screenshot-data', async (data) => {
       setScreenshotData(data);
+
+      // Check if auto-copy is enabled and copy to clipboard
+      try {
+        const preferences = await api.invoke('get-preferences', {});
+        if (preferences?.capture?.autoCopyToClipboard && data.imageDataUrl) {
+          await api.invoke('copy-image', { dataUrl: data.imageDataUrl });
+        }
+      } catch (error) {
+        console.warn('Failed to auto-copy screenshot:', error);
+      }
     });
     return unsubscribe;
   }, []);
@@ -96,6 +111,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Hello />} />
           <Route path="/screenshot" element={<ScreenshotCapture />} />
+          <Route path="/preferences" element={<PreferencesWindow />} />
         </Routes>
       </Shell>
     </Router>

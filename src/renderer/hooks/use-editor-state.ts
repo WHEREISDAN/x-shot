@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 
 export type ToolType =
   | 'select'
@@ -207,6 +207,28 @@ export function useEditorState(): UseEditorStateResult {
   );
   const [undoStack, setUndoStack] = useState<EditorShape[][]>([]);
   const [redoStack, setRedoStack] = useState<EditorShape[][]>([]);
+
+  // Load editor preferences on initialization
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const api = window?.electron?.ipcRenderer;
+        if (!api) return;
+
+        const preferences = await api.invoke('get-preferences', {});
+        if (preferences?.editor) {
+          setStrokeColor(preferences.editor.defaultStrokeColor);
+          setFillColor(preferences.editor.defaultFillColor);
+          setStrokeWidth(preferences.editor.defaultStrokeWidth);
+          setTextSize(preferences.editor.defaultTextSize);
+        }
+      } catch (error) {
+        console.warn('Failed to load editor preferences:', error);
+      }
+    };
+
+    loadPreferences();
+  }, []);
 
   const snapshot = useCallback(
     (next: EditorShape[]) => {

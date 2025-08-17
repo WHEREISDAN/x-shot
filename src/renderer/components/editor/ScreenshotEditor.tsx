@@ -342,10 +342,12 @@ export default function ScreenshotEditor({
       });
       if (pii.censorPII && state.activeTool === 'rect') {
         const r = shape as RectShape;
-        r.fillColor = '#000000';
+        // Use defaultStyle preference for manual PII masking
+        const isBlur = pii.defaultStyle === 'blur';
+        r.fillColor = isBlur ? '#808080' : '#000000'; // Gray for blur effect, black for solid
         r.strokeColor = 'transparent';
-        r.opacity = 1;
-        r.radius = 2;
+        r.opacity = isBlur ? 0.8 : 1; // Semi-transparent for blur effect
+        r.radius = isBlur ? 4 : 2; // Larger radius for blur for softer appearance
         r.tag = 'pii-manual';
       }
       state.startProvisionalShape(shape);
@@ -359,6 +361,7 @@ export default function ScreenshotEditor({
       selectableItems,
       createRectForBox,
       pii.censorPII,
+      pii.defaultStyle,
     ],
   );
 

@@ -44,7 +44,7 @@ export default function TitleBar() {
       display: 'flex',
       alignItems: 'center',
       gap: 8,
-      paddingLeft: isMac ? 72 : 0,
+      paddingLeft: isMac ? 56 : 0,
       opacity: 0.9,
     }),
     [isMac],
@@ -70,7 +70,7 @@ export default function TitleBar() {
           height={16}
           style={{ filter: 'grayscale(100%) brightness(200%)', opacity: 0.8 }}
         />
-        <span style={{ fontSize: 12, fontWeight: 600 }}>X‑Shot</span>
+        {/* <span style={{ fontSize: 12, fontWeight: 600 }}>X‑Shot</span> */}
       </div>
       <div style={rightStyle}>
         {/* Intentionally empty: we use native caption buttons provided by titleBarOverlay */}

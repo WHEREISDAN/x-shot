@@ -52,6 +52,7 @@ interface UsePiiMaskingParams {
 interface UsePiiMaskingResult {
   censorPII: boolean;
   setCensorPII: (next: boolean) => void;
+  defaultStyle: 'blur' | 'black';
   recordManualMaskOnCommit: (
     shape: EditorShape,
     bounds: {
@@ -81,14 +82,53 @@ export function usePiiMasking(
     getBoundsForShape,
   } = editorApi;
 
-  // Toggle with persistence
-  const [censorPII, setCensorPII] = useState<boolean>(() => {
-    const stored = safeLocalStorage.getItem('censorPII');
-    return stored === '1';
-  });
+  // Toggle with persistence via preferences
+  const [censorPII, setCensorPII] = useState<boolean>(false);
+  const [defaultStyle, setDefaultStyle] = useState<'blur' | 'black'>('black');
+
+  // Load PII preferences
   useEffect(() => {
-    safeLocalStorage.setItem('censorPII', censorPII ? '1' : '0');
-  }, [censorPII]);
+    const loadPiiPreferences = async () => {
+      try {
+        const api = window?.electron?.ipcRenderer;
+        if (!api) return;
+
+        const preferences = await api.invoke('get-preferences', {});
+        if (preferences?.pii) {
+          setCensorPII(preferences.pii.autoDetect);
+          setDefaultStyle(preferences.pii.defaultStyle);
+        }
+      } catch (error) {
+        console.warn('Failed to load PII preferences:', error);
+      }
+    };
+
+    loadPiiPreferences();
+  }, []);
+
+  // Update preferences when censorPII changes
+  const updateCensorPII = useCallback(async (enabled: boolean) => {
+    setCensorPII(enabled);
+
+    try {
+      const api = window?.electron?.ipcRenderer;
+      if (!api) return;
+
+      // Get current preferences to preserve defaultStyle
+      const currentPrefs = await api.invoke('get-preferences', {});
+
+      await api.invoke('set-preferences', {
+        preferences: {
+          pii: {
+            autoDetect: enabled,
+            defaultStyle: currentPrefs?.pii?.defaultStyle || 'black',
+          },
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to save PII preferences:', error);
+    }
+  }, []);
 
   // Persisted per-screenshot masks
   const [piiMasks, setPiiMasks] = useState<PiiMaskRect[]>([]);
@@ -165,8 +205,53 @@ export function usePiiMasking(
   const applyMasks = useCallback(
     (masks: PiiMaskRect[]) => {
       if (!masks || masks.length === 0) return;
-      const shapesToAdd = masks.map((m) =>
-        createRectForBox(
+
+      // Determine style based on defaultStyle preference
+      const isBlur = defaultStyle === 'blur';
+      const fillColor = isBlur ? '#808080' : '#000000'; // Gray for blur effect, black for solid
+      const opacity = isBlur ? 0.8 : 1; // Semi-transparent for blur effect
+
+      const shapesToAdd = masks.map((m) => {
+        // For blur mode, expand the bounds to ensure full coverage
+        if (isBlur) {
+          const padding = Math.max(4, Math.min(m.width, m.height) * 0.15); // 15% padding or 4px minimum
+
+          // Calculate expanded bounds with padding
+          const expandedX = m.x - padding;
+          const expandedY = m.y - padding;
+          const expandedWidth = m.width + padding * 2;
+          const expandedHeight = m.height + padding;
+
+          // Clamp to image bounds to prevent overflow
+          const clampedX = Math.max(0, Math.round(expandedX));
+          const clampedY = Math.max(0, Math.round(expandedY));
+          const clampedWidth = Math.round(
+            Math.min(expandedWidth, screenshot.width - clampedX),
+          );
+          const clampedHeight = Math.round(
+            Math.min(expandedHeight, screenshot.height - clampedY),
+          );
+
+          return createRectForBox(
+            {
+              x: clampedX,
+              y: clampedY,
+              width: clampedWidth,
+              height: clampedHeight,
+            },
+            {
+              fillColor,
+              strokeColor: 'transparent',
+              strokeWidth: 0,
+              opacity,
+              radius: 4, // Slightly larger radius for blur
+              tag: m.tag,
+            },
+          );
+        }
+
+        // For black mode, use exact bounds
+        return createRectForBox(
           {
             x: Math.round(m.x),
             y: Math.round(m.y),
@@ -174,22 +259,22 @@ export function usePiiMasking(
             height: Math.round(m.height),
           },
           {
-            fillColor: '#000000',
+            fillColor,
             strokeColor: 'transparent',
             strokeWidth: 0,
-            opacity: 1,
+            opacity,
             radius: 2,
             tag: m.tag,
           },
-        ),
-      );
+        );
+      });
       const ids = addShapesRef.current(shapesToAdd);
       autoCensorIdsRef.current = ids;
       piiMaskIdsRef.current.clear();
       ids.forEach((id, idx) => piiMaskIdsRef.current.set(id, idx));
       censorAppliedRef.current = true;
     },
-    [createRectForBox],
+    [createRectForBox, defaultStyle, screenshot.width, screenshot.height],
   );
 
   // Compute masks from OCR and auto-apply when enabled
@@ -434,9 +519,13 @@ export function usePiiMasking(
     applyMasks(masks);
   }, [status, words, lines, censorPII, applyMasks, removeAllTagged, ocr.lines]);
 
-  // Reset applied flag if screenshot changes
+  // Reset all PII state if screenshot changes
   useEffect(() => {
     censorAppliedRef.current = false;
+    piiMasksRef.current = [];
+    piiMaskIdsRef.current.clear();
+    autoCensorIdsRef.current = [];
+    setPiiMasks([]);
   }, [screenshot.imageDataUrl]);
 
   // Public helpers for editor interactions
@@ -536,7 +625,8 @@ export function usePiiMasking(
 
   return {
     censorPII,
-    setCensorPII,
+    setCensorPII: updateCensorPII,
+    defaultStyle,
     recordManualMaskOnCommit,
     updateMaskForShape,
     syncDraggedMaskBounds,
