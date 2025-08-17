@@ -16,7 +16,7 @@ import {
   showScreenshotOverlays,
   areOverlaysOpen,
 } from './windows';
-import { createTray, updateTrayVisibility } from './tray';
+import { createTray, updateTrayVisibility, isTrayVisible } from './tray';
 import registerFileIpcHandlers from './ipc/files';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
 import registerWindowIpcHandlers, {
@@ -39,9 +39,11 @@ ipcMain.on('ipc-example', async (event, arg) => {
   event.reply('ipc-example', msgTemplate('pong'));
 });
 app.on('window-all-closed', () => {
-  // Respect the OSX convention of having the application in memory even
-  // after all windows have been closed
-  app.quit();
+  // Only quit if tray is not visible
+  // When tray is visible, keep app running for both Windows and macOS
+  if (!isTrayVisible()) {
+    app.quit();
+  }
 });
 
 app
