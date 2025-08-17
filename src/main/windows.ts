@@ -100,7 +100,7 @@ export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
 
 export const enableScreenSaverMode = (): void => {
   if (!mainWindow) return;
-  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 };
 
@@ -187,7 +187,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
 
     overlay.once('ready-to-show', () => {
       console.log('✅ Screenshot overlay ready on display', display.id);
-      overlay.setAlwaysOnTop(true, 'screen-saver');
+      overlay.setAlwaysOnTop(true, 'floating');
       // Enter full screen so the overlay covers menu bar/taskbar
       try {
         if (process.platform === 'darwin') overlay.setSimpleFullScreen(true);
@@ -216,7 +216,7 @@ export const showScreenshotOverlays = (): void => {
   enableScreenSaverMode();
   screenshotWindows.forEach((w) => {
     try {
-      w.setAlwaysOnTop(true, 'screen-saver');
+      w.setAlwaysOnTop(true, 'floating');
       w.showInactive();
     } catch {
       // ignore
