@@ -27,9 +27,9 @@ export function createMainWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     show: false,
     width: 1425,
-    height: 930,
+    height: 980,
     icon: getAssetPath('icon.png'),
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: '#111111',
       symbolColor: '#ffffff',
@@ -243,7 +243,7 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
     show: false,
     resizable: true,
     icon: getAssetPath('icon.png'),
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: '#111111',
       symbolColor: '#ffffff',
