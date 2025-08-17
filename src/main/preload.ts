@@ -30,10 +30,10 @@ const electronHandler = {
         _event: IpcRendererEvent,
         payload: MainToRendererEvents[K],
       ) => func(payload);
-      ipcRenderer.on(channel as string, subscription as any);
+      ipcRenderer.on(channel as string, subscription);
 
       return () => {
-        ipcRenderer.removeListener(channel as string, subscription as any);
+        ipcRenderer.removeListener(channel as string, subscription);
       };
     },
     once<K extends keyof MainToRendererEvents>(channel: K, func: Listener<K>) {
@@ -64,9 +64,8 @@ const electronHandler = {
     onState(listener: (state: WindowState) => void): () => void {
       const subscription = (_e: IpcRendererEvent, payload: WindowState) =>
         listener(payload);
-      ipcRenderer.on('window-state', subscription as any);
-      return () =>
-        ipcRenderer.removeListener('window-state', subscription as any);
+      ipcRenderer.on('window-state', subscription);
+      return () => ipcRenderer.removeListener('window-state', subscription);
     },
   },
 };

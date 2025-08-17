@@ -54,12 +54,15 @@ function ScreenshotCapture() {
           'get-display-snapshot',
           { displayId },
         );
-        if (!cancelled && res && typeof (res as any).dataUrl === 'string') {
-          const r = res as { dataUrl: string; width: number; height: number };
-          setBackground({ url: r.dataUrl, width: r.width, height: r.height });
+        if (!cancelled && res) {
+          setBackground({
+            url: res.dataUrl,
+            width: res.width,
+            height: res.height,
+          });
         }
-      } catch {
-        // noop
+      } catch (error) {
+        console.warn('Failed to get display snapshot:', error);
       }
     };
     run();
@@ -82,7 +85,8 @@ function ScreenshotCapture() {
         );
         if (Array.isArray(sources))
           setWindowSources(sources as WindowSourceItem[]);
-      } catch {
+      } catch (error) {
+        console.warn('Failed to load window sources:', error);
         setWindowSources([]);
       }
     }
@@ -102,7 +106,8 @@ function ScreenshotCapture() {
         );
         if (Array.isArray(sources))
           setScreenSources(sources as ScreenSourceItem[]);
-      } catch {
+      } catch (error) {
+        console.warn('Failed to load screen sources:', error);
         setScreenSources([]);
       }
     }

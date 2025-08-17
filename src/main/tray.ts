@@ -1,14 +1,9 @@
 import path from 'path';
 import { app, BrowserWindow, Menu, Tray } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
+import getResourcesPath from '../shared/utils';
 
 let tray: Tray | null = null;
-
-function getResourcesPath(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-}
 
 export default function createTray(
   mainWindowGetter: () => BrowserWindow | null,

@@ -5,6 +5,7 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import getResourcesPath from '../shared/utils';
 
 class AppUpdater {
   constructor() {
@@ -16,12 +17,6 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
-
-function getResourcesPath(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-}
 
 export function createMainWindow(): BrowserWindow {
   const RESOURCES_PATH = getResourcesPath();
@@ -115,8 +110,8 @@ export const closeScreenshotOverlays = (): void => {
     screenshotWindows.forEach((w) => {
       try {
         w.close();
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('Failed to close screenshot window:', error);
       }
     });
     screenshotWindows = [];
@@ -135,8 +130,8 @@ export const createScreenshotOverlays = async (): Promise<void> => {
     screenshotWindows.forEach((w) => {
       try {
         w.close();
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('Failed to close screenshot window:', error);
       }
     });
     screenshotWindows = [];
@@ -192,8 +187,8 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       try {
         if (process.platform === 'darwin') overlay.setSimpleFullScreen(true);
         else overlay.setFullScreen(true);
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('Failed to set fullscreen on screenshot overlay:', error);
       }
       if (display.id === focusedDisplay.id) {
         overlay.show();
@@ -218,8 +213,8 @@ export const showScreenshotOverlays = (): void => {
     try {
       w.setAlwaysOnTop(true, 'floating');
       w.showInactive();
-    } catch {
-      // ignore
+    } catch (error) {
+      console.warn('Failed to show screenshot overlay window:', error);
     }
   });
 };

@@ -1,5 +1,8 @@
 import React from 'react';
-import type { PresentationSettings } from '../../hooks/use-presentation-state';
+import type {
+  PresentationSettings,
+  AspectPreset,
+} from '../../hooks/use-presentation-state';
 import { presets, toCssGradient } from './gradient-presets';
 import { GlassPanel, Input, Select } from '../../design-system';
 import {
@@ -312,7 +315,9 @@ export default function PresentationPanel({
               size="sm"
               variant="filled"
               value={settings.aspect.preset}
-              onChange={(e) => onChange.setAspectPreset(e.target.value as any)}
+              onChange={(e) =>
+                onChange.setAspectPreset(e.target.value as AspectPreset)
+              }
               options={aspectPresets}
               fullWidth
             />

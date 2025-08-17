@@ -6,6 +6,7 @@ import type {
   OcrStatus,
   OcrWord,
 } from './use-text-detection';
+import safeLocalStorage from '../utils/storage';
 
 export interface PiiMaskRect {
   x: number;
@@ -82,18 +83,11 @@ export function usePiiMasking(
 
   // Toggle with persistence
   const [censorPII, setCensorPII] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('censorPII') === '1';
-    } catch {
-      return false;
-    }
+    const stored = safeLocalStorage.getItem('censorPII');
+    return stored === '1';
   });
   useEffect(() => {
-    try {
-      localStorage.setItem('censorPII', censorPII ? '1' : '0');
-    } catch {
-      // ignore
-    }
+    safeLocalStorage.setItem('censorPII', censorPII ? '1' : '0');
   }, [censorPII]);
 
   // Persisted per-screenshot masks
@@ -120,22 +114,18 @@ export function usePiiMasking(
   }, [screenshot.imageDataUrl, screenshot.width, screenshot.height]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(piiStorageKey);
-      if (raw) {
+    const raw = safeLocalStorage.getItem(piiStorageKey);
+    if (raw) {
+      try {
         const parsed = JSON.parse(raw) as PiiMaskRect[];
         if (Array.isArray(parsed)) setPiiMasks(parsed);
+      } catch (error) {
+        console.warn('Failed to parse stored PII masks:', error);
       }
-    } catch {
-      // ignore
     }
   }, [piiStorageKey]);
   useEffect(() => {
-    try {
-      localStorage.setItem(piiStorageKey, JSON.stringify(piiMasks));
-    } catch {
-      // ignore
-    }
+    safeLocalStorage.setItem(piiStorageKey, JSON.stringify(piiMasks));
   }, [piiStorageKey, piiMasks]);
 
   // Keep refs to editor actions to avoid stale closures
@@ -156,7 +146,7 @@ export function usePiiMasking(
   const removeAllTagged = useCallback(() => {
     const taggedIds = shapesRef.current
       .filter((s) => {
-        const t = (s as any).tag as string | undefined;
+        const t = s.tag;
         return (
           t === 'pii-email' ||
           t === 'pii-phone' ||
@@ -455,7 +445,7 @@ export function usePiiMasking(
       shape: EditorShape,
       bounds: { x: number; y: number; width: number; height: number },
     ) => {
-      const tag = (shape as any)?.tag as string | undefined;
+      const { tag } = shape;
       if (!tag || !tag.startsWith('pii-')) return;
       const shapeId = shape.id;
       setPiiMasks((prev) => {
@@ -502,7 +492,7 @@ export function usePiiMasking(
   const syncDraggedMaskBounds = useCallback(
     (shapeId: string) => {
       const shape = getShapeById(shapeId);
-      const tag = (shape as any)?.tag as string | undefined;
+      const { tag } = shape;
       if (!shape || !tag || !tag.startsWith('pii-')) return;
       const b = getBoundsForShape(shape);
       const idx = piiMaskIdsRef.current.get(shapeId);
@@ -526,7 +516,7 @@ export function usePiiMasking(
   const deletePiiForShapeId = useCallback(
     (shapeId: string) => {
       const shape = getShapeById(shapeId);
-      const tag = (shape as any)?.tag as string | undefined;
+      const { tag } = shape;
       if (!shape || !tag || !tag.startsWith('pii-')) return;
       const idx = piiMaskIdsRef.current.get(shapeId);
       if (idx === undefined) return;

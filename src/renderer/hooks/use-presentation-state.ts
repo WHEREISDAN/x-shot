@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import safeLocalStorage from '../utils/storage';
 
 export type AspectPreset =
   | 'auto'
@@ -81,22 +82,20 @@ export function usePresentationState(): [
   },
 ] {
   const [settings, setSettings] = useState<PresentationSettings>(() => {
-    try {
-      const raw = localStorage.getItem('xshot:presentation');
-      if (raw) return JSON.parse(raw) as PresentationSettings;
-    } catch {
-      // ignore storage read errors
+    const raw = safeLocalStorage.getItem('xshot:presentation');
+    if (raw) {
+      try {
+        return JSON.parse(raw) as PresentationSettings;
+      } catch (error) {
+        console.warn('Failed to parse stored presentation settings:', error);
+      }
     }
     return defaultSettings;
   });
 
   const save = useCallback((next: PresentationSettings) => {
     setSettings(next);
-    try {
-      localStorage.setItem('xshot:presentation', JSON.stringify(next));
-    } catch {
-      // ignore storage write errors
-    }
+    safeLocalStorage.setItem('xshot:presentation', JSON.stringify(next));
   }, []);
 
   const actions = useMemo(

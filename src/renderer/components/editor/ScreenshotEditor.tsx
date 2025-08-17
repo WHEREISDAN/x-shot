@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import React, {
   RefObject,
   useCallback,
@@ -25,14 +24,11 @@ import { getBoundsForShape, hitTestPoint } from './editor-geometry';
 import { EditorStage } from './editor-stage';
 import { usePresentationState } from '../../hooks/use-presentation-state';
 import { computeLayout } from './compute-presentation-layout';
-  import { useEditorShortcuts } from '../../hooks/use-editor-shortcuts';
-  import { useExportGlue } from '../../hooks/use-export-glue';
-  import TextEditOverlay from './TextEditOverlay';
-//
+import { useEditorShortcuts } from '../../hooks/use-editor-shortcuts';
+import { useExportGlue } from '../../hooks/use-export-glue';
+import TextEditOverlay from './TextEditOverlay';
 import { useTextDetection } from '../../hooks/use-text-detection';
 import { usePiiMasking } from '../../hooks/use-pii-masking';
-
-// ToolButton and ColorSwatch moved to './editor-tools'
 
 interface ScreenshotEditorProps {
   screenshot: ScreenshotResult;
@@ -67,7 +63,8 @@ export default function ScreenshotEditor({
     () => computeLayout(natural.width, natural.height, presentation),
     [natural.width, natural.height, presentation],
   );
-  const presentationDisabled = presentation.padding === 0 && presentation.inset === 0;
+  const presentationDisabled =
+    presentation.padding === 0 && presentation.inset === 0;
   const canvasW = presentationDisabled ? natural.width : layout.canvas.width;
   const canvasH = presentationDisabled ? natural.height : layout.canvas.height;
   const shotX = presentationDisabled ? 0 : layout.shot.x;
@@ -106,9 +103,6 @@ export default function ScreenshotEditor({
     return () => window.removeEventListener('resize', updateFit);
   }, [canvasW, canvasH, presentationDisabled]);
 
-
-  // dantavious.w20@gmail.com
-
   const toImageCoords = useCallback(
     (clientX: number, clientY: number) => {
       const bounds = containerRef.current?.getBoundingClientRect();
@@ -124,10 +118,7 @@ export default function ScreenshotEditor({
       // Map from layout coordinates to natural image coordinates
       const x = Math.max(
         0,
-        Math.min(
-          natural.width,
-          (layoutX / Math.max(1, shotW)) * natural.width,
-        ),
+        Math.min(natural.width, (layoutX / Math.max(1, shotW)) * natural.width),
       );
       const y = Math.max(
         0,
@@ -161,17 +152,15 @@ export default function ScreenshotEditor({
   const [resizeHandle, setResizeHandle] = useState<
     'nw' | 'ne' | 'sw' | 'se' | null
   >(null);
-  const resizeStartRef = useRef<
-    | null
-    | {
-        left: number;
-        top: number;
-        right: number;
-        bottom: number;
-        shapeId: string;
-        handle: 'nw' | 'ne' | 'sw' | 'se';
-      }
-  >(null);
+  type ResizeStartData = {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    shapeId: string;
+    handle: 'nw' | 'ne' | 'sw' | 'se';
+  };
+  const resizeStartRef = useRef<ResizeStartData | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const panLast = useRef<{ x: number; y: number } | null>(null);
   const [editingText, setEditingText] = useState<null | {
@@ -203,17 +192,20 @@ export default function ScreenshotEditor({
       r.height = box.height;
       if (typeof options.opacity === 'number') r.opacity = options.opacity;
       if (typeof options.radius === 'number') r.radius = options.radius;
-      if (options.tag) (r as any).tag = options.tag;
+      if (options.tag) r.tag = options.tag;
       return r;
     },
     [],
   );
-  const { status: ocrStatus, words, lines, paragraphs } = useTextDetection(
-    screenshot.imageDataUrl,
-  );
-  const [textSelectLevel, setTextSelectLevel] = useState<'word' | 'line' | 'paragraph'>(
-    'word',
-  );
+  const {
+    status: ocrStatus,
+    words,
+    lines,
+    paragraphs,
+  } = useTextDetection(screenshot.imageDataUrl);
+  const [textSelectLevel, setTextSelectLevel] = useState<
+    'word' | 'line' | 'paragraph'
+  >('word');
   const pii = usePiiMasking({
     screenshot,
     ocr: { status: ocrStatus, words, lines, paragraphs },
@@ -256,7 +248,8 @@ export default function ScreenshotEditor({
     onRedo: state.redo,
     onDeleteSelected: deleteSelectedShapePiiAware,
     onEscape: () => state.selectShape(null),
-    setZoom: (updater) => setZoom(typeof updater === 'number' ? updater : updater(zoom)),
+    setZoom: (updater) =>
+      setZoom(typeof updater === 'number' ? updater : updater(zoom)),
     resetView: () => setZoom(1),
     setPan: (p) => setPan(p),
   });
@@ -273,13 +266,20 @@ export default function ScreenshotEditor({
       // Text selection tool: click to add highlight over word/line/paragraph
       if (state.activeTool === 'text-select' && e.button === 0) {
         const { x, y } = toImageCoords(e.clientX, e.clientY);
-        const contains = (b: { x: number; y: number; width: number; height: number }) =>
-          x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height;
+        const contains = (b: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }) => x >= b.x && y >= b.y && x <= b.x + b.width && y <= b.y + b.height;
         const pool = selectableItems;
         const hit = pool.find((item) => contains(item.bbox));
-        const box: { x: number; y: number; width: number; height: number } | null = hit
-          ? hit.bbox
-          : null;
+        const box: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        } | null = hit ? hit.bbox : null;
         if (box) {
           const highlight = createRectForBox(box, {
             fillColor: '#f59e0b',
@@ -346,12 +346,20 @@ export default function ScreenshotEditor({
         r.strokeColor = 'transparent';
         r.opacity = 1;
         r.radius = 2;
-        (r as any).tag = 'pii-manual';
+        r.tag = 'pii-manual';
       }
       state.startProvisionalShape(shape);
       setIsPointerDown(true);
     },
-    [state, toImageCoords, hitTest, isSpacePressed, selectableItems, createRectForBox, pii.censorPII],
+    [
+      state,
+      toImageCoords,
+      hitTest,
+      isSpacePressed,
+      selectableItems,
+      createRectForBox,
+      pii.censorPII,
+    ],
   );
 
   const onPointerMove = useCallback(
@@ -393,7 +401,12 @@ export default function ScreenshotEditor({
           const r = s as RectShape;
           return { ...r, x: nx, y: ny, width: nw, height: nh } as RectShape;
         });
-        pii.updateMaskForShape(start.shapeId, { x: nx, y: ny, width: nw, height: nh });
+        pii.updateMaskForShape(start.shapeId, {
+          x: nx,
+          y: ny,
+          width: nw,
+          height: nh,
+        });
         return;
       }
       if (isDragging && dragLastPos.current && state.selectedShapeId) {
@@ -431,7 +444,18 @@ export default function ScreenshotEditor({
         }
       });
     },
-    [isPointerDown, isDragging, state, toImageCoords, isPanning, isResizing, resizeHandle, natural.width, natural.height, pii],
+    [
+      isPointerDown,
+      isDragging,
+      state,
+      toImageCoords,
+      isPanning,
+      isResizing,
+      resizeHandle,
+      natural.width,
+      natural.height,
+      pii,
+    ],
   );
 
   const onPointerUp = useCallback(() => {
@@ -461,14 +485,22 @@ export default function ScreenshotEditor({
     setIsPointerDown(false);
     if (state.provisionalShape) {
       const s = state.provisionalShape as EditorShape;
-      const tag = (s as any)?.tag as string | undefined;
+      const { tag } = s;
       const bounds = getBoundsForShapeMemo(s);
       state.commitProvisionalShape();
       if (tag && tag.startsWith('pii-')) {
         pii.recordManualMaskOnCommit(s, bounds);
       }
     }
-  }, [isPointerDown, isDragging, isPanning, state, getBoundsForShapeMemo, isResizing, pii]);
+  }, [
+    isPointerDown,
+    isDragging,
+    isPanning,
+    state,
+    getBoundsForShapeMemo,
+    isResizing,
+    pii,
+  ]);
 
   // Wheel: zoom with cmd/ctrl, otherwise pan
   const onWheel = useCallback(
@@ -492,10 +524,8 @@ export default function ScreenshotEditor({
         const imgY = (e.clientY - stageTopLeftPrevY) / prevScale;
         const stageTopLeftNextX = e.clientX - imgX * nextScale;
         const stageTopLeftNextY = e.clientY - imgY * nextScale;
-        const panX =
-          stageTopLeftNextX - (centerX - (canvasW * nextScale) / 2);
-        const panY =
-          stageTopLeftNextY - (centerY - (canvasH * nextScale) / 2);
+        const panX = stageTopLeftNextX - (centerX - (canvasW * nextScale) / 2);
+        const panY = stageTopLeftNextY - (centerY - (canvasH * nextScale) / 2);
         setZoom(nextZoom);
         setPan({ x: panX, y: panY });
       } else {
@@ -509,7 +539,6 @@ export default function ScreenshotEditor({
     },
     [fitScale, canvasW, canvasH, pan.x, pan.y, viewScale, zoom],
   );
-
 
   const handleCopy = useCallback(async () => {
     const url = await exportDataUrl();
@@ -547,7 +576,11 @@ export default function ScreenshotEditor({
       <EditorStage
         natural={{ width: natural.width, height: natural.height }}
         presentationDisabled={presentationDisabled}
-        layout={{ frame: layout.frame, shot: layout.shot, canvas: layout.canvas }}
+        layout={{
+          frame: layout.frame,
+          shot: layout.shot,
+          canvas: layout.canvas,
+        }}
         pan={pan}
         viewScale={viewScale}
         presentation={presentation}
@@ -582,7 +615,9 @@ export default function ScreenshotEditor({
         }}
         shapes={state.shapes}
         provisionalShape={state.provisionalShape as EditorShape | null}
-        showOcrOverlay={state.activeTool === 'text-select' && ocrStatus === 'done'}
+        showOcrOverlay={
+          state.activeTool === 'text-select' && ocrStatus === 'done'
+        }
         ocrBoxes={selectableItems.map((it) => it.bbox)}
         ocrKeyPrefix={`ocr-${textSelectLevel}`}
         renderSelectionOverlay={() => {
@@ -626,7 +661,7 @@ export default function ScreenshotEditor({
                     bottom: b.y + b.height,
                     shapeId: state.selectedShapeId,
                     handle: 'nw',
-                  } as any;
+                  };
                 }}
               />
               {/* NE */}
@@ -651,7 +686,7 @@ export default function ScreenshotEditor({
                     bottom: b.y + b.height,
                     shapeId: state.selectedShapeId,
                     handle: 'ne',
-                  } as any;
+                  };
                 }}
               />
               {/* SW */}
@@ -676,7 +711,7 @@ export default function ScreenshotEditor({
                     bottom: b.y + b.height,
                     shapeId: state.selectedShapeId,
                     handle: 'sw',
-                  } as any;
+                  };
                 }}
               />
               {/* SE */}
@@ -701,7 +736,7 @@ export default function ScreenshotEditor({
                     bottom: b.y + b.height,
                     shapeId: state.selectedShapeId,
                     handle: 'se',
-                  } as any;
+                  };
                 }}
               />
               {/* Inline delete button */}
