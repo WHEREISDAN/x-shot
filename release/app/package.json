@@ -1,12 +1,12 @@
 {
-  "name": "electron-react-boilerplate",
-  "version": "4.6.0",
-  "description": "A foundation for scalable desktop apps",
+  "name": "X-Shot",
+  "version": "1.0.0",
+  "description": "A tool for taking screenshots with advanced customization",
   "license": "MIT",
   "author": {
-    "name": "Electron React Boilerplate Maintainers",
-    "email": "electronreactboilerplate@gmail.com",
-    "url": "https://github.com/electron-react-boilerplate"
+    "name": "WHEREISDAN",
+    "email": "dan@whereisdan.dev",
+    "url": "https://github.com/WHEREISDAN"
   },
   "main": "./dist/main/main.js",
   "scripts": {
