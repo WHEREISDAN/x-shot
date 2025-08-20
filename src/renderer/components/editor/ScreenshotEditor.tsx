@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  memo,
 } from 'react';
 import type { ScreenshotResult } from '../../../shared/ipc-types';
 import {
@@ -37,7 +38,7 @@ interface ScreenshotEditorProps {
   onSave: (dataUrl: string) => Promise<void>;
 }
 
-export default function ScreenshotEditor({
+const ScreenshotEditor = memo(function ScreenshotEditor({
   screenshot,
   onDelete,
   onCopy,
@@ -74,7 +75,7 @@ export default function ScreenshotEditor({
 
   // Export/presentation scaling glue
   const { exportDataUrl } = useExportGlue({
-    stageRef: exportStageRef,
+    stageRef: exportStageRef as React.RefObject<HTMLElement>,
     natural: { width: natural.width, height: natural.height },
     shapes: state.shapes,
     presentation,
@@ -590,7 +591,7 @@ export default function ScreenshotEditor({
         screenshotUrl={screenshot.imageDataUrl}
         containerRef={containerRef}
         imgRef={imgRef}
-        exportStageRef={exportStageRef}
+        exportStageRef={exportStageRef as React.RefObject<HTMLDivElement>}
         isExporting={isExporting}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
@@ -805,4 +806,6 @@ export default function ScreenshotEditor({
       />
     </div>
   );
-}
+});
+
+export default ScreenshotEditor;

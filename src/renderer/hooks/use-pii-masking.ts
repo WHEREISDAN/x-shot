@@ -581,8 +581,9 @@ export function usePiiMasking(
   const syncDraggedMaskBounds = useCallback(
     (shapeId: string) => {
       const shape = getShapeById(shapeId);
+      if (!shape) return;
       const { tag } = shape;
-      if (!shape || !tag || !tag.startsWith('pii-')) return;
+      if (!tag || !tag.startsWith('pii-')) return;
       const b = getBoundsForShape(shape);
       const idx = piiMaskIdsRef.current.get(shapeId);
       if (idx === undefined) return;
@@ -605,8 +606,9 @@ export function usePiiMasking(
   const deletePiiForShapeId = useCallback(
     (shapeId: string) => {
       const shape = getShapeById(shapeId);
+      if (!shape) return;
       const { tag } = shape;
-      if (!shape || !tag || !tag.startsWith('pii-')) return;
+      if (!tag || !tag.startsWith('pii-')) return;
       const idx = piiMaskIdsRef.current.get(shapeId);
       if (idx === undefined) return;
       setPiiMasks((prev) => {

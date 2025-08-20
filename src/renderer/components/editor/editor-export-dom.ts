@@ -30,13 +30,34 @@ export async function exportDomToDataUrl({
     throw new Error('Element has zero dimensions - cannot export');
   }
 
+  // Calculate memory usage and apply limits
+  const width = element.offsetWidth * scale;
+  const height = element.offsetHeight * scale;
+  const estimatedMemoryMB = (width * height * 4) / (1024 * 1024);
+
+  // Prevent excessive memory usage
+  const MAX_EXPORT_MEMORY_MB = 500; // 500MB limit
+  let finalScale = scale;
+  if (estimatedMemoryMB > MAX_EXPORT_MEMORY_MB) {
+    const maxScale = Math.sqrt(
+      MAX_EXPORT_MEMORY_MB / ((width * height * 4) / (1024 * 1024)),
+    );
+    finalScale = Math.min(scale, maxScale);
+    console.warn(
+      `Export scale reduced from ${scale} to ${finalScale.toFixed(2)} to limit memory usage`,
+    );
+  }
+
   const options: any = {
-    width: element.offsetWidth * scale,
-    height: element.offsetHeight * scale,
+    width: element.offsetWidth * finalScale,
+    height: element.offsetHeight * finalScale,
     style: {
-      transform: `scale(${scale})`,
+      transform: `scale(${finalScale})`,
       transformOrigin: 'top left',
     },
+    // Enable memory optimizations
+    quality: 0.92, // Slightly reduce quality for better compression
+    cacheBust: true, // Prevent caching issues
   };
 
   // Add background color if specified and not transparent
@@ -50,7 +71,13 @@ export async function exportDomToDataUrl({
   }
 
   try {
+    const startTime = Date.now();
     const dataUrl = await domtoimage.toPng(element, options);
+    const duration = Date.now() - startTime;
+    console.log(
+      `Export completed in ${duration}ms (${Math.round(estimatedMemoryMB)}MB)`,
+    );
+
     return dataUrl;
   } catch (error) {
     console.error('Failed to export DOM to image:', error);

@@ -208,6 +208,10 @@ export function useEditorState(): UseEditorStateResult {
   const [undoStack, setUndoStack] = useState<EditorShape[][]>([]);
   const [redoStack, setRedoStack] = useState<EditorShape[][]>([]);
 
+  // Memory management constants
+  const MAX_UNDO_STACK_SIZE = 50;
+  const MAX_REDO_STACK_SIZE = 50;
+
   // Load editor preferences on initialization
   useEffect(() => {
     const loadPreferences = async () => {
@@ -232,11 +236,18 @@ export function useEditorState(): UseEditorStateResult {
 
   const snapshot = useCallback(
     (next: EditorShape[]) => {
-      setUndoStack((prev) => [...prev, shapes]);
+      setUndoStack((prev) => {
+        const newStack = [...prev, shapes];
+        // Limit stack size to prevent memory bloat
+        if (newStack.length > MAX_UNDO_STACK_SIZE) {
+          return newStack.slice(-MAX_UNDO_STACK_SIZE);
+        }
+        return newStack;
+      });
       setRedoStack([]);
       setShapes(next);
     },
-    [shapes],
+    [shapes, MAX_UNDO_STACK_SIZE],
   );
 
   const startProvisionalShape = useCallback((shape: EditorShape) => {
@@ -362,21 +373,35 @@ export function useEditorState(): UseEditorStateResult {
     setUndoStack((prev) => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
-      setRedoStack((r) => [shapes, ...r]);
+      setRedoStack((r) => {
+        const newStack = [shapes, ...r];
+        // Limit redo stack size
+        if (newStack.length > MAX_REDO_STACK_SIZE) {
+          return newStack.slice(0, MAX_REDO_STACK_SIZE);
+        }
+        return newStack;
+      });
       setShapes(last);
       return prev.slice(0, -1);
     });
-  }, [shapes]);
+  }, [shapes, MAX_REDO_STACK_SIZE]);
 
   const redo = useCallback(() => {
     setRedoStack((prev) => {
       if (prev.length === 0) return prev;
       const [first, ...rest] = prev;
-      setUndoStack((u) => [...u, shapes]);
+      setUndoStack((u) => {
+        const newStack = [...u, shapes];
+        // Limit undo stack size
+        if (newStack.length > MAX_UNDO_STACK_SIZE) {
+          return newStack.slice(-MAX_UNDO_STACK_SIZE);
+        }
+        return newStack;
+      });
       setShapes(first);
       return rest;
     });
-  }, [shapes]);
+  }, [shapes, MAX_UNDO_STACK_SIZE]);
 
   const hasUndo = useMemo(() => undoStack.length > 0, [undoStack.length]);
   const hasRedo = useMemo(() => redoStack.length > 0, [redoStack.length]);

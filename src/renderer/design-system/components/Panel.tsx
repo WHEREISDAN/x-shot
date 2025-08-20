@@ -56,7 +56,7 @@ const sizeStyles: Record<PanelSize, { width: string; maxWidth: string }> = {
 export function Panel({
   variant = 'default',
   size = 'md',
-  padding = '3',
+  padding = 3,
   children,
   header,
   footer,
@@ -133,9 +133,9 @@ export function Panel({
       type={props.onClick ? 'button' : undefined}
       style={baseStyles}
       className={className}
-      onClick={props.onClick}
-      onMouseEnter={props.onMouseEnter}
-      onMouseLeave={props.onMouseLeave}
+      onClick={props.onClick as any}
+      onMouseEnter={props.onMouseEnter as any}
+      onMouseLeave={props.onMouseLeave as any}
       id={props.id}
       aria-label={props.onClick ? title || 'Interactive panel' : undefined}
     >
@@ -195,7 +195,7 @@ export function Panel({
 export function GlassPanel({
   children,
   size = 'md',
-  padding = '3',
+  padding = 3,
   header,
   footer,
   title,
@@ -237,7 +237,7 @@ export function GlassPanel({
 export function ElevatedPanel({
   children,
   size = 'md',
-  padding = '3',
+  padding = 3,
   header,
   footer,
   title,
@@ -279,7 +279,7 @@ export function ElevatedPanel({
 export function MinimalPanel({
   children,
   size = 'md',
-  padding = '3',
+  padding = 3,
   header,
   footer,
   title,
@@ -324,7 +324,7 @@ export function FloatingPanel({
   children,
   variant = 'glass',
   size = 'md',
-  padding = '3',
+  padding = 3,
   header,
   footer,
   title,

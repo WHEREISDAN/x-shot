@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import type { PresentationSettings } from '../../hooks/use-presentation-state';
 import { toCssGradient } from './gradient-presets';
 import type {
@@ -250,7 +250,7 @@ export interface EditorStageProps {
   renderSelectionOverlay: (() => React.ReactNode) | undefined;
 }
 
-export function EditorStage({
+export const EditorStage = memo(function EditorStage({
   natural,
   presentationDisabled,
   layout,
@@ -473,4 +473,4 @@ export function EditorStage({
       </div>
     </div>
   );
-}
+});

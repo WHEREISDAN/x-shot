@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Button, DestructiveButton, PrimaryButton } from '../../design-system';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
@@ -11,7 +11,7 @@ interface TopBarProps {
   setCensorPII: (next: boolean) => void;
 }
 
-export default function TopBar({
+const TopBar = memo(function TopBar({
   onDelete,
   onCopy,
   onSave,
@@ -83,4 +83,6 @@ export default function TopBar({
       <div style={scaleTextStyles}>{Math.round(viewScalePercent)}%</div>
     </div>
   );
-}
+});
+
+export default TopBar;

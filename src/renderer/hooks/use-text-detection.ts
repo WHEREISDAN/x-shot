@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { recognize } from 'tesseract.js';
 
 export interface OcrBox {
@@ -27,6 +27,7 @@ export interface OcrParagraph {
 export type OcrStatus = 'idle' | 'running' | 'done' | 'error';
 
 const scannedOnce = new Set<string>();
+const MAX_SCANNED_CACHE = 10; // Limit cache size
 
 async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -40,7 +41,7 @@ async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 function scaleImageToCanvas(
   img: HTMLImageElement,
   maxDim: number,
-): { canvas: HTMLCanvasElement; scale: number } {
+): { canvas: HTMLCanvasElement; scale: number; cleanup: () => void } {
   const { naturalWidth, naturalHeight } = img;
   const maxInput = Math.max(naturalWidth, naturalHeight);
   const scale = maxInput > maxDim ? maxDim / maxInput : 1;
@@ -62,7 +63,23 @@ function scaleImageToCanvas(
     canvas.width,
     canvas.height,
   );
-  return { canvas, scale };
+
+  const cleanup = () => {
+    // Clear canvas and dispose context
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = 1;
+    canvas.height = 1;
+  };
+
+  return { canvas, scale, cleanup };
+}
+
+function manageCacheSize() {
+  if (scannedOnce.size > MAX_SCANNED_CACHE) {
+    const entries = Array.from(scannedOnce);
+    const toRemove = entries.slice(0, entries.length - MAX_SCANNED_CACHE);
+    toRemove.forEach((entry) => scannedOnce.delete(entry));
+  }
 }
 
 export interface UseTextDetectionResult {
@@ -81,33 +98,39 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
   const [words, setWords] = useState<OcrWord[]>([]);
   const [lines, setLines] = useState<OcrLine[]>([]);
   const [paragraphs, setParagraphs] = useState<OcrParagraph[]>([]);
+
   const hasRunOnce = useMemo(
     () => scannedOnce.has(imageDataUrl),
     [imageDataUrl],
   );
 
-  // dantavious.w20@gmail.com
-
   const run = useCallback(async () => {
     if (!imageDataUrl) return;
+
     setStatus('running');
     setError(null);
+
+    let img: HTMLImageElement | null = null;
+    let canvasCleanup: (() => void) | null = null;
+
     try {
-      const img = await loadImage(imageDataUrl);
-      const { canvas, scale } = scaleImageToCanvas(img, 1600);
+      img = await loadImage(imageDataUrl);
+      const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200); // Reduced from 1600
+      canvasCleanup = cleanup;
+
       // Use recognize() with explicit CDN paths and fallback to avoid importScripts failures
       const MAJOR = 'v5';
       const primaryOpts = {
         workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${MAJOR}/dist/worker.min.js`,
         corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
         langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        logger: () => {},
+        logger: () => {}, // Disable logging to save memory
       } as const;
       const fallbackOpts = {
         workerPath: `https://unpkg.com/tesseract.js@${MAJOR}/dist/worker.min.js`,
         corePath: `https://unpkg.com/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
         langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
-        logger: () => {},
+        logger: () => {}, // Disable logging to save memory
       } as const;
 
       let data;
@@ -150,11 +173,17 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       setLines(nextLines);
       setParagraphs(nextParagraphs);
       scannedOnce.add(imageDataUrl);
+      manageCacheSize();
 
       setStatus('done');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStatus('error');
+    } finally {
+      // Clean up resources
+      canvasCleanup?.();
+      // Clear image reference
+      img = null;
     }
   }, [imageDataUrl]);
 

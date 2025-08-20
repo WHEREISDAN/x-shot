@@ -29,6 +29,7 @@ export function useExportGlue({
       throw new Error('Stage element not available for export');
     }
 
+    let result: string = '';
     try {
       // Set exporting state to hide interactive elements
       setIsExporting?.(true);
@@ -38,18 +39,45 @@ export function useExportGlue({
         setTimeout(resolve, 50);
       });
 
-      if (presentationDisabled) {
-        return await exportAnnotatedDataUrl(stageRef.current, natural, shapes);
+      // Force garbage collection if available (development)
+      if (typeof window !== 'undefined' && 'gc' in window) {
+        (window as any).gc();
       }
-      return await exportPresentedDataUrl(
-        stageRef.current,
-        natural,
-        shapes,
-        presentation,
-      );
+
+      const startTime = Date.now();
+
+      if (presentationDisabled) {
+        result = await exportAnnotatedDataUrl(
+          stageRef.current,
+          natural,
+          shapes,
+        );
+      } else {
+        result = await exportPresentedDataUrl(
+          stageRef.current,
+          natural,
+          shapes,
+          presentation,
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`Total export pipeline took ${duration}ms`);
+
+      return result;
     } finally {
       // Always reset the exporting state
       setIsExporting?.(false);
+
+      // Trigger cleanup after export
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(() => {
+          // Force garbage collection if available
+          if (typeof window !== 'undefined' && 'gc' in window) {
+            (window as any).gc();
+          }
+        });
+      }
     }
   }, [
     presentationDisabled,

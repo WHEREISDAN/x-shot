@@ -31,30 +31,85 @@ export default function registerScreenshotIpcHandlers() {
       height: number;
       bounds: Rectangle;
       scaleFactor: number;
+      timestamp: number;
     }
   >();
 
+  // Memory management constants
+  const MAX_SNAPSHOT_AGE_MS = 30000; // 30 seconds
+  const MAX_SNAPSHOT_DIMENSION = 4096; // Reduce max size from 8192
+  let cleanupTimer: NodeJS.Timeout | null = null;
+
   const releaseDisplaySnapshots = () => {
+    log.info(
+      `Releasing ${displaySnapshots.size} display snapshots from memory`,
+    );
     displaySnapshots.clear();
+    if (cleanupTimer) {
+      clearTimeout(cleanupTimer);
+      cleanupTimer = null;
+    }
+  };
+
+  const cleanupExpiredSnapshots = () => {
+    const now = Date.now();
+    let cleanedCount = 0;
+    const expiredKeys: number[] = [];
+    
+    displaySnapshots.forEach((snapshot, key) => {
+      if (now - snapshot.timestamp > MAX_SNAPSHOT_AGE_MS) {
+        expiredKeys.push(key);
+      }
+    });
+    
+    expiredKeys.forEach((key) => {
+      displaySnapshots.delete(key);
+      cleanedCount += 1;
+    });
+    
+    if (cleanedCount > 0) {
+      log.info(`Cleaned up ${cleanedCount} expired display snapshots`);
+    }
+  };
+
+  const scheduleCleanup = () => {
+    if (cleanupTimer) clearTimeout(cleanupTimer);
+    cleanupTimer = setTimeout(() => {
+      cleanupExpiredSnapshots();
+      if (displaySnapshots.size > 0) {
+        scheduleCleanup(); // Reschedule if there are still snapshots
+      }
+    }, MAX_SNAPSHOT_AGE_MS);
   };
 
   const prepareDisplaySnapshots = async () => {
     releaseDisplaySnapshots();
     const displays = screen.getAllDisplays();
+    const timestamp = Date.now();
+
     try {
-      // Capture all screens at native resolution (clamped for safety)
+      // Capture all screens with reduced max resolution for memory efficiency
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
-        thumbnailSize: { width: 8192, height: 8192 },
+        thumbnailSize: {
+          width: MAX_SNAPSHOT_DIMENSION,
+          height: MAX_SNAPSHOT_DIMENSION,
+        },
       });
+
+      let totalMemoryMB = 0;
       displays.forEach((d) => {
         const { bounds, scaleFactor, id } = d;
         const source = sources.find((s) => s.display_id === String(id));
         if (!source) {
           return;
         }
+
         const img = source.thumbnail;
         const size = img.getSize();
+        const memoryUsageMB = (size.width * size.height * 4) / (1024 * 1024); // RGBA bytes
+        totalMemoryMB += memoryUsageMB;
+
         displaySnapshots.set(id, {
           image: img,
           dataUrl: img.toDataURL(),
@@ -62,8 +117,14 @@ export default function registerScreenshotIpcHandlers() {
           height: size.height,
           bounds,
           scaleFactor: scaleFactor || 1,
+          timestamp,
         });
       });
+
+      log.info(
+        `Prepared ${displaySnapshots.size} display snapshots (${Math.round(totalMemoryMB)}MB total)`,
+      );
+      scheduleCleanup();
     } catch (err) {
       log.error('Failed to prepare display snapshots:', err);
       releaseDisplaySnapshots();
@@ -140,7 +201,10 @@ export default function registerScreenshotIpcHandlers() {
       }
       const sources = await desktopCapturer.getSources({
         types: ['window'],
-        thumbnailSize: { width: 8192, height: 8192 },
+        thumbnailSize: {
+          width: MAX_SNAPSHOT_DIMENSION,
+          height: MAX_SNAPSHOT_DIMENSION,
+        },
       });
       const source = sources.find((s) => s.id === payload.sourceId);
       if (!source) throw new Error('Window source not found');
@@ -176,7 +240,10 @@ export default function registerScreenshotIpcHandlers() {
       }
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
-        thumbnailSize: { width: 8192, height: 8192 },
+        thumbnailSize: {
+          width: MAX_SNAPSHOT_DIMENSION,
+          height: MAX_SNAPSHOT_DIMENSION,
+        },
       });
       let source = sources.find((s) => s.id === payload.sourceId);
       if (!source && payload.displayId !== undefined) {
@@ -251,7 +318,12 @@ export default function registerScreenshotIpcHandlers() {
           height: img.getSize().height,
           bounds,
           scaleFactor: deviceScale,
+          timestamp: Date.now(),
         };
+      }
+
+      if (!snapshot) {
+        throw new Error('No display snapshot available');
       }
 
       const scaleX = snapshot.width / Math.max(1, snapshot.bounds.width);

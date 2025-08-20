@@ -47,7 +47,7 @@ const variantStyles: Record<CardVariant, React.CSSProperties> = {
 
 export function Card({
   variant = 'default',
-  padding = '4',
+  padding = 4,
   children,
   header,
   footer,
@@ -141,7 +141,7 @@ export function Card({
       className={className}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={onClick}
+      onClick={onClick as any}
       id={props.id}
       aria-label={
         onClick || selectable ? title || 'Interactive card' : undefined
@@ -167,7 +167,7 @@ export function Card({
 // Specialized card components
 export function ElevatedCard({
   children,
-  padding = '4',
+  padding = 4,
   header,
   footer,
   title,
@@ -198,7 +198,7 @@ export function ElevatedCard({
       fullWidth={fullWidth}
       className={className}
       style={style}
-      onClick={onClick}
+      onClick={onClick as any}
       id={id}
     >
       {children}
@@ -208,7 +208,7 @@ export function ElevatedCard({
 
 export function OutlinedCard({
   children,
-  padding = '4',
+  padding = 4,
   header,
   footer,
   title,
@@ -240,7 +240,7 @@ export function OutlinedCard({
       fullWidth={fullWidth}
       className={className}
       style={style}
-      onClick={onClick}
+      onClick={onClick as any}
       id={id}
     >
       {children}
@@ -250,7 +250,7 @@ export function OutlinedCard({
 
 export function MinimalCard({
   children,
-  padding = '4',
+  padding = 4,
   header,
   footer,
   title,
@@ -282,7 +282,7 @@ export function MinimalCard({
       fullWidth={fullWidth}
       className={className}
       style={style}
-      onClick={onClick}
+      onClick={onClick as any}
       id={id}
     >
       {children}
@@ -293,7 +293,7 @@ export function MinimalCard({
 export function SelectableCard({
   children,
   variant = 'default',
-  padding = '4',
+  padding = 4,
   header,
   footer,
   title,
@@ -323,7 +323,7 @@ export function SelectableCard({
       fullWidth={fullWidth}
       className={className}
       style={style}
-      onClick={onClick}
+      onClick={onClick as any}
       id={id}
     >
       {children}
@@ -337,7 +337,7 @@ export function ActionCard({
   label,
   shortcut,
   variant = 'outlined',
-  padding = '3',
+  padding = 3,
   header,
   footer,
   title,
@@ -372,7 +372,7 @@ export function ActionCard({
       fullWidth={fullWidth}
       className={className}
       style={style}
-      onClick={onClick}
+      onClick={onClick as any}
       id={id}
     >
       <div

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import type { ToolType } from '../../hooks/use-editor-state';
 import { ToolButton, ColorSwatch } from './editor-tools';
 import { Select } from '../../design-system';
@@ -24,7 +24,7 @@ interface BottomToolbarProps {
   setTextSelectLevel: (lvl: 'word' | 'line' | 'paragraph') => void;
 }
 
-export default function BottomToolbar({
+const BottomToolbar = memo(function BottomToolbar({
   activeTool,
   setActiveTool,
   strokeColor,
@@ -229,4 +229,6 @@ export default function BottomToolbar({
       )}
     </div>
   );
-}
+});
+
+export default BottomToolbar;
