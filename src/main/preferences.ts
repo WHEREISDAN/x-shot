@@ -32,6 +32,24 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   pii: {
     autoDetect: false,
     defaultStyle: 'black',
+    detectors: {
+      email: true,
+      phone: true,
+      address: true,
+      ipv4: false,
+      url: false,
+      ssn: false,
+      creditCard: false,
+      dob: false,
+      postalUS: false,
+      postalCA: false,
+      postalUK: false,
+      uuid: false,
+      mac: false,
+      iban: false,
+      poBox: false,
+      tokens: false,
+    },
   },
   presentation: {
     gradient: {

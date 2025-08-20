@@ -28,9 +28,29 @@ export interface SystemPreferences {
   showInTray: boolean;
 }
 
+export interface PiiDetectors {
+  email: boolean;
+  phone: boolean;
+  address: boolean;
+  ipv4: boolean;
+  url: boolean;
+  ssn: boolean;
+  creditCard: boolean;
+  dob: boolean;
+  postalUS: boolean;
+  postalCA: boolean;
+  postalUK: boolean;
+  uuid: boolean;
+  mac: boolean;
+  iban: boolean;
+  poBox: boolean;
+  tokens: boolean;
+}
+
 export interface PiiPreferences {
   autoDetect: boolean;
   defaultStyle: 'blur' | 'black';
+  detectors: PiiDetectors;
 }
 
 // Import presentation types (will be migrated from use-presentation-state.ts)

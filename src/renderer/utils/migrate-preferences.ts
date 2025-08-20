@@ -56,12 +56,31 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
         const piiSettings = JSON.parse(piiData);
         if (
           piiSettings.autoDetect !== undefined ||
-          piiSettings.defaultStyle !== undefined
+          piiSettings.defaultStyle !== undefined ||
+          piiSettings.detectors !== undefined
         ) {
           updates.pii = {
             autoDetect: piiSettings.autoDetect ?? false,
             defaultStyle: piiSettings.defaultStyle ?? 'black',
-          };
+            detectors: piiSettings.detectors ?? {
+              email: true,
+              phone: true,
+              address: true,
+              ipv4: false,
+              url: false,
+              ssn: false,
+              creditCard: false,
+              dob: false,
+              postalUS: false,
+              postalCA: false,
+              postalUK: false,
+              uuid: false,
+              mac: false,
+              iban: false,
+              poBox: false,
+              tokens: false,
+            },
+          } as any;
           migrated = true;
           console.log('Migrated PII settings');
         }

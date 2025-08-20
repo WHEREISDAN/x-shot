@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PiiDetectors } from '../../shared/ipc-types';
 import type { RectShape, EditorShape } from './use-editor-state';
 import type {
   OcrLine,
@@ -85,6 +86,7 @@ export function usePiiMasking(
   // Toggle with persistence via preferences
   const [censorPII, setCensorPII] = useState<boolean>(false);
   const [defaultStyle, setDefaultStyle] = useState<'blur' | 'black'>('black');
+  const [detectors, setDetectors] = useState<PiiDetectors | null>(null);
 
   // Load PII preferences
   useEffect(() => {
@@ -97,6 +99,7 @@ export function usePiiMasking(
         if (preferences?.pii) {
           setCensorPII(preferences.pii.autoDetect);
           setDefaultStyle(preferences.pii.defaultStyle);
+          setDetectors(preferences.pii.detectors ?? null);
         }
       } catch (error) {
         console.warn('Failed to load PII preferences:', error);
@@ -114,7 +117,7 @@ export function usePiiMasking(
       const api = window?.electron?.ipcRenderer;
       if (!api) return;
 
-      // Get current preferences to preserve defaultStyle
+      // Get current preferences to preserve defaultStyle and detectors
       const currentPrefs = await api.invoke('get-preferences', {});
 
       await api.invoke('set-preferences', {
@@ -122,6 +125,7 @@ export function usePiiMasking(
           pii: {
             autoDetect: enabled,
             defaultStyle: currentPrefs?.pii?.defaultStyle || 'black',
+            detectors: currentPrefs?.pii?.detectors,
           },
         },
       });
@@ -191,6 +195,19 @@ export function usePiiMasking(
           t === 'pii-email' ||
           t === 'pii-phone' ||
           t === 'pii-address' ||
+          t === 'pii-ipv4' ||
+          t === 'pii-url' ||
+          t === 'pii-ssn' ||
+          t === 'pii-cc' ||
+          t === 'pii-dob' ||
+          t === 'pii-postal-us' ||
+          t === 'pii-postal-ca' ||
+          t === 'pii-postal-uk' ||
+          t === 'pii-uuid' ||
+          t === 'pii-mac' ||
+          t === 'pii-iban' ||
+          t === 'pii-po-box' ||
+          t === 'pii-token' ||
           t === 'pii-manual'
         );
       })
@@ -294,6 +311,10 @@ export function usePiiMasking(
       return;
     }
 
+    // Ensure detectors are loaded
+    const enabled = detectors;
+    if (!enabled) return;
+
     // use words, lines from dependencies
     const emailRegex = /[a-zA-Z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g;
     const phoneRegex =
@@ -305,6 +326,32 @@ export function usePiiMasking(
       String.raw`\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+)*\s+${streetType}(?:\s+${dir})?(?:\s+(?:Apt|Apartment|Unit|Suite|Ste|#)\s*\w+)?\b`,
       'gi',
     );
+
+    const obfuscatedEmailRegex =
+      /\b[A-Za-z0-9._%+-]+\s*(?:\(|\[)?at(?:\)|\])\s*[A-Za-z0-9.-]+\s*(?:\(|\[)?dot(?:\)|\])\s*[A-Za-z]{2,}\b/gi;
+
+    const ipv4Regex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+    const urlRegex = /\bhttps?:\/\/[^\s/$.?#].[^\s]*\b/gi;
+    const domainRegex =
+      /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b/gi;
+    const ssnRegex = /\b\d{3}-\d{2}-\d{4}\b/g;
+    const ssnLabelRegex = /(ssn|social\s*security)/i;
+    const ccRegex = /\b(?:\d[ -]?){13,19}\b/g;
+    const dobRegex =
+      /\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/g;
+    const dobLabelRegex = /(dob|date\s*of\s*birth|birthday)/i;
+    const zipUSRegex = /\b\d{5}(?:-\d{4})?\b/g;
+    const postalCARegex =
+      /\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b/g;
+    const postalUKRegex =
+      /\b([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z]{2}[0-9]{1,2})|([A-Za-z][0-9][A-Za-z])|([A-Za-z]{2}[0-9][A-Za-z])))[ ]?[0-9][A-Za-z]{2})\b/g;
+    const uuidRegex =
+      /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b/g;
+    const macRegex = /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g;
+    const ibanRegex = /\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/g;
+    const poBoxRegex = /\bP(?:ost)?\.?\s*O(?:ffice)?\.?\s*Box\s*\d+\b/gi;
+    const tokensRegex =
+      /\b(?:sk_(?:live|test)_[A-Za-z0-9]{16,}|gh[pous]_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,})\b/g;
 
     const boxesFromTokensByRegex = (
       tokens: Array<{
@@ -399,6 +446,131 @@ export function usePiiMasking(
         return boxesFromTokensByRegex(lineWords, rx);
       });
 
+    const lineBoxesForWithLabel = (valueRx: RegExp, labelRx: RegExp) =>
+      ocr.lines.flatMap((ln) => {
+        if (!labelRx.test(ln.text || ''))
+          return [] as Array<{
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+          }>;
+        const ly0 = ln.bbox.y;
+        const ly1 = ln.bbox.y + ln.bbox.height;
+        const lineWords = words
+          .filter((w) => {
+            const wy0 = w.bbox.y;
+            const wy1 = w.bbox.y + w.bbox.height;
+            const overlap = Math.max(
+              0,
+              Math.min(ly1, wy1) - Math.max(ly0, wy0),
+            );
+            const minH = Math.min(ln.bbox.height, w.bbox.height);
+            return minH > 0 && overlap / minH >= 0.5;
+          })
+          .sort((a, b) => a.bbox.x - b.bbox.x);
+        return boxesFromTokensByRegex(lineWords, valueRx);
+      });
+
+    // Variant that allows match-level filter (e.g., Luhn)
+    const boxesFromTokensByRegexWithFilter = (
+      tokens: Array<{
+        text: string;
+        bbox: { x: number; y: number; width: number; height: number };
+      }>,
+      pattern: RegExp,
+      accept: (matchedText: string) => boolean,
+    ) => {
+      if (tokens.length === 0)
+        return [] as Array<{
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }>;
+      const parts = tokens.map((t) => t.text);
+      const joined = parts.join(' ');
+      const spans: Array<{ start: number; end: number; text: string }> = [];
+      let m: RegExpExecArray | null;
+      const rx = new RegExp(pattern.source, pattern.flags);
+      // eslint-disable-next-line no-cond-assign
+      while ((m = rx.exec(joined)) !== null) {
+        if (accept(m[0]))
+          spans.push({
+            start: m.index,
+            end: m.index + m[0].length,
+            text: m[0],
+          });
+      }
+      if (spans.length === 0) return [];
+      const ranges: Array<{ start: number; end: number }> = [];
+      let pos = 0;
+      for (let i = 0; i < parts.length; i += 1) {
+        const len = parts[i].length;
+        ranges.push({ start: pos, end: pos + len });
+        pos += len + (i < parts.length - 1 ? 1 : 0);
+      }
+      const results: Array<{
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }> = [];
+      spans.forEach((s) => {
+        const startIdx = ranges.findIndex(
+          (r) => s.start < r.end && s.end > r.start,
+        );
+        if (startIdx < 0) return;
+        let endIdx = startIdx;
+        for (let j = startIdx + 1; j < ranges.length; j += 1) {
+          if (s.end > ranges[j].start) endIdx = j;
+          else break;
+        }
+        const sliceB = tokens.slice(startIdx, endIdx + 1).map((t) => t.bbox);
+        const minY = Math.min(...sliceB.map((b) => b.y));
+        const maxY = Math.max(...sliceB.map((b) => b.y + b.height));
+        const startTok = tokens[startIdx];
+        const endTok = tokens[endIdx];
+        const startLocal = Math.max(0, s.start - ranges[startIdx].start);
+        const endLocal = Math.min(
+          endTok.text.length,
+          s.end - ranges[endIdx].start,
+        );
+        const startFrac =
+          startTok.text.length > 0 ? startLocal / startTok.text.length : 0;
+        const endFrac =
+          endTok.text.length > 0 ? endLocal / endTok.text.length : 1;
+        const startX = startTok.bbox.x + startFrac * startTok.bbox.width;
+        const endX = endTok.bbox.x + endFrac * endTok.bbox.width;
+        const minX = Math.min(startX, endX);
+        const maxX = Math.max(startX, endX);
+        results.push({
+          x: Math.round(minX),
+          y: minY,
+          width: Math.round(maxX - minX),
+          height: maxY - minY,
+        });
+      });
+      return results;
+    };
+
+    const luhnValid = (raw: string) => {
+      const digits = raw.replace(/[^0-9]/g, '');
+      if (digits.length < 13 || digits.length > 19) return false;
+      let sum = 0;
+      let shouldDouble = false;
+      for (let i = digits.length - 1; i >= 0; i -= 1) {
+        let d = parseInt(digits[i], 10);
+        if (shouldDouble) {
+          d *= 2;
+          if (d > 9) d -= 9;
+        }
+        sum += d;
+        shouldDouble = !shouldDouble;
+      }
+      return sum % 10 === 0;
+    };
+
     const fallbackWordBoxesFor = (
       rx: RegExp,
       existing: Array<{ x: number; y: number; width: number; height: number }>,
@@ -439,19 +611,144 @@ export function usePiiMasking(
       );
     };
 
-    const lineBoxesEmail = lineBoxesFor(emailRegex);
-    const lineBoxesPhone = lineBoxesFor(phoneRegex);
-    const lineBoxesAddress = lineBoxesFor(addressRegex);
-    const wordBoxesEmail = fallbackWordBoxesFor(emailRegex, lineBoxesEmail);
-    const wordBoxesPhone = fallbackWordBoxesFor(phoneRegex, lineBoxesPhone);
-    const wordBoxesAddress = fallbackWordBoxesFor(
-      addressRegex,
-      lineBoxesAddress,
-    );
+    const lineBoxesEmail = enabled.email ? lineBoxesFor(emailRegex) : [];
+    const lineBoxesEmailObf = enabled.email
+      ? lineBoxesFor(obfuscatedEmailRegex)
+      : [];
+    const lineBoxesPhone = enabled.phone ? lineBoxesFor(phoneRegex) : [];
+    const lineBoxesAddress = enabled.address ? lineBoxesFor(addressRegex) : [];
+    const wordBoxesEmail = enabled.email
+      ? fallbackWordBoxesFor(emailRegex, [
+          ...lineBoxesEmail,
+          ...lineBoxesEmailObf,
+        ])
+      : [];
+    const wordBoxesEmailObf = enabled.email
+      ? fallbackWordBoxesFor(obfuscatedEmailRegex, [
+          ...lineBoxesEmail,
+          ...lineBoxesEmailObf,
+        ])
+      : [];
+    const wordBoxesPhone = enabled.phone
+      ? fallbackWordBoxesFor(phoneRegex, lineBoxesPhone)
+      : [];
+    const wordBoxesAddress = enabled.address
+      ? fallbackWordBoxesFor(addressRegex, lineBoxesAddress)
+      : [];
 
-    const boxesRawEmail = [...lineBoxesEmail, ...wordBoxesEmail];
+    const lineBoxesIpv4 = enabled.ipv4 ? lineBoxesFor(ipv4Regex) : [];
+    const wordBoxesIpv4 = enabled.ipv4
+      ? fallbackWordBoxesFor(ipv4Regex, lineBoxesIpv4)
+      : [];
+    const lineBoxesUrl = enabled.url
+      ? [...lineBoxesFor(urlRegex), ...lineBoxesFor(domainRegex)]
+      : [];
+    const wordBoxesUrl = enabled.url
+      ? [
+          ...fallbackWordBoxesFor(urlRegex, lineBoxesUrl),
+          ...fallbackWordBoxesFor(domainRegex, lineBoxesUrl),
+        ]
+      : [];
+    const lineBoxesSsn = enabled.ssn
+      ? lineBoxesForWithLabel(ssnRegex, ssnLabelRegex)
+      : [];
+    const wordBoxesSsn = enabled.ssn
+      ? fallbackWordBoxesFor(ssnRegex, lineBoxesSsn)
+      : [];
+    const lineBoxesDob = enabled.dob
+      ? lineBoxesForWithLabel(dobRegex, dobLabelRegex)
+      : [];
+    const wordBoxesDob = enabled.dob
+      ? fallbackWordBoxesFor(dobRegex, lineBoxesDob)
+      : [];
+    const lineBoxesZipUS = enabled.postalUS ? lineBoxesFor(zipUSRegex) : [];
+    const wordBoxesZipUS = enabled.postalUS
+      ? fallbackWordBoxesFor(zipUSRegex, lineBoxesZipUS)
+      : [];
+    const lineBoxesPostalCA = enabled.postalCA
+      ? lineBoxesFor(postalCARegex)
+      : [];
+    const wordBoxesPostalCA = enabled.postalCA
+      ? fallbackWordBoxesFor(postalCARegex, lineBoxesPostalCA)
+      : [];
+    const lineBoxesPostalUK = enabled.postalUK
+      ? lineBoxesFor(postalUKRegex)
+      : [];
+    const wordBoxesPostalUK = enabled.postalUK
+      ? fallbackWordBoxesFor(postalUKRegex, lineBoxesPostalUK)
+      : [];
+    const lineBoxesUuid = enabled.uuid ? lineBoxesFor(uuidRegex) : [];
+    const wordBoxesUuid = enabled.uuid
+      ? fallbackWordBoxesFor(uuidRegex, lineBoxesUuid)
+      : [];
+    const lineBoxesMac = enabled.mac ? lineBoxesFor(macRegex) : [];
+    const wordBoxesMac = enabled.mac
+      ? fallbackWordBoxesFor(macRegex, lineBoxesMac)
+      : [];
+    const lineBoxesIban = enabled.iban ? lineBoxesFor(ibanRegex) : [];
+    const wordBoxesIban = enabled.iban
+      ? fallbackWordBoxesFor(ibanRegex, lineBoxesIban)
+      : [];
+    const lineBoxesPoBox = enabled.poBox ? lineBoxesFor(poBoxRegex) : [];
+    const wordBoxesPoBox = enabled.poBox
+      ? fallbackWordBoxesFor(poBoxRegex, lineBoxesPoBox)
+      : [];
+    const lineBoxesTokens = enabled.tokens ? lineBoxesFor(tokensRegex) : [];
+    const wordBoxesTokens = enabled.tokens
+      ? fallbackWordBoxesFor(tokensRegex, lineBoxesTokens)
+      : [];
+
+    const ccBoxesLine = enabled.creditCard
+      ? ocr.lines.flatMap((ln) => {
+          const ly0 = ln.bbox.y;
+          const ly1 = ln.bbox.y + ln.bbox.height;
+          const lineWords = words
+            .filter((w) => {
+              const wy0 = w.bbox.y;
+              const wy1 = w.bbox.y + w.bbox.height;
+              const overlap = Math.max(
+                0,
+                Math.min(ly1, wy1) - Math.max(ly0, wy0),
+              );
+              const minH = Math.min(ln.bbox.height, w.bbox.height);
+              return minH > 0 && overlap / minH >= 0.5;
+            })
+            .sort((a, b) => a.bbox.x - b.bbox.x);
+          return boxesFromTokensByRegexWithFilter(
+            lineWords,
+            ccRegex,
+            luhnValid,
+          );
+        })
+      : [];
+    const ccBoxesWord = enabled.creditCard
+      ? boxesFromTokensByRegexWithFilter(
+          [...words].sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x),
+          ccRegex,
+          luhnValid,
+        )
+      : [];
+
+    const boxesRawEmail = [
+      ...lineBoxesEmail,
+      ...lineBoxesEmailObf,
+      ...wordBoxesEmail,
+      ...wordBoxesEmailObf,
+    ];
     const boxesRawPhone = [...lineBoxesPhone, ...wordBoxesPhone];
     const boxesRawAddress = [...lineBoxesAddress, ...wordBoxesAddress];
+    const boxesRawIpv4 = [...lineBoxesIpv4, ...wordBoxesIpv4];
+    const boxesRawUrl = [...lineBoxesUrl, ...wordBoxesUrl];
+    const boxesRawSsn = [...lineBoxesSsn, ...wordBoxesSsn];
+    const boxesRawDob = [...lineBoxesDob, ...wordBoxesDob];
+    const boxesRawZipUS = [...lineBoxesZipUS, ...wordBoxesZipUS];
+    const boxesRawPostalCA = [...lineBoxesPostalCA, ...wordBoxesPostalCA];
+    const boxesRawPostalUK = [...lineBoxesPostalUK, ...wordBoxesPostalUK];
+    const boxesRawUuid = [...lineBoxesUuid, ...wordBoxesUuid];
+    const boxesRawMac = [...lineBoxesMac, ...wordBoxesMac];
+    const boxesRawIban = [...lineBoxesIban, ...wordBoxesIban];
+    const boxesRawPoBox = [...lineBoxesPoBox, ...wordBoxesPoBox];
+    const boxesRawTokens = [...lineBoxesTokens, ...wordBoxesTokens];
 
     const dedup = (
       arr: Array<{ x: number; y: number; width: number; height: number }>,
@@ -469,6 +766,18 @@ export function usePiiMasking(
     const dedupEmail = dedup(boxesRawEmail);
     const dedupPhone = dedup(boxesRawPhone);
     const dedupAddress = dedup(boxesRawAddress);
+    const dedupIpv4 = dedup(boxesRawIpv4);
+    const dedupUrl = dedup(boxesRawUrl);
+    const dedupSsn = dedup(boxesRawSsn);
+    const dedupDob = dedup(boxesRawDob);
+    const dedupZipUS = dedup(boxesRawZipUS);
+    const dedupPostalCA = dedup(boxesRawPostalCA);
+    const dedupPostalUK = dedup(boxesRawPostalUK);
+    const dedupUuid = dedup(boxesRawUuid);
+    const dedupMac = dedup(boxesRawMac);
+    const dedupIban = dedup(boxesRawIban);
+    const dedupPoBox = dedup(boxesRawPoBox);
+    const dedupTokens = dedup(boxesRawTokens);
 
     const mergeOverlap = (
       input: Array<{ x: number; y: number; width: number; height: number }>,
@@ -514,10 +823,41 @@ export function usePiiMasking(
       ...mergeOverlap(dedupEmail).map((b) => ({ ...b, tag: 'pii-email' })),
       ...mergeOverlap(dedupPhone).map((b) => ({ ...b, tag: 'pii-phone' })),
       ...mergeOverlap(dedupAddress).map((b) => ({ ...b, tag: 'pii-address' })),
+      ...mergeOverlap(dedupIpv4).map((b) => ({ ...b, tag: 'pii-ipv4' })),
+      ...mergeOverlap(dedupUrl).map((b) => ({ ...b, tag: 'pii-url' })),
+      ...mergeOverlap(dedupSsn).map((b) => ({ ...b, tag: 'pii-ssn' })),
+      ...mergeOverlap([...ccBoxesLine, ...ccBoxesWord]).map((b) => ({
+        ...b,
+        tag: 'pii-cc',
+      })),
+      ...mergeOverlap(dedupDob).map((b) => ({ ...b, tag: 'pii-dob' })),
+      ...mergeOverlap(dedupZipUS).map((b) => ({ ...b, tag: 'pii-postal-us' })),
+      ...mergeOverlap(dedupPostalCA).map((b) => ({
+        ...b,
+        tag: 'pii-postal-ca',
+      })),
+      ...mergeOverlap(dedupPostalUK).map((b) => ({
+        ...b,
+        tag: 'pii-postal-uk',
+      })),
+      ...mergeOverlap(dedupUuid).map((b) => ({ ...b, tag: 'pii-uuid' })),
+      ...mergeOverlap(dedupMac).map((b) => ({ ...b, tag: 'pii-mac' })),
+      ...mergeOverlap(dedupIban).map((b) => ({ ...b, tag: 'pii-iban' })),
+      ...mergeOverlap(dedupPoBox).map((b) => ({ ...b, tag: 'pii-po-box' })),
+      ...mergeOverlap(dedupTokens).map((b) => ({ ...b, tag: 'pii-token' })),
     ];
     setPiiMasks(masks);
     applyMasks(masks);
-  }, [status, words, lines, censorPII, applyMasks, removeAllTagged, ocr.lines]);
+  }, [
+    status,
+    words,
+    lines,
+    censorPII,
+    applyMasks,
+    removeAllTagged,
+    ocr.lines,
+    detectors,
+  ]);
 
   // Reset all PII state if screenshot changes
   useEffect(() => {

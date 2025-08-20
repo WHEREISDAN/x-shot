@@ -9,10 +9,22 @@ declare module 'dom-to-image-more' {
     cacheBust?: boolean;
   }
 
-  export function toPng(element: HTMLElement, options?: Options): Promise<string>;
-  export function toBlob(element: HTMLElement, options?: Options): Promise<Blob>;
-  export function toSvg(element: HTMLElement, options?: Options): Promise<string>;
-  export function toJpeg(element: HTMLElement, options?: Options): Promise<string>;
+  export function toPng(
+    element: HTMLElement,
+    options?: Options,
+  ): Promise<string>;
+  export function toBlob(
+    element: HTMLElement,
+    options?: Options,
+  ): Promise<Blob>;
+  export function toSvg(
+    element: HTMLElement,
+    options?: Options,
+  ): Promise<string>;
+  export function toJpeg(
+    element: HTMLElement,
+    options?: Options,
+  ): Promise<string>;
 
   const domtoimage: {
     toPng: typeof toPng;

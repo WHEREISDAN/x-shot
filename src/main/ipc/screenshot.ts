@@ -38,7 +38,7 @@ export default function registerScreenshotIpcHandlers() {
   // Memory management constants
   const MAX_SNAPSHOT_AGE_MS = 30000; // 30 seconds
   const MAX_SNAPSHOT_DIMENSION = 4096; // Reduce max size from 8192
-  let cleanupTimer: NodeJS.Timeout | null = null;
+  let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
   const releaseDisplaySnapshots = () => {
     log.info(
@@ -55,18 +55,18 @@ export default function registerScreenshotIpcHandlers() {
     const now = Date.now();
     let cleanedCount = 0;
     const expiredKeys: number[] = [];
-    
+
     displaySnapshots.forEach((snapshot, key) => {
       if (now - snapshot.timestamp > MAX_SNAPSHOT_AGE_MS) {
         expiredKeys.push(key);
       }
     });
-    
+
     expiredKeys.forEach((key) => {
       displaySnapshots.delete(key);
       cleanedCount += 1;
     });
-    
+
     if (cleanedCount > 0) {
       log.info(`Cleaned up ${cleanedCount} expired display snapshots`);
     }

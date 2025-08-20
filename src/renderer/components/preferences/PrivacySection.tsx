@@ -89,6 +89,21 @@ export default function PrivacySection({
     [preferences.pii, onUpdate],
   );
 
+  const handleDetectorToggle = useCallback(
+    async (key: keyof AppPreferences['pii']['detectors'], enabled: boolean) => {
+      await onUpdate({
+        pii: {
+          ...preferences.pii,
+          detectors: {
+            ...preferences.pii.detectors,
+            [key]: enabled,
+          },
+        },
+      });
+    },
+    [preferences.pii, onUpdate],
+  );
+
   const styleOptions = [
     { value: 'black', label: 'Black Box (Complete Hiding)' },
     { value: 'blur', label: 'Blur (Partial Obscuring)' },
@@ -163,6 +178,55 @@ export default function PrivacySection({
           💡 <strong>Tip:</strong> You can always manually add or adjust PII
           masks using the rectangle tool with PII mode enabled in the editor.
         </div>
+      </div>
+
+      {/* Detectors */}
+      <div style={groupStyles}>
+        <h3 style={labelStyles}>PII Types to Detect</h3>
+        <p style={descriptionStyles}>
+          Choose which patterns to auto-detect when masking is enabled.
+        </p>
+
+        {(
+          [
+            ['email', 'Email addresses'],
+            ['phone', 'Phone numbers'],
+            ['address', 'Street addresses'],
+            ['ipv4', 'IPv4 addresses'],
+            ['url', 'URLs and domains'],
+            ['ssn', 'US SSN'],
+            ['creditCard', 'Credit card numbers'],
+            ['dob', 'Dates of birth (label-aware)'],
+            ['postalUS', 'US ZIP codes'],
+            ['postalCA', 'Canada postal codes'],
+            ['postalUK', 'UK postcodes'],
+            ['uuid', 'UUIDs'],
+            ['mac', 'MAC addresses'],
+            ['iban', 'IBANs'],
+            ['poBox', 'PO Boxes'],
+            ['tokens', 'API keys and tokens'],
+          ] as Array<[keyof AppPreferences['pii']['detectors'], string]>
+        ).map(([key, label]) => (
+          <div key={key} style={checkboxContainerStyles}>
+            <input
+              type="checkbox"
+              id={`pii-detector-${key}`}
+              checked={preferences.pii.detectors?.[key] ?? false}
+              onChange={(e) => handleDetectorToggle(key, e.target.checked)}
+              style={checkboxStyles}
+            />
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label
+              htmlFor={`pii-detector-${key}`}
+              style={{
+                fontSize: typography.fontSize.base,
+                color: colors.text.primary,
+              }}
+            >
+              {label}
+            </label>
+          </div>
+        ))}
       </div>
 
       {/* Data Handling */}
