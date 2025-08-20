@@ -119,6 +119,25 @@ const BottomToolbar = memo(function BottomToolbar({
         onClick={() => setActiveTool('pen')}
       />
       <ToolButton
+        label="Eyedropper"
+        active={false}
+        onClick={async () => {
+          try {
+            // Use EyeDropper API if available (Chromium 95+)
+            // @ts-expect-error EyeDropper may exist in chromium runtime
+            const EyeDropperCtor = (window as any).EyeDropper;
+            if (EyeDropperCtor) {
+              const ed = new EyeDropperCtor();
+              const res = await ed.open();
+              const color = (res?.sRGBHex as string) || '#ffffff';
+              setStrokeColor(color);
+            }
+          } catch {
+            // ignore
+          }
+        }}
+      />
+      <ToolButton
         label="Text Highlight"
         active={activeTool === 'text-select'}
         onClick={() => setActiveTool('text-select')}

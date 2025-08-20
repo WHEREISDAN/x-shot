@@ -84,6 +84,98 @@ export default function GeneralSection({
     [preferences.capture, onUpdate],
   );
 
+  const buildAcceleratorFromEvent = useCallback((e: React.KeyboardEvent) => {
+    const parts: string[] = [];
+    // Require at least one modifier for safety unless using F-keys
+    const hasMeta = e.metaKey || e.ctrlKey;
+    if (hasMeta) parts.push('CommandOrControl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    const key = (e.key || '').toUpperCase();
+    const code = (e.code || '').toUpperCase();
+    const isFn = /^F\d{1,2}$/.test(key);
+    const isLetter = /^[A-Z]$/.test(key);
+    const isDigit = /^DIGIT(\d)$/.test(code) || /^[0-9]$/.test(key);
+    let finalKey = '';
+    if (isFn) finalKey = key;
+    else if (isLetter) finalKey = key;
+    else if (isDigit) finalKey = key.match(/\d/)?.[0] ?? key;
+    else if (key === 'ARROWUP' || key === 'UP') finalKey = 'Up';
+    else if (key === 'ARROWDOWN' || key === 'DOWN') finalKey = 'Down';
+    else if (key === 'ARROWLEFT' || key === 'LEFT') finalKey = 'Left';
+    else if (key === 'ARROWRIGHT' || key === 'RIGHT') finalKey = 'Right';
+    else if (key === 'ESCAPE') finalKey = 'Esc';
+    else if (key === 'ENTER' || key === 'RETURN') finalKey = 'Enter';
+    else if (key === 'SPACE') finalKey = 'Space';
+    if (!finalKey) return '';
+    if (!hasMeta && !/^F\d{1,2}$/.test(finalKey)) return '';
+    parts.push(finalKey);
+    return parts.join('+');
+  }, []);
+
+  const hotkeyInputHandlers = {
+    onKeyDown: (setter: (accel: string) => void) =>
+      (e: React.KeyboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const accel = buildAcceleratorFromEvent(e);
+        if (accel) setter(accel);
+      },
+  } as const;
+
+  // Fallback: global key capture when field is focused (handles cases where input doesn't get keydown reliably)
+  const globalCaptureSetterRef = React.useRef<null | ((accel: string) => void)>(
+    null,
+  );
+  const globalKeyHandler = React.useCallback((ev: KeyboardEvent) => {
+    if (!globalCaptureSetterRef.current) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    // Build accelerator from native event and commit
+    const e = ev as unknown as React.KeyboardEvent;
+    // Shim minimal shape used by builder
+    // @ts-ignore
+    e.key = ev.key;
+    // @ts-ignore
+    e.code = ev.code;
+    // @ts-ignore
+    e.metaKey = ev.metaKey;
+    // @ts-ignore
+    e.ctrlKey = ev.ctrlKey;
+    // @ts-ignore
+    e.altKey = ev.altKey;
+    // @ts-ignore
+    e.shiftKey = ev.shiftKey;
+    const accel = buildAcceleratorFromEvent(e);
+    if (!accel) return;
+    try {
+      globalCaptureSetterRef.current(accel);
+    } finally {
+      globalCaptureSetterRef.current = null;
+      window.removeEventListener('keydown', globalKeyHandler, true);
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  }, [buildAcceleratorFromEvent]);
+  const startGlobalCapture = React.useCallback(
+    (setter: (accel: string) => void) => () => {
+      globalCaptureSetterRef.current = setter;
+      window.addEventListener('keydown', globalKeyHandler, true);
+    },
+    [globalKeyHandler],
+  );
+
+  const handleDelayHotkeyChange = useCallback(
+    async (field: 'hotkeyDelay3' | 'hotkeyDelay5', value: string) => {
+      await onUpdate({
+        capture: {
+          ...preferences.capture,
+          [field]: value || null,
+        } as any,
+      });
+    },
+    [preferences.capture, onUpdate],
+  );
+
   const handleSaveLocationChange = useCallback(
     async (defaultSaveLocation: string) => {
       await onUpdate({
@@ -184,12 +276,93 @@ export default function GeneralSection({
             aria-labelledby="hotkey-label"
             type="text"
             value={preferences.capture.hotkey}
-            onChange={(e) => handleHotkeyChange(e.target.value)}
-            placeholder="CommandOrControl+Shift+1"
+            onChange={() => {}}
+            onFocus={startGlobalCapture((accel) => handleHotkeyChange(accel))}
+            onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
+              if (accel) handleHotkeyChange(accel);
+            })}
+            placeholder="Click then press shortcut"
             variant="filled"
             size="md"
             style={{ maxWidth: '300px' }}
+            readOnly
           />
+        </div>
+
+        <div>
+          <div style={labelStyles} id="delay-hotkey-label">
+            Delayed Capture Hotkeys
+          </div>
+          <p style={descriptionStyles}>
+            Optional shortcuts for delayed capture. Leave blank to disable.
+          </p>
+          <div style={{ display: 'flex', gap: spacing[3], maxWidth: 980 }}>
+            <div style={{ flex: 1 }}>
+              <Input
+                aria-labelledby="delay-hotkey-label"
+                type="text"
+                value={preferences.capture.hotkeyDelay3 || ''}
+                onChange={() => {}}
+                onFocus={startGlobalCapture((accel) =>
+                  handleDelayHotkeyChange('hotkeyDelay3', accel),
+                )}
+                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
+                  if (accel) handleDelayHotkeyChange('hotkeyDelay3', accel);
+                })}
+                placeholder="Click then press shortcut (3s)"
+                variant="filled"
+                size="md"
+                readOnly
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <Input
+                aria-labelledby="delay-hotkey-label"
+                type="text"
+                value={preferences.capture.hotkeyDelay5 || ''}
+                onChange={() => {}}
+                onFocus={startGlobalCapture((accel) =>
+                  handleDelayHotkeyChange('hotkeyDelay5', accel),
+                )}
+                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
+                  if (accel) handleDelayHotkeyChange('hotkeyDelay5', accel);
+                })}
+                placeholder="Click then press shortcut (5s)"
+                variant="filled"
+                size="md"
+                readOnly
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <Input
+                aria-labelledby="delay-hotkey-label"
+                type="text"
+                value={preferences.capture.hotkeyRecapture || ''}
+                onChange={() => {}}
+                onFocus={startGlobalCapture((accel) =>
+                  onUpdate({
+                    capture: {
+                      ...preferences.capture,
+                      hotkeyRecapture: accel,
+                    },
+                  }),
+                )}
+                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
+                  if (!accel) return;
+                  onUpdate({
+                    capture: {
+                      ...preferences.capture,
+                      hotkeyRecapture: accel,
+                    },
+                  });
+                })}
+                placeholder="Click then press shortcut (Re-capture last area)"
+                variant="filled"
+                size="md"
+                readOnly
+              />
+            </div>
+          </div>
         </div>
 
         <div>

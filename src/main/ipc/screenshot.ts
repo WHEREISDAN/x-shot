@@ -19,6 +19,7 @@ import {
   getMainWindow,
   enableScreenSaverMode,
 } from '../windows';
+import { updatePreferences } from '../preferences';
 
 export default function registerScreenshotIpcHandlers() {
   // In-memory store of pre-captured display images for the current screenshot session
@@ -430,6 +431,22 @@ export default function registerScreenshotIpcHandlers() {
         sourceId: String(id),
         displayId: id,
       };
+      // Persist last selection for quick re-capture
+      try {
+        await updatePreferences({
+          capture: {
+            lastSelection: {
+              x: data.x,
+              y: data.y,
+              width: data.width,
+              height: data.height,
+              displayId: id,
+            },
+          } as any,
+        });
+      } catch {
+        // ignore
+      }
       win.webContents.send('screenshot-data', screenshotData);
       releaseDisplaySnapshots();
     } catch (error) {

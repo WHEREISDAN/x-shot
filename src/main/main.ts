@@ -17,7 +17,7 @@ import {
   showScreenshotOverlays,
   areOverlaysOpen,
 } from './windows';
-import { createTray, updateTrayVisibility, isTrayVisible } from './tray';
+import { createTray, updateTrayVisibility, isTrayVisible, refreshTrayMenu } from './tray';
 import registerFileIpcHandlers from './ipc/files';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
 import registerWindowIpcHandlers, {
@@ -26,11 +26,13 @@ import registerWindowIpcHandlers, {
 import registerPreferencesIpcHandlers, {
   setHotkeyChangeCallback,
   setTrayVisibilityChangeCallback,
+  setDelayHotkeysChangeCallback,
 } from './ipc/preferences';
 import {
   DEFAULT_SCREENSHOT_ACCELERATOR,
   registerScreenshotHotkey,
   unregisterAllHotkeys,
+  updateRegisteredHotkeys,
 } from './hotkeys';
 import { loadPreferences } from './preferences';
 
@@ -99,7 +101,43 @@ app
     }
 
     const hotkey = preferences.capture.hotkey || DEFAULT_SCREENSHOT_ACCELERATOR;
-    registerScreenshotHotkey(hotkey, triggerScreenshot);
+    // Register main + delayed hotkeys
+    updateRegisteredHotkeys(
+      {
+        main: hotkey,
+        delay3: {
+          accelerator: preferences.capture.hotkeyDelay3 || null,
+          delayMs: 3000,
+        },
+        delay5: {
+          accelerator: preferences.capture.hotkeyDelay5 || null,
+          delayMs: 5000,
+        },
+        recapture: preferences.capture.hotkeyRecapture || null,
+      },
+      {
+        triggerMain: triggerScreenshot,
+        triggerDelay: (ms: number) => {
+          setTimeout(() => triggerScreenshot(), ms);
+        },
+        triggerRecapture: () => {
+          const prefsPromise = import('./preferences').then((m) => m.loadPreferences());
+          prefsPromise
+            .then(async ({ capture }) => {
+              const last = capture.lastSelection;
+              if (!last) return;
+              // Dispatch through existing handler path
+              ipcMain.emit('screenshot-data', undefined, {
+                x: last.x,
+                y: last.y,
+                width: last.width,
+                height: last.height,
+              });
+            })
+            .catch(() => {});
+        },
+      },
+    );
 
     createMainWindow();
 
@@ -108,7 +146,45 @@ app
 
     // Set up hotkey change callback
     setHotkeyChangeCallback((newHotkey: string) => {
-      registerScreenshotHotkey(newHotkey, triggerScreenshot);
+      updateRegisteredHotkeys(
+        { main: newHotkey },
+        {
+          triggerMain: triggerScreenshot,
+          triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+        },
+      );
+    });
+
+    // Set up delay hotkeys change callback
+    setDelayHotkeysChangeCallback(({ hotkeyDelay3, hotkeyDelay5, hotkeyRecapture }) => {
+      updateRegisteredHotkeys(
+        {
+          delay3: { accelerator: hotkeyDelay3 || null, delayMs: 3000 },
+          delay5: { accelerator: hotkeyDelay5 || null, delayMs: 5000 },
+          recapture: hotkeyRecapture || null,
+        },
+        {
+          triggerMain: triggerScreenshot,
+          triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+          triggerRecapture: () => {
+            const prefsPromise = import('./preferences').then((m) => m.loadPreferences());
+            prefsPromise
+              .then(async ({ capture }) => {
+                const last = capture.lastSelection;
+                if (!last) return;
+                ipcMain.emit('screenshot-data', undefined, {
+                  x: last.x,
+                  y: last.y,
+                  width: last.width,
+                  height: last.height,
+                });
+              })
+              .catch(() => {});
+          },
+        },
+      );
+      // Keep tray menu accelerators in sync with preferences
+      refreshTrayMenu(getMainWindow, triggerScreenshot).catch(() => {});
     });
 
     // Set up tray visibility change callback

@@ -15,9 +15,22 @@ export interface LogMessage {
 // Preferences System Types
 export interface CapturePreferences {
   hotkey: string;
+  // Optional delayed capture hotkeys (Electron accelerator strings)
+  hotkeyDelay3?: string | null;
+  hotkeyDelay5?: string | null;
+  // Optional re-capture last area hotkey
+  hotkeyRecapture?: string | null;
   defaultSaveLocation: string;
   autoCopyToClipboard: boolean;
   defaultFormat: 'png' | 'jpg';
+  // Last used area selection for quick re-capture
+  lastSelection?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    displayId: number;
+  } | null;
 }
 
 export interface EditorPreferences {

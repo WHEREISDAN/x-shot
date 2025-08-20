@@ -40,6 +40,7 @@ function ScreenshotCapture() {
     width: number;
     height: number;
   } | null>(null);
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,7 +199,10 @@ function ScreenshotCapture() {
         }
         selection.onMouseDown(e);
       }}
-      onMouseMove={selection.onMouseMove}
+      onMouseMove={(e) => {
+        setPointer({ x: e.clientX, y: e.clientY });
+        selection.onMouseMove(e);
+      }}
       onMouseUp={selection.onMouseUp}
       onKeyDown={selection.onKeyDown}
       role="application"
@@ -244,6 +248,65 @@ function ScreenshotCapture() {
       />
 
       <SelectionOverlay selection={selection.selection} />
+
+      {/* Magnifier */}
+      {background && pointer && (
+        <div
+          style={{
+            position: 'fixed',
+            left: Math.min(pointer.x + 24, window.innerWidth - 140),
+            top: Math.min(pointer.y + 24, window.innerHeight - 140),
+            width: 120,
+            height: 120,
+            borderRadius: 80,
+            overflow: 'hidden',
+            zIndex: 1004,
+            pointerEvents: 'none',
+            boxShadow: '0 6px 16px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15)',
+            backgroundImage: `url(${background.url})`,
+            backgroundRepeat: 'no-repeat',
+            // Scale up display snapshot; since snapshot is stretched to viewport, use viewport coords
+            backgroundSize: `${window.innerWidth * 3}px ${window.innerHeight * 3}px`,
+            backgroundPosition: `-${pointer.x * 3 - 60}px -${pointer.y * 3 - 60}px`,
+          }}
+          aria-hidden="true"
+        >
+          {/* Pixel grid */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage:
+                'repeating-linear-gradient(90deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(0deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 1px, transparent 3px)',
+              backgroundSize: '3px 3px, 3px 3px',
+              mixBlendMode: 'overlay',
+            }}
+          />
+          {/* Crosshair */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 60,
+              top: 0,
+              width: 1,
+              height: '100%',
+              background: 'rgba(255,255,255,0.8)',
+              opacity: 0.7,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 60,
+              left: 0,
+              height: 1,
+              width: '100%',
+              background: 'rgba(255,255,255,0.8)',
+              opacity: 0.7,
+            }}
+          />
+        </div>
+      )}
 
       <button
         type="button"

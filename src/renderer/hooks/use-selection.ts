@@ -146,6 +146,8 @@ export function useSelection({
     (e: React.MouseEvent) => {
       const currentX = e.clientX;
       const currentY = e.clientY;
+      const grid = 8;
+      const snap = (v: number) => Math.round(v / grid) * grid;
 
       if (isResizing && selection && resizeHandle) {
         const dx = currentX - startRef.current.x;
@@ -189,17 +191,19 @@ export function useSelection({
           default:
             break;
         }
-        // Minimum size
-        width = Math.max(10, width);
-        height = Math.max(10, height);
+        // Snap to grid
+        x = snap(x);
+        y = snap(y);
+        width = Math.max(10, snap(width));
+        height = Math.max(10, snap(height));
         setSelection({ x, y, width, height });
         startRef.current = { x: currentX, y: currentY };
         return;
       }
 
       if (isDragging && selection) {
-        const newX = currentX - moveOffsetRef.current.x;
-        const newY = currentY - moveOffsetRef.current.y;
+        const newX = snap(currentX - moveOffsetRef.current.x);
+        const newY = snap(currentY - moveOffsetRef.current.y);
         setSelection({
           ...selection,
           x: Math.max(0, newX),
@@ -215,7 +219,7 @@ export function useSelection({
         const top = Math.min(start.y, currentY);
         const width = Math.abs(currentX - start.x);
         const height = Math.abs(currentY - start.y);
-        setSelection({ x: left, y: top, width, height });
+        setSelection({ x: snap(left), y: snap(top), width: snap(width), height: snap(height) });
       }
     },
     [isDragging, isResizing, isSelecting, selection, resizeHandle],

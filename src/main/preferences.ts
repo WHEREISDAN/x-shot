@@ -10,9 +10,13 @@ const PREFERENCES_FILE = 'preferences.json';
 const DEFAULT_PREFERENCES: AppPreferences = {
   capture: {
     hotkey: 'CommandOrControl+Shift+1',
+    hotkeyDelay3: null,
+    hotkeyDelay5: null,
+    hotkeyRecapture: null,
     defaultSaveLocation: app.getPath('pictures'),
     autoCopyToClipboard: false,
     defaultFormat: 'png',
+    lastSelection: null,
   },
   editor: {
     defaultStrokeColor: '#ef4444',

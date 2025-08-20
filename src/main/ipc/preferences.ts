@@ -11,6 +11,15 @@ import {
 } from '../preferences';
 import { createPreferencesWindow } from '../windows';
 
+// Callback for delayed hotkeys changes
+let onDelayHotkeysChange:
+  | ((payload: {
+      hotkeyDelay3?: string | null;
+      hotkeyDelay5?: string | null;
+      hotkeyRecapture?: string | null;
+    }) => void)
+  | null = null;
+
 // Callback for when hotkey changes
 let onHotkeyChange: ((newHotkey: string) => void) | null = null;
 
@@ -25,6 +34,16 @@ export function setTrayVisibilityChangeCallback(
   callback: (show: boolean) => void,
 ) {
   onTrayVisibilityChange = callback;
+}
+
+export function setDelayHotkeysChangeCallback(
+  callback: (payload: {
+    hotkeyDelay3?: string | null;
+    hotkeyDelay5?: string | null;
+    hotkeyRecapture?: string | null;
+  }) => void,
+) {
+  onDelayHotkeysChange = callback;
 }
 
 export default function registerPreferencesIpcHandlers() {
@@ -56,6 +75,19 @@ export default function registerPreferencesIpcHandlers() {
         // Handle hotkey changes
         if (request.preferences.capture?.hotkey && onHotkeyChange) {
           onHotkeyChange(request.preferences.capture.hotkey);
+        }
+        if (
+          (request.preferences.capture?.hotkeyDelay3 !== undefined ||
+            request.preferences.capture?.hotkeyDelay5 !== undefined ||
+            request.preferences.capture?.hotkeyRecapture !== undefined) &&
+          onDelayHotkeysChange
+        ) {
+          onDelayHotkeysChange({
+            hotkeyDelay3: request.preferences.capture?.hotkeyDelay3 ?? null,
+            hotkeyDelay5: request.preferences.capture?.hotkeyDelay5 ?? null,
+            hotkeyRecapture:
+              request.preferences.capture?.hotkeyRecapture ?? null,
+          });
         }
 
         // Handle tray visibility changes

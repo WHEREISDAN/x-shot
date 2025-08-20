@@ -3,39 +3,74 @@ import { app, BrowserWindow, Menu, Tray } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import getResourcesPath from '../shared/utils';
 import { createPreferencesWindow } from './windows';
+import { ensureMainWindowReady } from './windows';
+import { ipcMain } from 'electron';
+import { loadPreferences } from './preferences';
 import { getLogger } from './logger';
 
 let tray: Tray | null = null;
 
-export default function createTray(
+async function buildContextMenu(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
 ) {
   const logger = getLogger('tray');
-  const RESOURCES_PATH = getResourcesPath();
-  const getAssetPath = (...paths: string[]): string =>
-    path.join(RESOURCES_PATH, ...paths);
+  const prefs = await loadPreferences();
+  const accMain = prefs.capture.hotkey || DEFAULT_SCREENSHOT_ACCELERATOR;
+  const acc3 = prefs.capture.hotkeyDelay3 || undefined;
+  const acc5 = prefs.capture.hotkeyDelay5 || undefined;
+  const accRecapture = prefs.capture.hotkeyRecapture || undefined;
 
-  const iconPath = getAssetPath('icons', '16x16.png');
-  tray = new Tray(iconPath);
-
-  const contextMenu = Menu.buildFromTemplate([
+  return Menu.buildFromTemplate([
     {
       label: 'Show App',
       click: () => {
-        const win = mainWindowGetter();
-        if (win) {
-          win.show();
-          win.focus();
-        }
+        ensureMainWindowReady().catch(() => {
+          const win = mainWindowGetter();
+          if (win) {
+            win.show();
+            win.focus();
+          }
+        });
       },
     },
     {
       label: 'Take Screenshot',
-      accelerator: DEFAULT_SCREENSHOT_ACCELERATOR,
+      accelerator: accMain,
       click: () => {
         onScreenshot();
       },
+    },
+    {
+      label: 'Re-capture Last Area',
+      ...(accRecapture ? { accelerator: accRecapture } : {}),
+      click: async () => {
+        try {
+          const latest = await loadPreferences();
+          const last = latest.capture.lastSelection;
+          if (last) {
+            // Trigger existing capture path using selection handler
+            ipcMain.emit('screenshot-data', undefined, {
+              x: last.x,
+              y: last.y,
+              width: last.width,
+              height: last.height,
+            });
+          }
+        } catch (err) {
+          logger.error('Failed to re-capture last area', err);
+        }
+      },
+    },
+    {
+      label: 'Delayed Screenshot (3s)',
+      ...(acc3 ? { accelerator: acc3 } : {}),
+      click: () => setTimeout(() => onScreenshot(), 3000),
+    },
+    {
+      label: 'Delayed Screenshot (5s)',
+      ...(acc5 ? { accelerator: acc5 } : {}),
+      click: () => setTimeout(() => onScreenshot(), 5000),
     },
     { type: 'separator' },
     {
@@ -56,8 +91,23 @@ export default function createTray(
       },
     },
   ]);
+}
 
-  tray.setContextMenu(contextMenu);
+export default function createTray(
+  mainWindowGetter: () => BrowserWindow | null,
+  onScreenshot: () => void,
+) {
+  const logger = getLogger('tray');
+  const RESOURCES_PATH = getResourcesPath();
+  const getAssetPath = (...paths: string[]): string =>
+    path.join(RESOURCES_PATH, ...paths);
+
+  const iconPath = getAssetPath('icons', '16x16.png');
+  tray = new Tray(iconPath);
+
+  buildContextMenu(mainWindowGetter, onScreenshot)
+    .then((contextMenu) => tray?.setContextMenu(contextMenu))
+    .catch((e) => getLogger('tray').warn('Failed to build tray menu', e));
   tray.setToolTip('Screenshot Tool');
   tray.on('click', () => tray?.popUpContextMenu());
 
@@ -104,6 +154,19 @@ export function updateTrayVisibility(
   } else if (!show && tray) {
     // Hide tray if it exists and should be hidden
     hideTray();
+  }
+}
+
+export async function refreshTrayMenu(
+  mainWindowGetter: () => BrowserWindow | null,
+  onScreenshot: () => void,
+): Promise<void> {
+  if (!tray) return;
+  try {
+    const menu = await buildContextMenu(mainWindowGetter, onScreenshot);
+    tray.setContextMenu(menu);
+  } catch (e) {
+    getLogger('tray').warn('Failed to refresh tray menu', e);
   }
 }
 
