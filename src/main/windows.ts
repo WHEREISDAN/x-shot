@@ -107,17 +107,56 @@ export const disableScreenSaverMode = (): void => {
 };
 
 export const closeScreenshotOverlays = (): void => {
-  if (screenshotWindows.length > 0) {
-    screenshotWindows.forEach((w) => {
-      try {
-        w.close();
-      } catch (error) {
-        console.warn('Failed to close screenshot window:', error);
+  if (screenshotWindows.length === 0) {
+    disableScreenSaverMode();
+    return;
+  }
+
+  const windowsToClose = [...screenshotWindows];
+  screenshotWindows = [];
+
+  const gracefulClose = (w: BrowserWindow): Promise<void> =>
+    new Promise((resolve) => {
+      const finish = () => {
+        try {
+          // Clear workspace visibility and always-on-top before closing to avoid sticky state
+          try {
+            w.setVisibleOnAllWorkspaces(false);
+          } catch {
+            // noop
+          }
+          try {
+            w.setAlwaysOnTop(false);
+          } catch {
+            // noop
+          }
+          w.close();
+        } catch (error) {
+          console.warn('Failed to close screenshot window:', error);
+        }
+        resolve();
+      };
+
+      // If we're in simple fullscreen on macOS, exit cleanly first
+      if (process.platform === 'darwin' && w.isSimpleFullScreen?.()) {
+        const timeout = setTimeout(finish, 500 /* ms safety timeout */);
+        w.once('leave-full-screen', () => {
+          clearTimeout(timeout);
+          finish();
+        });
+        try {
+          w.setSimpleFullScreen(false);
+        } catch {
+          finish();
+        }
+      } else {
+        finish();
       }
     });
-    screenshotWindows = [];
-  }
-  disableScreenSaverMode();
+
+  Promise.all(windowsToClose.map((w) => gracefulClose(w))).finally(() => {
+    disableScreenSaverMode();
+  });
 };
 
 export const createScreenshotOverlays = async (): Promise<void> => {
@@ -184,10 +223,12 @@ export const createScreenshotOverlays = async (): Promise<void> => {
     overlay.once('ready-to-show', () => {
       console.log('✅ Screenshot overlay ready on display', display.id);
       overlay.setAlwaysOnTop(true, 'floating');
-      // Enter full screen so the overlay covers menu bar/taskbar
+      // Enter full screen on the focused display only so we own input over the menu bar
       try {
-        if (process.platform === 'darwin') overlay.setSimpleFullScreen(true);
-        else overlay.setFullScreen(true);
+        if (display.id === focusedDisplay.id) {
+          if (process.platform === 'darwin') overlay.setSimpleFullScreen(true);
+          else overlay.setFullScreen(true);
+        }
       } catch (error) {
         console.warn('Failed to set fullscreen on screenshot overlay:', error);
       }

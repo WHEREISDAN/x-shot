@@ -98,12 +98,42 @@ export default function registerScreenshotIpcHandlers() {
       });
 
       let totalMemoryMB = 0;
-      displays.forEach((d) => {
-        const { bounds, scaleFactor, id } = d;
-        const source = sources.find((s) => s.display_id === String(id));
-        if (!source) {
-          return;
+      const pickBestSourceForDisplay = (
+        display: (typeof displays)[number],
+        index: number,
+      ) => {
+        // 1) Exact match by display_id
+        const direct = sources.find(
+          (s) => (s as unknown as { display_id?: string }).display_id === String(display.id),
+        );
+        if (direct) return direct;
+        // 2) Single source: use it for all (mirrored/Sidecar cases)
+        if (sources.length === 1) return sources[0];
+        // 3) Best aspect-ratio match from thumbnails
+        const deviceScale = display.scaleFactor || 1;
+        const targetW = Math.max(1, Math.floor(display.bounds.width * deviceScale));
+        const targetH = Math.max(1, Math.floor(display.bounds.height * deviceScale));
+        const targetRatio = targetW / targetH;
+        let best = sources[0];
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (const s of sources) {
+          const sz = s.thumbnail.getSize();
+          if (sz.width === 0 || sz.height === 0) continue;
+          const r = sz.width / sz.height;
+          const delta = Math.abs(r - targetRatio);
+          if (delta < bestDelta) {
+            best = s;
+            bestDelta = delta;
+          }
         }
+        // 4) As a final fallback, try index pairing
+        return best ?? sources[Math.min(index, sources.length - 1)];
+      };
+
+      displays.forEach((d, i) => {
+        const { bounds, scaleFactor, id } = d;
+        const source = pickBestSourceForDisplay(d, i);
+        if (!source) return;
 
         const img = source.thumbnail;
         const size = img.getSize();
@@ -182,7 +212,28 @@ export default function registerScreenshotIpcHandlers() {
     const { displayId } = (req as { displayId?: number | string }) || {};
     if (displayId === undefined || displayId === null) return null;
     const key = Number(displayId);
-    const snap = displaySnapshots.get(key);
+    let snap = displaySnapshots.get(key);
+    if (!snap) {
+      // Fallback: choose snapshot with closest aspect ratio to the requested display
+      const d = screen.getAllDisplays().find((dd) => dd.id === key);
+      if (d && displaySnapshots.size > 0) {
+        const deviceScale = d.scaleFactor || 1;
+        const targetW = Math.max(1, Math.floor(d.bounds.width * deviceScale));
+        const targetH = Math.max(1, Math.floor(d.bounds.height * deviceScale));
+        const targetRatio = targetW / targetH;
+        let bestEntry: typeof snap | null = null;
+        let bestDelta = Number.POSITIVE_INFINITY;
+        displaySnapshots.forEach((value) => {
+          const r = value.width > 0 && value.height > 0 ? value.width / value.height : 0;
+          const delta = Math.abs(r - targetRatio);
+          if (delta < bestDelta) {
+            bestDelta = delta;
+            bestEntry = value;
+          }
+        });
+        snap = bestEntry ?? null;
+      }
+    }
     if (!snap) return null;
     return { dataUrl: snap.dataUrl, width: snap.width, height: snap.height };
   });
