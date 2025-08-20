@@ -2,6 +2,16 @@
 
 export type CaptureSourceType = 'window' | 'screen';
 
+// Centralized logging types
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogMessage {
+  level: LogLevel;
+  message: string;
+  scope?: string;
+  meta?: Record<string, unknown> | unknown;
+}
+
 // Preferences System Types
 export interface CapturePreferences {
   hotkey: string;
@@ -194,6 +204,7 @@ export type RendererToMainPayloads = {
   'screenshot-window': ScreenshotWindowRequest;
   'screenshot-screen': ScreenshotScreenRequest;
   'screenshot-data': ScreenshotSelection;
+  log: LogMessage;
 };
 
 export type MainToRendererEvents = {

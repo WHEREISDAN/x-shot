@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppPreferences } from '../../shared/ipc-types';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('use-preferences');
 
 interface UsePreferencesResult {
   preferences: AppPreferences | null;
@@ -31,7 +34,7 @@ export default function usePreferences(): UsePreferencesResult {
       const message =
         err instanceof Error ? err.message : 'Failed to load preferences';
       setError(message);
-      console.error('Failed to load preferences:', err);
+      logger.error('Failed to load preferences', err);
     } finally {
       setLoading(false);
     }
@@ -59,7 +62,7 @@ export default function usePreferences(): UsePreferencesResult {
         const message =
           err instanceof Error ? err.message : 'Failed to update preferences';
         setError(message);
-        console.error('Failed to update preferences:', err);
+        logger.error('Failed to update preferences', err);
         return false;
       }
     },
@@ -80,7 +83,7 @@ export default function usePreferences(): UsePreferencesResult {
       const message =
         err instanceof Error ? err.message : 'Failed to reset preferences';
       setError(message);
-      console.error('Failed to reset preferences:', err);
+      logger.error('Failed to reset preferences', err);
       return false;
     }
   }, []);

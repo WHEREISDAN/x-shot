@@ -6,6 +6,9 @@ import SelectionOverlay from './components/SelectionOverlay';
 import QuickDock from './components/QuickDock';
 import SourcesPanel from './components/SourcesPanel';
 import type { ScreenSourceItem, WindowSourceItem } from '../shared/ipc-types';
+import { createRendererLogger } from './utils/logger';
+
+const logger = createRendererLogger('screenshot-capture');
 
 function ScreenshotCapture() {
   const { offsetX, offsetY, isPrimary } = useMemo(() => {
@@ -62,7 +65,7 @@ function ScreenshotCapture() {
           });
         }
       } catch (error) {
-        console.warn('Failed to get display snapshot:', error);
+        logger.warn('Failed to get display snapshot', error);
       }
     };
     run();
@@ -86,7 +89,7 @@ function ScreenshotCapture() {
         if (Array.isArray(sources))
           setWindowSources(sources as WindowSourceItem[]);
       } catch (error) {
-        console.warn('Failed to load window sources:', error);
+        logger.warn('Failed to load window sources', error);
         setWindowSources([]);
       }
     }
@@ -107,7 +110,7 @@ function ScreenshotCapture() {
         if (Array.isArray(sources))
           setScreenSources(sources as ScreenSourceItem[]);
       } catch (error) {
-        console.warn('Failed to load screen sources:', error);
+        logger.warn('Failed to load screen sources', error);
         setScreenSources([]);
       }
     }

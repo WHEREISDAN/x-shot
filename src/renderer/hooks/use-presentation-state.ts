@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import safeLocalStorage from '../utils/storage';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('use-presentation-state');
 
 export type AspectPreset =
   | 'auto'
@@ -104,7 +107,7 @@ export function usePresentationState(): [
           setSettings(preferences.presentation);
         }
       } catch (error) {
-        console.warn('Failed to load presentation preferences:', error);
+        logger.warn('Failed to load presentation preferences', error);
       }
     };
 
@@ -128,7 +131,7 @@ export function usePresentationState(): [
         },
       });
     } catch (error) {
-      console.warn('Failed to save presentation preferences:', error);
+      logger.warn('Failed to save presentation preferences', error);
       // Fall back to localStorage
       safeLocalStorage.setItem('xshot:presentation', JSON.stringify(next));
     }

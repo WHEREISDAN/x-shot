@@ -1,4 +1,7 @@
 import domtoimage from 'dom-to-image-more';
+import { createRendererLogger } from '../../utils/logger';
+
+const logger = createRendererLogger('editor-export-dom');
 
 export interface DomExportOptions {
   /** The DOM element to capture (should be the main stage div) */
@@ -43,7 +46,7 @@ export async function exportDomToDataUrl({
       MAX_EXPORT_MEMORY_MB / ((width * height * 4) / (1024 * 1024)),
     );
     finalScale = Math.min(scale, maxScale);
-    console.warn(
+    logger.warn(
       `Export scale reduced from ${scale} to ${finalScale.toFixed(2)} to limit memory usage`,
     );
   }
@@ -74,13 +77,13 @@ export async function exportDomToDataUrl({
     const startTime = Date.now();
     const dataUrl = await domtoimage.toPng(element, options);
     const duration = Date.now() - startTime;
-    console.log(
+    logger.info(
       `Export completed in ${duration}ms (${Math.round(estimatedMemoryMB)}MB)`,
     );
 
     return dataUrl;
   } catch (error) {
-    console.error('Failed to export DOM to image:', error);
+    logger.error('Failed to export DOM to image', error);
     throw new Error(
       `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );

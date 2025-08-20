@@ -1,4 +1,7 @@
 import { useCallback, useMemo, useState, useEffect } from 'react';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('use-editor-state');
 
 export type ToolType =
   | 'select'
@@ -227,7 +230,7 @@ export function useEditorState(): UseEditorStateResult {
           setTextSize(preferences.editor.defaultTextSize);
         }
       } catch (error) {
-        console.warn('Failed to load editor preferences:', error);
+        logger.warn('Failed to load editor preferences', error);
       }
     };
 

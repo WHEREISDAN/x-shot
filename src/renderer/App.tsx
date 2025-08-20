@@ -12,6 +12,9 @@ import ScreenshotEditor from './components/editor/ScreenshotEditor';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
+import { createRendererLogger } from './utils/logger';
+
+const logger = createRendererLogger('app');
 
 function Hello() {
   const [screenshotData, setScreenshotData] = useState<ScreenshotResult | null>(
@@ -35,7 +38,7 @@ function Hello() {
           await api.invoke('copy-image', { dataUrl: data.imageDataUrl });
         }
       } catch (error) {
-        console.warn('Failed to auto-copy screenshot:', error);
+        logger.warn('Failed to auto-copy screenshot', error);
       }
     });
     return unsubscribe;

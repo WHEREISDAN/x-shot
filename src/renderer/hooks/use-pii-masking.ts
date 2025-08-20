@@ -8,6 +8,9 @@ import type {
   OcrWord,
 } from './use-text-detection';
 import safeLocalStorage from '../utils/storage';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('use-pii-masking');
 
 export interface PiiMaskRect {
   x: number;
@@ -102,7 +105,7 @@ export function usePiiMasking(
           setDetectors(preferences.pii.detectors ?? null);
         }
       } catch (error) {
-        console.warn('Failed to load PII preferences:', error);
+        logger.warn('Failed to load PII preferences', error);
       }
     };
 
@@ -130,7 +133,7 @@ export function usePiiMasking(
         },
       });
     } catch (error) {
-      console.warn('Failed to save PII preferences:', error);
+      logger.warn('Failed to save PII preferences', error);
     }
   }, []);
 
@@ -164,7 +167,7 @@ export function usePiiMasking(
         const parsed = JSON.parse(raw) as PiiMaskRect[];
         if (Array.isArray(parsed)) setPiiMasks(parsed);
       } catch (error) {
-        console.warn('Failed to parse stored PII masks:', error);
+        logger.warn('Failed to parse stored PII masks', error);
       }
     }
   }, [piiStorageKey]);

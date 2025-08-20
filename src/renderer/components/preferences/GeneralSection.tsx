@@ -7,6 +7,9 @@ import {
   typography,
   borderRadius,
 } from '../../design-system/tokens';
+import { createRendererLogger } from '../../utils/logger';
+
+const logger = createRendererLogger('preferences-general');
 
 interface GeneralSectionProps {
   preferences: AppPreferences;
@@ -155,8 +158,7 @@ export default function GeneralSection({
         await handleSaveLocationChange(result.filePath);
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to select folder:', error);
+      logger.error('Failed to select folder', error);
     }
   }, [preferences.capture.defaultSaveLocation, handleSaveLocationChange]);
 

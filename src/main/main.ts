@@ -9,6 +9,8 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import { app, ipcMain } from 'electron';
+import log from 'electron-log';
+import type { LogMessage } from '../shared/ipc-types';
 import {
   createMainWindow,
   getMainWindow,
@@ -34,8 +36,30 @@ import { loadPreferences } from './preferences';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
+  log.info(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
+});
+
+// Centralized renderer-to-main logging sink
+ipcMain.on('log', (_event, payload: LogMessage) => {
+  const { level, message, scope, meta } = payload || {};
+  const prefix = scope ? `[${scope}] ` : '';
+  switch (level) {
+    case 'debug':
+      log.debug(prefix + message, meta ?? '');
+      break;
+    case 'info':
+      log.info(prefix + message, meta ?? '');
+      break;
+    case 'warn':
+      log.warn(prefix + message, meta ?? '');
+      break;
+    case 'error':
+      log.error(prefix + message, meta ?? '');
+      break;
+    default:
+      log.info(prefix + message, meta ?? '');
+  }
 });
 app.on('window-all-closed', () => {
   // Only quit if tray is not visible
@@ -98,7 +122,7 @@ app
       app.disableHardwareAcceleration();
     });
   })
-  .catch(console.log);
+  .catch((err) => log.error(err));
 
 app.on('will-quit', () => {
   unregisterAllHotkeys();

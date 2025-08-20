@@ -3,6 +3,7 @@ import { app, BrowserWindow, Menu, Tray } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import getResourcesPath from '../shared/utils';
 import { createPreferencesWindow } from './windows';
+import { getLogger } from './logger';
 
 let tray: Tray | null = null;
 
@@ -10,6 +11,7 @@ export default function createTray(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
 ) {
+  const logger = getLogger('tray');
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
     path.join(RESOURCES_PATH, ...paths);
@@ -42,7 +44,7 @@ export default function createTray(
         try {
           await createPreferencesWindow();
         } catch (error) {
-          console.error('Failed to open preferences window:', error);
+          logger.error('Failed to open preferences window', error);
         }
       },
     },

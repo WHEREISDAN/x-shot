@@ -1,10 +1,14 @@
 // Safe localStorage utilities with proper error handling
+import { createRendererLogger } from './logger';
+
+const logger = createRendererLogger('storage');
+
 const safeLocalStorage = {
   getItem(key: string): string | null {
     try {
       return localStorage.getItem(key);
     } catch (error) {
-      console.warn(`Failed to read from localStorage (key: ${key}):`, error);
+      logger.warn(`Failed to read from localStorage (key: ${key})`, error);
       return null;
     }
   },
@@ -14,7 +18,7 @@ const safeLocalStorage = {
       localStorage.setItem(key, value);
       return true;
     } catch (error) {
-      console.warn(`Failed to write to localStorage (key: ${key}):`, error);
+      logger.warn(`Failed to write to localStorage (key: ${key})`, error);
       return false;
     }
   },
@@ -24,7 +28,7 @@ const safeLocalStorage = {
       localStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.warn(`Failed to remove from localStorage (key: ${key}):`, error);
+      logger.warn(`Failed to remove from localStorage (key: ${key})`, error);
       return false;
     }
   },

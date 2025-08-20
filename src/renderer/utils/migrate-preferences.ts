@@ -3,17 +3,20 @@ import type {
   AppPreferences,
   PresentationSettings,
 } from '../../shared/ipc-types';
+import { createRendererLogger } from './logger';
+
+const logger = createRendererLogger('migrate-preferences');
 
 /**
  * Migrate localStorage preferences to the new unified system
  */
 export async function migrateLocalStoragePreferences(): Promise<boolean> {
   try {
-    console.log('Starting localStorage preferences migration...');
+    logger.info('Starting localStorage preferences migration...');
 
     const api = window?.electron?.ipcRenderer;
     if (!api) {
-      console.warn('Electron IPC not available, skipping migration');
+      logger.warn('Electron IPC not available, skipping migration');
       return false;
     }
 
@@ -27,7 +30,7 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
       existingPrefs.editor.defaultStrokeColor !== '#ef4444' ||
       existingPrefs.presentation.padding !== 48
     ) {
-      console.log('Preferences already customized, skipping migration');
+      logger.info('Preferences already customized, skipping migration');
       return false;
     }
 
@@ -43,9 +46,9 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
         ) as PresentationSettings;
         updates.presentation = presentation;
         migrated = true;
-        console.log('Migrated presentation settings');
+        logger.info('Migrated presentation settings');
       } catch (error) {
-        console.warn('Failed to parse presentation settings:', error);
+        logger.warn('Failed to parse presentation settings', error);
       }
     }
 
@@ -82,10 +85,10 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
             },
           } as any;
           migrated = true;
-          console.log('Migrated PII settings');
+          logger.info('Migrated PII settings');
         }
       } catch (error) {
-        console.warn('Failed to parse PII settings:', error);
+        logger.warn('Failed to parse PII settings', error);
       }
     }
 
@@ -95,7 +98,7 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
         preferences: updates,
       });
       if (success) {
-        console.log('Successfully migrated localStorage preferences');
+        logger.info('Successfully migrated localStorage preferences');
 
         // Clean up old localStorage keys
         safeLocalStorage.removeItem('xshot:presentation');
@@ -103,13 +106,13 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
 
         return true;
       }
-      console.error('Failed to save migrated preferences');
+      logger.error('Failed to save migrated preferences');
       return false;
     }
-    console.log('No localStorage preferences found to migrate');
+    logger.info('No localStorage preferences found to migrate');
     return false;
   } catch (error) {
-    console.error('Error during localStorage migration:', error);
+    logger.error('Error during localStorage migration', error);
     return false;
   }
 }

@@ -5,6 +5,9 @@ import {
   exportAnnotatedDataUrl,
   exportPresentedDataUrl,
 } from '../components/editor/editor-export';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('use-export-glue');
 
 export interface UseExportGlueInput {
   stageRef: React.RefObject<HTMLElement>;
@@ -62,7 +65,7 @@ export function useExportGlue({
       }
 
       const duration = Date.now() - startTime;
-      console.log(`Total export pipeline took ${duration}ms`);
+      logger.info(`Total export pipeline took ${duration}ms`);
 
       return result;
     } finally {

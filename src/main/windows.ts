@@ -3,6 +3,7 @@ import path from 'path';
 import { app, BrowserWindow, shell, screen } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import { getLogger } from './logger';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import getResourcesPath from '../shared/utils';
@@ -107,6 +108,7 @@ export const disableScreenSaverMode = (): void => {
 };
 
 export const closeScreenshotOverlays = (): void => {
+  const logger = getLogger('windows');
   if (screenshotWindows.length === 0) {
     disableScreenSaverMode();
     return;
@@ -132,7 +134,7 @@ export const closeScreenshotOverlays = (): void => {
           }
           w.close();
         } catch (error) {
-          console.warn('Failed to close screenshot window:', error);
+          logger.warn('Failed to close screenshot window', error);
         }
         resolve();
       };
@@ -157,12 +159,13 @@ export const closeScreenshotOverlays = (): void => {
   Promise.all(windowsToClose.map((w) => gracefulClose(w)))
     .then(() => disableScreenSaverMode())
     .catch((err) => {
-      console.warn('Error while closing screenshot overlays:', err);
+      logger.warn('Error while closing screenshot overlays', err);
       disableScreenSaverMode();
     });
 };
 
 export const createScreenshotOverlays = async (): Promise<void> => {
+  const logger = getLogger('windows');
   const displays = screen.getAllDisplays();
   const baseUrl = resolveHtmlPath('index.html');
   const cursorPoint = screen.getCursorScreenPoint();
@@ -174,7 +177,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       try {
         w.close();
       } catch (error) {
-        console.warn('Failed to close screenshot window:', error);
+        logger.warn('Failed to close screenshot window', error);
       }
     });
     screenshotWindows = [];
@@ -224,7 +227,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     overlay.once('ready-to-show', () => {
-      console.log('✅ Screenshot overlay ready on display', display.id);
+      logger.info(`✅ Screenshot overlay ready on display ${display.id}`);
       overlay.setAlwaysOnTop(true, 'floating');
       // Enter full screen on the focused display only so we own input over the menu bar
       try {
@@ -233,7 +236,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
           else overlay.setFullScreen(true);
         }
       } catch (error) {
-        console.warn('Failed to set fullscreen on screenshot overlay:', error);
+        logger.warn('Failed to set fullscreen on screenshot overlay', error);
       }
       if (display.id === focusedDisplay.id) {
         overlay.show();
@@ -252,6 +255,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
 };
 
 export const showScreenshotOverlays = (): void => {
+  const logger = getLogger('windows');
   if (screenshotWindows.length === 0) return;
   enableScreenSaverMode();
   screenshotWindows.forEach((w) => {
@@ -259,7 +263,7 @@ export const showScreenshotOverlays = (): void => {
       w.setAlwaysOnTop(true, 'floating');
       w.showInactive();
     } catch (error) {
-      console.warn('Failed to show screenshot overlay window:', error);
+      logger.warn('Failed to show screenshot overlay window', error);
     }
   });
 };

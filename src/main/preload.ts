@@ -6,6 +6,7 @@ import type {
   MainToRendererEvents,
   IpcInvokes,
   WindowState,
+  LogMessage,
 } from '../shared/ipc-types';
 
 export type Channels =
@@ -44,6 +45,9 @@ const electronHandler = {
       payload: IpcInvokes[K]['req'],
     ): Promise<IpcInvokes[K]['res']> {
       return ipcRenderer.invoke(channel as string, payload);
+    },
+    log(payload: LogMessage) {
+      ipcRenderer.send('log', payload);
     },
   },
   windowControls: {
