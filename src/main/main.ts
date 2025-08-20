@@ -12,7 +12,6 @@ import { app, ipcMain } from 'electron';
 import {
   createMainWindow,
   getMainWindow,
-  createScreenshotOverlays,
   showScreenshotOverlays,
   areOverlaysOpen,
 } from './windows';
@@ -52,8 +51,13 @@ app
     const triggerScreenshot = async () => {
       const main = getMainWindow();
       if (main) main.hide();
-      if (areOverlaysOpen()) showScreenshotOverlays();
-      else await createScreenshotOverlays();
+      if (areOverlaysOpen()) {
+        showScreenshotOverlays();
+      } else {
+        // Route through the screenshot-capture flow so pre-capture snapshots are prepared
+        // and overlays are created in the correct order.
+        ipcMain.emit('screenshot-capture');
+      }
     };
 
     // Register IPC handlers first

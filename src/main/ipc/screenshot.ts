@@ -97,6 +97,10 @@ export default function registerScreenshotIpcHandlers() {
         },
       });
 
+      log.info(
+        `Pre-capture: found ${displays.length} displays and ${sources.length} screen sources`,
+      );
+
       let totalMemoryMB = 0;
       const pickBestSourceForDisplay = (
         display: (typeof displays)[number],
@@ -104,26 +108,36 @@ export default function registerScreenshotIpcHandlers() {
       ) => {
         // 1) Exact match by display_id
         const direct = sources.find(
-          (s) => (s as unknown as { display_id?: string }).display_id === String(display.id),
+          (s) =>
+            (s as unknown as { display_id?: string }).display_id ===
+            String(display.id),
         );
         if (direct) return direct;
         // 2) Single source: use it for all (mirrored/Sidecar cases)
         if (sources.length === 1) return sources[0];
         // 3) Best aspect-ratio match from thumbnails
         const deviceScale = display.scaleFactor || 1;
-        const targetW = Math.max(1, Math.floor(display.bounds.width * deviceScale));
-        const targetH = Math.max(1, Math.floor(display.bounds.height * deviceScale));
+        const targetW = Math.max(
+          1,
+          Math.floor(display.bounds.width * deviceScale),
+        );
+        const targetH = Math.max(
+          1,
+          Math.floor(display.bounds.height * deviceScale),
+        );
         const targetRatio = targetW / targetH;
         let best = sources[0];
         let bestDelta = Number.POSITIVE_INFINITY;
-        for (const s of sources) {
-          const sz = s.thumbnail.getSize();
-          if (sz.width === 0 || sz.height === 0) continue;
-          const r = sz.width / sz.height;
-          const delta = Math.abs(r - targetRatio);
-          if (delta < bestDelta) {
-            best = s;
-            bestDelta = delta;
+        for (let idx = 0; idx < sources.length; idx += 1) {
+          const candidate = sources[idx];
+          const sz = candidate.thumbnail.getSize();
+          if (sz.width > 0 && sz.height > 0) {
+            const r = sz.width / sz.height;
+            const delta = Math.abs(r - targetRatio);
+            if (delta < bestDelta) {
+              best = candidate;
+              bestDelta = delta;
+            }
           }
         }
         // 4) As a final fallback, try index pairing
@@ -133,7 +147,12 @@ export default function registerScreenshotIpcHandlers() {
       displays.forEach((d, i) => {
         const { bounds, scaleFactor, id } = d;
         const source = pickBestSourceForDisplay(d, i);
-        if (!source) return;
+        if (!source) {
+          log.warn(
+            `Pre-capture: no source matched for display ${id} (index ${i})`,
+          );
+          return;
+        }
 
         const img = source.thumbnail;
         const size = img.getSize();
@@ -149,6 +168,9 @@ export default function registerScreenshotIpcHandlers() {
           scaleFactor: scaleFactor || 1,
           timestamp,
         });
+        log.info(
+          `Pre-capture: stored snapshot for display ${id} -> ${size.width}x${size.height}`,
+        );
       });
 
       log.info(
@@ -221,17 +243,20 @@ export default function registerScreenshotIpcHandlers() {
         const targetW = Math.max(1, Math.floor(d.bounds.width * deviceScale));
         const targetH = Math.max(1, Math.floor(d.bounds.height * deviceScale));
         const targetRatio = targetW / targetH;
-        let bestEntry: typeof snap | null = null;
+        let bestEntry: typeof snap;
         let bestDelta = Number.POSITIVE_INFINITY;
         displaySnapshots.forEach((value) => {
-          const r = value.width > 0 && value.height > 0 ? value.width / value.height : 0;
+          const r =
+            value.width > 0 && value.height > 0
+              ? value.width / value.height
+              : 0;
           const delta = Math.abs(r - targetRatio);
           if (delta < bestDelta) {
             bestDelta = delta;
             bestEntry = value;
           }
         });
-        snap = bestEntry ?? null;
+        snap = bestEntry;
       }
     }
     if (!snap) return null;

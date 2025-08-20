@@ -154,9 +154,12 @@ export const closeScreenshotOverlays = (): void => {
       }
     });
 
-  Promise.all(windowsToClose.map((w) => gracefulClose(w))).finally(() => {
-    disableScreenSaverMode();
-  });
+  Promise.all(windowsToClose.map((w) => gracefulClose(w)))
+    .then(() => disableScreenSaverMode())
+    .catch((err) => {
+      console.warn('Error while closing screenshot overlays:', err);
+      disableScreenSaverMode();
+    });
 };
 
 export const createScreenshotOverlays = async (): Promise<void> => {
