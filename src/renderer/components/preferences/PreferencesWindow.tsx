@@ -50,12 +50,15 @@ export default function PreferencesWindow() {
 
   const sidebarStyles: React.CSSProperties = {
     width: '200px',
+    minWidth: '200px',
+    flexShrink: 0,
     background: colors.background.secondary,
     borderRight: `1px solid ${colors.border.default}`,
     padding: spacing[4],
     display: 'flex',
     flexDirection: 'column',
     gap: spacing[2],
+    overflowY: 'auto',
   };
 
   const tabStyles: React.CSSProperties = {
@@ -88,14 +91,24 @@ export default function PreferencesWindow() {
   };
 
   const mainContentStyles: React.CSSProperties = {
+    position: 'relative',
     height: 0,
     flex: 1,
     padding: spacing[6],
+    paddingTop: 0,
     overflow: 'auto',
   };
 
   const headerStyles: React.CSSProperties = {
-    marginBottom: spacing[6],
+    position: 'sticky',
+    width: '100%',
+    top: 0,
+    zIndex: 1,
+    paddingBottom: spacing[3],
+    paddingTop: spacing[4],
+    marginBottom: spacing[4],
+    background: colors.background.primary,
+    borderBottom: `1px solid ${colors.border.default}`,
   };
 
   const titleStyles: React.CSSProperties = {
@@ -228,11 +241,18 @@ export default function PreferencesWindow() {
 
       <div style={contentStyles}>
         {/* Sidebar */}
-        <div style={sidebarStyles}>
+        <div
+          style={sidebarStyles}
+          role="tablist"
+          aria-label="Preferences Sections"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
               style={activeTab === tab.id ? activeTabStyles : tabStyles}
               onClick={() => setActiveTab(tab.id)}
               onMouseEnter={(e) => {
@@ -246,7 +266,7 @@ export default function PreferencesWindow() {
                 }
               }}
             >
-              <span>{tab.icon}</span>
+              <span aria-hidden>{tab.icon}</span>
               {tab.label}
             </button>
           ))}
@@ -254,7 +274,12 @@ export default function PreferencesWindow() {
 
         {/* Main content */}
         <div style={mainStyles}>
-          <div style={mainContentStyles}>
+          <div
+            style={mainContentStyles}
+            id={`panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${activeTab}`}
+          >
             <div style={headerStyles}>
               <h1 style={titleStyles}>{getTabTitle()}</h1>
               <p style={subtitleStyles}>Customize X-Shot to your preferences</p>

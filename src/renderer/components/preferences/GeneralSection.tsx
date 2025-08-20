@@ -265,7 +265,7 @@ export default function GeneralSection({
       <div style={groupStyles}>
         <h3 style={labelStyles}>Screenshot Capture</h3>
 
-        <div>
+        <div style={{ width: '100%' }}>
           <div style={labelStyles} id="hotkey-label">
             Global Hotkey
           </div>
@@ -284,20 +284,27 @@ export default function GeneralSection({
             placeholder="Click then press shortcut"
             variant="filled"
             size="md"
-            style={{ maxWidth: '300px' }}
+            style={{ width: '100%', maxWidth: '360px' }}
             readOnly
           />
         </div>
 
-        <div>
+        <div style={{ width: '100%' }}>
           <div style={labelStyles} id="delay-hotkey-label">
             Delayed Capture Hotkeys
           </div>
           <p style={descriptionStyles}>
             Optional shortcuts for delayed capture. Leave blank to disable.
           </p>
-          <div style={{ display: 'flex', gap: spacing[3], maxWidth: 980 }}>
-            <div style={{ flex: 1 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: spacing[3],
+              width: '100%',
+            }}
+          >
+            <div>
               <Input
                 aria-labelledby="delay-hotkey-label"
                 type="text"
@@ -312,10 +319,11 @@ export default function GeneralSection({
                 placeholder="Click then press shortcut (3s)"
                 variant="filled"
                 size="md"
+                style={{ width: '100%' }}
                 readOnly
               />
             </div>
-            <div style={{ flex: 1 }}>
+            <div>
               <Input
                 aria-labelledby="delay-hotkey-label"
                 type="text"
@@ -330,10 +338,11 @@ export default function GeneralSection({
                 placeholder="Click then press shortcut (5s)"
                 variant="filled"
                 size="md"
+                style={{ width: '100%' }}
                 readOnly
               />
             </div>
-            <div style={{ flex: 1 }}>
+            <div>
               <Input
                 aria-labelledby="delay-hotkey-label"
                 type="text"
@@ -359,6 +368,7 @@ export default function GeneralSection({
                 placeholder="Click then press shortcut (Re-capture last area)"
                 variant="filled"
                 size="md"
+                style={{ width: '100%' }}
                 readOnly
               />
             </div>
