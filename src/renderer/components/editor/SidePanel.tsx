@@ -13,6 +13,7 @@ interface SidePanelProps {
     setExportScale: (n: number) => void;
     setShadow: (s: Partial<PresentationSettings['shadow']>) => void;
     setGradient: (g: Partial<PresentationSettings['gradient']>) => void;
+    setBackgroundImage: (url: string | null) => void;
     setBorderColor: (c: string) => void;
   };
 }

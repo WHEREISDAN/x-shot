@@ -83,6 +83,8 @@ export interface PresentationSettings {
     angleDeg: number;
     stops: Array<{ offset: number; color: string }>;
   };
+  // Optional background image; when set, overrides gradient background
+  backgroundImageUrl?: string | null;
   padding: number;
   inset: number;
   radius: number;

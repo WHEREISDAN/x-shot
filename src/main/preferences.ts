@@ -64,6 +64,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
         { offset: 1, color: '#22d3ee' },
       ],
     },
+    backgroundImageUrl: null,
     padding: 48,
     inset: 16,
     radius: 24,

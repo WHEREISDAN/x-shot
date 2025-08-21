@@ -35,6 +35,8 @@ export interface ShadowSettings {
 
 export interface PresentationSettings {
   gradient: GradientSettings;
+  // When set, overrides gradient and uses this image as the background
+  backgroundImageUrl?: string | null;
   padding: number;
   inset: number;
   radius: number;
@@ -53,6 +55,7 @@ const defaultSettings: PresentationSettings = {
       { offset: 1, color: '#22d3ee' },
     ],
   },
+  backgroundImageUrl: null,
   padding: 48,
   inset: 16,
   radius: 24,
@@ -74,6 +77,7 @@ export function usePresentationState(): [
   {
     setGradient: (g: Partial<GradientSettings>) => void;
     setGradientStops: (stops: GradientStop[]) => void;
+    setBackgroundImage: (url: string | null) => void;
     setPadding: (px: number) => void;
     setInset: (px: number) => void;
     setRadius: (px: number) => void;
@@ -140,9 +144,16 @@ export function usePresentationState(): [
   const actions = useMemo(
     () => ({
       setGradient: (g: Partial<GradientSettings>) =>
-        save({ ...settings, gradient: { ...settings.gradient, ...g } }),
+        // Selecting a gradient should clear any background image
+        save({
+          ...settings,
+          backgroundImageUrl: null,
+          gradient: { ...settings.gradient, ...g },
+        }),
       setGradientStops: (stops: GradientStop[]) =>
         save({ ...settings, gradient: { ...settings.gradient, stops } }),
+      setBackgroundImage: (url: string | null) =>
+        save({ ...settings, backgroundImageUrl: url }),
       setPadding: (px: number) =>
         save({ ...settings, padding: Math.max(0, Math.round(px)) }),
       setInset: (px: number) =>

@@ -4,6 +4,14 @@ import type {
   AspectPreset,
 } from '../../hooks/use-presentation-state';
 import { presets, toCssGradient } from './gradient-presets';
+import bg1 from '../../../../assets/backgrounds/1.png';
+import bg2 from '../../../../assets/backgrounds/2.png';
+import bg3 from '../../../../assets/backgrounds/3.png';
+import bg4 from '../../../../assets/backgrounds/4.png';
+import bg5 from '../../../../assets/backgrounds/5.png';
+import bg6 from '../../../../assets/backgrounds/6.png';
+import bg7 from '../../../../assets/backgrounds/7.png';
+import bg8 from '../../../../assets/backgrounds/8.png';
 import { GlassPanel, Input, Select } from '../../design-system';
 import {
   colors,
@@ -11,6 +19,61 @@ import {
   borderRadius,
   typography,
 } from '../../design-system/tokens';
+
+function UploadBackgroundButton({
+  onSelect,
+}: {
+  onSelect: (url: string) => void;
+}) {
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const handlePick = () => inputRef.current?.click();
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') onSelect(reader.result);
+          };
+          reader.readAsDataURL(file);
+        }}
+      />
+      <button
+        type="button"
+        aria-label="Upload background image"
+        onClick={handlePick}
+        style={{
+          height: '36px',
+          borderRadius: 12,
+          border: '1px solid rgba(255,255,255,0.1)',
+          cursor: 'pointer',
+          background:
+            'linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#ffffff',
+          opacity: 0.85,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+        title="Upload your image"
+      >
+        +
+      </button>
+    </>
+  );
+}
 
 interface PresentationPanelProps {
   settings: PresentationSettings;
@@ -23,6 +86,7 @@ interface PresentationPanelProps {
     setExportScale: (n: number) => void;
     setShadow: (s: Partial<PresentationSettings['shadow']>) => void;
     setGradient: (g: Partial<PresentationSettings['gradient']>) => void;
+    setBackgroundImage: (url: string | null) => void;
     setBorderColor: (c: string) => void;
   };
 }
@@ -73,7 +137,7 @@ export default function PresentationPanel({
     gap: spacing[2],
   };
 
-  const gradientButtonStyles: React.CSSProperties = {
+  const swatchButtonStyles: React.CSSProperties = {
     height: '36px',
     borderRadius: borderRadius.lg,
     border: `1px solid ${colors.border.muted}`,
@@ -139,14 +203,39 @@ export default function PresentationPanel({
         <div style={sectionStyles}>
           <div style={sectionTitleStyles}>Background</div>
           <div style={gridStyles}>
-            {presets.map((g, i) => (
+            {/* 8 image swatches */}
+            {[bg1, bg2, bg3, bg4, bg5, bg6, bg7, bg8].map((src) => (
+              <button
+                type="button"
+                key={`img-${src}`}
+                onClick={() => {
+                  onChange.setBackgroundImage(src);
+                }}
+                aria-label={`Image ${src}`}
+                style={{
+                  ...swatchButtonStyles,
+                  background: `url(${src}) center/cover no-repeat`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              />
+            ))}
+            {/* 11 gradient swatches */}
+            {presets.slice(0, 11).map((g, i) => (
               <button
                 type="button"
                 key={`${g.kind}-${g.angleDeg}-${g.stops.map((s) => s.color).join('-')}`}
-                onClick={() => onChange.setGradient(g)}
+                onClick={() => {
+                  onChange.setBackgroundImage(null);
+                  onChange.setGradient(g);
+                }}
                 aria-label={`Gradient ${i + 1}`}
                 style={{
-                  ...gradientButtonStyles,
+                  ...swatchButtonStyles,
                   background: toCssGradient(g, 120, 36),
                 }}
                 onMouseEnter={(e) => {
@@ -157,6 +246,10 @@ export default function PresentationPanel({
                 }}
               />
             ))}
+            {/* Upload swatch */}
+            <UploadBackgroundButton
+              onSelect={(url) => onChange.setBackgroundImage(url)}
+            />
           </div>
         </div>
 

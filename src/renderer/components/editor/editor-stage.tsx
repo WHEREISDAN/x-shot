@@ -279,6 +279,17 @@ export const EditorStage = memo(function EditorStage({
   const canvasW = presentationDisabled ? natural.width : layout.canvas.width;
   const canvasH = presentationDisabled ? natural.height : layout.canvas.height;
 
+  // Compute background style without nested ternaries (lint-friendly)
+  let stageBackground = 'transparent';
+  if (!presentationDisabled) {
+    if (presentation.backgroundImageUrl) {
+      // Include position/size/repeat in shorthand to ensure exporters respect it
+      stageBackground = `url(${presentation.backgroundImageUrl}) center / cover no-repeat`;
+    } else {
+      stageBackground = toCssGradient(presentation.gradient, canvasW, canvasH);
+    }
+  }
+
   return (
     <div
       ref={containerRef}
@@ -306,11 +317,7 @@ export const EditorStage = memo(function EditorStage({
           transformOrigin: 'center center',
           userSelect: 'none',
           WebkitUserSelect: 'none',
-          background: presentationDisabled
-            ? 'transparent'
-            : toCssGradient(presentation.gradient, canvasW, canvasH),
-          backgroundSize: '100% 100%',
-          backgroundPosition: 'center',
+          background: stageBackground,
           borderRadius: presentationDisabled ? 0 : 24,
         }}
       >
