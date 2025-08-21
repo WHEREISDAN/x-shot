@@ -133,7 +133,6 @@ export default function GeneralSection({
       },
   } as const;
 
-  // Fallback: global key capture when field is focused (handles cases where input doesn't get keydown reliably)
   const globalCaptureSetterRef = React.useRef<null | ((accel: string) => void)>(
     null,
   );

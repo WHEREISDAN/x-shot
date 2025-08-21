@@ -14,13 +14,13 @@ export type AspectPreset =
   | 'custom';
 
 export interface GradientStop {
-  offset: number; // 0..1
-  color: string; // css color
+  offset: number;
+  color: string;
 }
 
 export interface GradientSettings {
   kind: 'linear' | 'radial';
-  angleDeg: number; // for linear
+  angleDeg: number;
   stops: GradientStop[];
 }
 
@@ -30,20 +30,19 @@ export interface ShadowSettings {
   y: number;
   blur: number;
   spread: number;
-  color: string; // rgba
+  color: string;
 }
 
 export interface PresentationSettings {
   gradient: GradientSettings;
-  // When set, overrides gradient and uses this image as the background
   backgroundImageUrl?: string | null;
   padding: number;
   inset: number;
   radius: number;
   shadow: ShadowSettings;
   aspect: { preset: AspectPreset; custom?: { w: number; h: number } };
-  exportScale: number; // 1x 2x 3x
-  borderColor: string; // inset/background color inside frame
+  exportScale: number;
+  borderColor: string;
 }
 
 const defaultSettings: PresentationSettings = {

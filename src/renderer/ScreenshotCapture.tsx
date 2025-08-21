@@ -79,7 +79,6 @@ function ScreenshotCapture() {
     const next = !showWindowsPanel;
     setShowWindowsPanel(next);
     setShowDisplaysPanel(false);
-    // Clear any existing area selection when switching to windows panel
     if (next) clearSelection();
     if (next && windowSources.length === 0) {
       try {
@@ -100,7 +99,6 @@ function ScreenshotCapture() {
     const next = !showDisplaysPanel;
     setShowDisplaysPanel(next);
     setShowWindowsPanel(false);
-    // Clear any existing area selection when switching to displays panel
     if (next) clearSelection();
     if (next && screenSources.length === 0) {
       try {
@@ -134,7 +132,6 @@ function ScreenshotCapture() {
 
   const captureScreen = useCallback(
     (sourceId: string) => {
-      // Clear selection before initiating display capture
       clearSelection();
       try {
         window.electron.ipcRenderer.sendMessage('screenshot-screen', {
@@ -163,7 +160,6 @@ function ScreenshotCapture() {
         cursor: 'crosshair',
       }}
       onMouseDown={(e) => {
-        // Ignore clicks originating from selection elements or dock
         const target = e.target as HTMLElement;
         if (
           target.closest(
@@ -182,8 +178,6 @@ function ScreenshotCapture() {
           e.stopPropagation();
           return;
         }
-        // Explicitly capture pointer to this container so move/up events are not lost
-        // Best-effort pointer capture; ignore if unsupported
         try {
           const maybePointerEvent = e.nativeEvent as unknown as {
             pointerId?: number;
@@ -266,7 +260,6 @@ function ScreenshotCapture() {
               '0 6px 16px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15)',
             backgroundImage: `url(${background.url})`,
             backgroundRepeat: 'no-repeat',
-            // Scale up display snapshot; since snapshot is stretched to viewport, use viewport coords
             backgroundSize: `${window.innerWidth * 3}px ${window.innerHeight * 3}px`,
             backgroundPosition: `-${pointer.x * 3 - 60}px -${pointer.y * 3 - 60}px`,
           }}

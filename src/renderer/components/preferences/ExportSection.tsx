@@ -100,7 +100,6 @@ export default function ExportSection({
     { value: 4, label: '4x (Maximum)' },
   ];
 
-  // Generate example filename
   const generateExampleFilename = () => {
     const timestamp = new Date()
       .toISOString()

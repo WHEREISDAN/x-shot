@@ -31,12 +31,11 @@ export default function registerScreenshotIpcHandlers() {
     scaleFactor: number;
     timestamp: number;
   };
-  // In-memory store of pre-captured display images for the current screenshot session
   const displaySnapshots = new Map<number, DisplaySnapshot>();
 
   // Memory management constants
-  const MAX_SNAPSHOT_AGE_MS = 30000; // 30 seconds
-  const MAX_SNAPSHOT_DIMENSION = 4096; // Reduce max size from 8192
+  const MAX_SNAPSHOT_AGE_MS = 30000;
+  const MAX_SNAPSHOT_DIMENSION = 4096;
   let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
   const releaseDisplaySnapshots = () => {
@@ -76,7 +75,7 @@ export default function registerScreenshotIpcHandlers() {
     cleanupTimer = setTimeout(() => {
       cleanupExpiredSnapshots();
       if (displaySnapshots.size > 0) {
-        scheduleCleanup(); // Reschedule if there are still snapshots
+        scheduleCleanup();
       }
     }, MAX_SNAPSHOT_AGE_MS);
   };
@@ -105,16 +104,13 @@ export default function registerScreenshotIpcHandlers() {
         display: (typeof displays)[number],
         index: number,
       ) => {
-        // 1) Exact match by display_id
         const direct = sources.find(
           (s) =>
             (s as unknown as { display_id?: string }).display_id ===
             String(display.id),
         );
         if (direct) return direct;
-        // 2) Single source: use it for all (mirrored/Sidecar cases)
         if (sources.length === 1) return sources[0];
-        // 3) Best aspect-ratio match from thumbnails
         const deviceScale = display.scaleFactor || 1;
         const targetW = Math.max(
           1,
@@ -139,7 +135,6 @@ export default function registerScreenshotIpcHandlers() {
             }
           }
         }
-        // 4) As a final fallback, try index pairing
         return best ?? sources[Math.min(index, sources.length - 1)];
       };
 
@@ -155,7 +150,7 @@ export default function registerScreenshotIpcHandlers() {
 
         const img = source.thumbnail;
         const size = img.getSize();
-        const memoryUsageMB = (size.width * size.height * 4) / (1024 * 1024); // RGBA bytes
+        const memoryUsageMB = (size.width * size.height * 4) / (1024 * 1024);
         totalMemoryMB += memoryUsageMB;
 
         displaySnapshots.set(id, {
@@ -235,7 +230,6 @@ export default function registerScreenshotIpcHandlers() {
     const key = Number(displayId);
     let snap: DisplaySnapshot | undefined = displaySnapshots.get(key);
     if (!snap) {
-      // Fallback: choose snapshot with closest aspect ratio to the requested display
       const d = screen.getAllDisplays().find((dd) => dd.id === key);
       if (d && displaySnapshots.size > 0) {
         const deviceScale = d.scaleFactor || 1;
@@ -443,7 +437,7 @@ export default function registerScreenshotIpcHandlers() {
           } as any,
         });
       } catch {
-        // ignore
+        // noop
       }
       win.webContents.send('screenshot-data', screenshotData);
       releaseDisplaySnapshots();

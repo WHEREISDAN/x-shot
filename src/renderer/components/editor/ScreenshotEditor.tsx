@@ -73,7 +73,6 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const shotW = presentationDisabled ? natural.width : layout.shot.width;
   const shotH = presentationDisabled ? natural.height : layout.shot.height;
 
-  // Export/presentation scaling glue
   const { exportDataUrl } = useExportGlue({
     stageRef: exportStageRef as React.RefObject<HTMLElement>,
     natural: { width: natural.width, height: natural.height },
@@ -86,15 +85,11 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       const parent = containerRef.current;
       if (!parent) return;
 
-      // Panels are overlays; do not reduce available area by their width.
-      // Keep only a small safety margin so the background can fill the space.
-      const horizontalMargin = 32; // total (left+right)
+      const horizontalMargin = 32;
       const maxWidth = Math.max(1, parent.clientWidth - horizontalMargin);
 
-      // Fill horizontally: prefer width fit and allow height to overflow (pan handles it)
       const widthFit = maxWidth / canvasW;
 
-      // Cap to avoid extreme zoom-in; allow modest upscaling to fill width for smaller canvases
       const next = Math.min(1.1, Math.max(0.05, widthFit));
       setFitScale(next);
     };
@@ -111,11 +106,9 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       const centerY = bounds.top + bounds.height / 2;
       const stageTopLeftX = centerX - (canvasW * viewScale) / 2 + pan.x;
       const stageTopLeftY = centerY - (canvasH * viewScale) / 2 + pan.y;
-      // Convert screen pixels to layout coordinates, then offset by shot origin
       const layoutX = (clientX - stageTopLeftX) / viewScale - shotX;
       const layoutY = (clientY - stageTopLeftY) / viewScale - shotY;
 
-      // Map from layout coordinates to natural image coordinates
       const x = Math.max(
         0,
         Math.min(natural.width, (layoutX / Math.max(1, shotW)) * natural.width),
@@ -532,7 +525,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         setZoom(nextZoom);
         setPan({ x: panX, y: panY });
       } else {
-        // Pan with wheel (less aggressive)
+        // Pan with wheel
         const factor = 0.5;
         setPan((p) => ({
           x: p.x - e.deltaX * factor,
@@ -552,10 +545,6 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     const url = await exportDataUrl();
     await onSave(url);
   }, [exportDataUrl, onSave]);
-
-  // (Per-window keyboard handled by useEditorShortcuts)
-
-  // Removed nested component definitions (use top-level ToolButton and ColorSwatch)
 
   return (
     <div

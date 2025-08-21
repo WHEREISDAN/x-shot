@@ -17,22 +17,17 @@ export function computeLayout(
   nh: number,
   s: PresentationSettings,
 ): Layout {
-  // Calculate frame size independently of aspect ratio
-  // Frame should always accommodate the original image with proper scaling + inset
   const frameWidth = Math.max(1, nw + s.inset * 2);
   const frameHeight = Math.max(1, nh + s.inset * 2);
 
-  // Calculate canvas size based on aspect ratio settings
   const resolveCanvasAspect = (): { width: number; height: number } => {
     if (s.aspect.preset === 'auto') {
-      // Auto: canvas fits frame + padding
       return {
         width: frameWidth + s.padding * 2,
         height: frameHeight + s.padding * 2,
       };
     }
 
-    // For preset ratios, determine minimum canvas size that can contain frame + padding
     const { preset } = s.aspect;
     const custom = s.aspect.custom ?? { w: nw, h: nh };
     let aw = custom.w;

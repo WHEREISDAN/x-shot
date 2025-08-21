@@ -221,9 +221,6 @@ export async function migrateLocalStoragePreferences(): Promise<void> {
 
     log.info('Starting localStorage preferences migration');
 
-    // Since we're in the main process, we can't directly access localStorage
-    // The migration will need to be triggered from the renderer process
-    // For now, we'll just log that migration is needed
     log.info('localStorage migration will be handled by renderer process');
   } catch (error) {
     log.error('Failed to migrate localStorage preferences:', error);

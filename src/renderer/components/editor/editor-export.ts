@@ -1,4 +1,3 @@
-// No shapes needed here because DOM export captures rendered shapes
 import type { PresentationSettings } from '../../hooks/use-presentation-state';
 import { exportAnnotatedDom, exportPresentationDom } from './editor-export-dom';
 

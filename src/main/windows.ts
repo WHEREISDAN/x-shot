@@ -121,7 +121,6 @@ export const closeScreenshotOverlays = (): void => {
     new Promise((resolve) => {
       const finish = () => {
         try {
-          // Clear workspace visibility and always-on-top before closing to avoid sticky state
           try {
             w.setVisibleOnAllWorkspaces(false);
           } catch {
@@ -171,7 +170,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
   const cursorPoint = screen.getCursorScreenPoint();
   const focusedDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
-  // Close existing overlays first (without disabling mode)
+  // Close existing overlays first
   if (screenshotWindows.length > 0) {
     screenshotWindows.forEach((w) => {
       try {
@@ -183,12 +182,8 @@ export const createScreenshotOverlays = async (): Promise<void> => {
     screenshotWindows = [];
   }
 
-  // Enable screen-saver mode for main window
   enableScreenSaverMode();
 
-  // Resolve asset path if needed in future
-
-  // Create one overlay window per display
   const primaryDisplayId = screen.getPrimaryDisplay().id;
   displays.forEach((display) => {
     const { x, y, width, height } = display.bounds;
@@ -270,7 +265,6 @@ export const showScreenshotOverlays = (): void => {
 export const areOverlaysOpen = (): boolean => screenshotWindows.length > 0;
 
 export async function createPreferencesWindow(): Promise<BrowserWindow> {
-  // If preferences window already exists, show and focus it
   if (preferencesWindow && !preferencesWindow.isDestroyed()) {
     preferencesWindow.show();
     preferencesWindow.focus();

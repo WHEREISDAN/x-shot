@@ -137,7 +137,7 @@ const BottomToolbar = memo(function BottomToolbar({
               setStrokeColor(color);
             }
           } catch {
-            // ignore
+            // noop
           }
         }}
       />

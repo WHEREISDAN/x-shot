@@ -38,7 +38,7 @@ function getHandleAtPoint(
   x: number,
   y: number,
 ): string | null {
-  const HANDLE_SIZE = 14; // 7px radius from center
+  const HANDLE_SIZE = 14;
   const points = [
     { name: 'top-left', x: selection.x, y: selection.y },
     { name: 'top-right', x: selection.x + selection.width, y: selection.y },
@@ -105,8 +105,6 @@ export function useSelection({
       const x = e.clientX;
       const y = e.clientY;
 
-      // If we are already dragging or resizing, keep the interaction active
-      // and do not let external hit-tests cancel it on a fresh mousedown.
       if (isDragging || isResizing || isSelecting) {
         e.preventDefault();
         return;
@@ -130,7 +128,6 @@ export function useSelection({
         return;
       }
 
-      // Begin new selection
       setDragging(false);
       setResizing(false);
       setSelecting(true);
@@ -191,7 +188,6 @@ export function useSelection({
           default:
             break;
         }
-        // Snap to grid
         x = snap(x);
         y = snap(y);
         width = Math.max(10, snap(width));
@@ -212,7 +208,6 @@ export function useSelection({
         return;
       }
 
-      // Drawing new selection
       if (isSelecting) {
         const start = startRef.current;
         const left = Math.min(start.x, currentX);

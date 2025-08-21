@@ -22,16 +22,13 @@ function Hello() {
   );
 
   useEffect(() => {
-    // Run migration check on app load
     checkAndMigrateIfNeeded();
 
-    // Listen for screenshot data if bridge is available (not in tests)
     const api = window?.electron?.ipcRenderer;
     if (!api) return () => {};
     const unsubscribe = api.on('screenshot-data', async (data) => {
       setScreenshotData(data);
 
-      // Check if auto-copy is enabled and copy to clipboard
       try {
         const preferences = await api.invoke('get-preferences', {});
         if (preferences?.capture?.autoCopyToClipboard && data.imageDataUrl) {

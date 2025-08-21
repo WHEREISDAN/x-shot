@@ -4,13 +4,10 @@ import { createRendererLogger } from '../../utils/logger';
 const logger = createRendererLogger('editor-export-dom');
 
 export interface DomExportOptions {
-  /** The DOM element to capture (should be the main stage div) */
+  /** The DOM element to capture */
   element: HTMLElement;
-  /** Scale factor for the export (default: 1) */
   scale?: number;
-  /** Background color for transparent areas (default: transparent) */
   backgroundColor?: string;
-  /** Filter function to exclude certain nodes during export */
   filter?: (node: Node) => boolean;
 }
 
@@ -68,17 +65,14 @@ export async function exportDomToDataUrl({
       transform: `scale(${finalScale})`,
       transformOrigin: 'top left',
     },
-    // Enable memory optimizations
-    quality: 0.92, // Slightly reduce quality for better compression
-    cacheBust: true, // Prevent caching issues
+    quality: 0.92,
+    cacheBust: true,
   };
 
-  // Add background color if specified and not transparent
   if (backgroundColor && backgroundColor !== 'transparent') {
     options.bgcolor = backgroundColor;
   }
 
-  // Add filter if provided
   if (filter) {
     options.filter = filter;
   }
@@ -111,18 +105,15 @@ export async function exportPresentationDom(
   return exportDomToDataUrl({
     element,
     scale: exportScale,
-    backgroundColor: 'transparent', // Preserve the gradient background from CSS
+    backgroundColor: 'transparent',
     filter: (node: Node) => {
-      // Filter out any elements that shouldn't be in the export
       if (node.nodeType === Node.ELEMENT_NODE) {
         const nodeElement = node as Element;
 
-        // Skip elements with data-export-exclude attribute
         if (nodeElement.hasAttribute('data-export-exclude')) {
           return false;
         }
 
-        // Skip any selection overlays or interactive elements
         if (
           nodeElement.classList.contains('selection-overlay') ||
           nodeElement.classList.contains('resize-handle') ||

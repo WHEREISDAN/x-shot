@@ -67,7 +67,6 @@ export const presets: GradientSettings[] = [
       { offset: 1, color: '#22d3ee' },
     ],
   },
-  // New linear presets
   {
     kind: 'linear',
     angleDeg: 135,
@@ -134,7 +133,6 @@ export const presets: GradientSettings[] = [
       { offset: 1, color: '#a18cd1' },
     ],
   },
-  // New radial presets (angleDeg is unused for radial)
   {
     kind: 'radial',
     angleDeg: 0,
@@ -178,7 +176,6 @@ export function toCssGradient(g: GradientSettings): string {
       .join(', ');
     return `linear-gradient(${angle}, ${stops})`;
   }
-  // Use percentage-based positioning for better scaling with large canvases
   const stops = g.stops
     .map((s) => `${s.color} ${Math.round(s.offset * 100)}%`)
     .join(', ');

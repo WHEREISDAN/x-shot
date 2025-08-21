@@ -17,10 +17,8 @@ export * from './components/Card';
 
 // Design system utilities
 export const designSystem = {
-  // Version
   version: '1.0.0',
 
-  // Quick access to commonly used values
   colors: {
     primary: '#4f46e5',
     success: '#22c55e',

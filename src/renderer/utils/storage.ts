@@ -1,4 +1,3 @@
-// Safe localStorage utilities with proper error handling
 import { createRendererLogger } from './logger';
 
 const logger = createRendererLogger('storage');

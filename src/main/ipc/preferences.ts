@@ -10,7 +10,6 @@ import {
   resetPreferences,
 } from '../preferences';
 import { createPreferencesWindow } from '../windows';
-// Also support a fire-and-forget event to open preferences (for menus)
 ipcMain.on('open-preferences', async () => {
   try {
     await createPreferencesWindow();

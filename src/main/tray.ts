@@ -47,7 +47,6 @@ async function buildContextMenu(
           const latest = await loadPreferences();
           const last = latest.capture.lastSelection;
           if (last) {
-            // Trigger existing capture path using selection handler
             ipcMain.emit('screenshot-data', undefined, {
               x: last.x,
               y: last.y,
@@ -95,7 +94,6 @@ export default function createTray(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
 ) {
-  // Use local logger in this scope only where needed
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
     path.join(RESOURCES_PATH, ...paths);
@@ -147,10 +145,8 @@ export function updateTrayVisibility(
   onScreenshot: () => void,
 ) {
   if (show && !tray) {
-    // Create tray if it doesn't exist and should be shown
     createTray(mainWindowGetter, onScreenshot);
   } else if (!show && tray) {
-    // Hide tray if it exists and should be hidden
     hideTray();
   }
 }

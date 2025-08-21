@@ -31,7 +31,6 @@ export function useExportGlue({
 
     let result: string = '';
     try {
-      // Set exporting state to hide interactive elements
       setIsExporting?.(true);
 
       // Give the DOM a moment to update and hide interactive elements

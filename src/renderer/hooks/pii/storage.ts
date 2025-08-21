@@ -33,7 +33,7 @@ export function usePersistedPiiMasks(storageKey: string) {
         const parsed = JSON.parse(raw) as PiiMaskRect[];
         if (Array.isArray(parsed)) setPiiMasks(parsed);
       } catch {
-        // swallow parse errors
+        // noop
       }
     }
   }, [storageKey]);

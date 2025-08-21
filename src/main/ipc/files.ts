@@ -60,7 +60,6 @@ export default function registerFileIpcHandlers() {
 
         // Check if auto-save is enabled
         if (preferences.export.autoSave && !payload.defaultPath) {
-          // Auto-save without dialog
           const filePath = path.join(defaultDir, defaultName);
           const buffer = format === 'png' ? image.toPNG() : image.toJPEG(90);
           const fs = await import('fs/promises');
@@ -68,7 +67,6 @@ export default function registerFileIpcHandlers() {
           return { filePath, canceled: false };
         }
 
-        // Show save dialog
         const filters =
           format === 'png'
             ? [

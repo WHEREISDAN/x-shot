@@ -3,7 +3,6 @@ import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
 import ScreenshotCapture from '../renderer/ScreenshotCapture';
 
-// Provide minimal window.electron mock for tests
 (globalThis as any).window = {
   location: { hash: '' },
   electron: {

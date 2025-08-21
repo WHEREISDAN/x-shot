@@ -72,12 +72,10 @@ export function ShapeSvg({ shape }: { shape: EditorShape }) {
     }
     case 'rect': {
       const r = shape as RectShape;
-      // Check if this is a PII blur mask
       const isPiiBlur = r.tag?.startsWith('pii-') && r.fillColor === '#808080';
 
       if (isPiiBlur) {
-        // For PII blur masks, use CSS backdrop-filter with feathered edges
-        const featherSize = 6; // Consistent feather size
+        const featherSize = 6;
 
         return (
           <foreignObject
@@ -202,11 +200,8 @@ export function ShapeSvg({ shape }: { shape: EditorShape }) {
 }
 
 export interface EditorStageProps {
-  // Natural image dimensions for SVG viewBox
   natural: { width: number; height: number };
-  // Whether presentation is disabled (no frame/inset/shadow)
   presentationDisabled: boolean;
-  // Layout metrics when presentation is enabled
   layout: {
     frame: {
       x: number;
@@ -218,16 +213,13 @@ export interface EditorStageProps {
     shot: { x: number; y: number; width: number; height: number };
     canvas: { width: number; height: number };
   };
-  // Stage transform
   pan: { x: number; y: number };
   viewScale: number;
-  // Visual settings
   presentation: PresentationSettings;
   screenshotUrl: string;
-  // Refs and events
   containerRef: React.RefObject<HTMLDivElement | null>;
   imgRef: React.RefObject<HTMLImageElement | null>;
-  exportStageRef?: React.RefObject<HTMLDivElement> | null; // Ref to the main stage element for dom-to-image export
+  exportStageRef?: React.RefObject<HTMLDivElement> | null;
   onWheel: (e: React.WheelEvent) => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
@@ -235,16 +227,12 @@ export interface EditorStageProps {
   onDoubleClick: (e: React.MouseEvent) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  // Shapes layers
   shapes: EditorShape[];
   provisionalShape: EditorShape | null;
-  // OCR overlay
   showOcrOverlay: boolean;
   ocrBoxes: Array<{ x: number; y: number; width: number; height: number }>;
-  ocrKeyPrefix: string; // include textSelectLevel in key for stability
-  // Export mode state - when true, hide interactive elements during export
+  ocrKeyPrefix: string;
   isExporting?: boolean;
-  // Optional render prop to inject selection overlay inside the SVG
   renderSelectionOverlay: (() => React.ReactNode) | undefined;
 }
 
@@ -277,11 +265,9 @@ export const EditorStage = memo(function EditorStage({
   const canvasW = presentationDisabled ? natural.width : layout.canvas.width;
   const canvasH = presentationDisabled ? natural.height : layout.canvas.height;
 
-  // Compute background style without nested ternaries (lint-friendly)
   let stageBackground = 'transparent';
   if (!presentationDisabled) {
     if (presentation.backgroundImageUrl) {
-      // Include position/size/repeat in shorthand to ensure exporters respect it
       stageBackground = `url(${presentation.backgroundImageUrl}) center / cover no-repeat`;
     } else {
       stageBackground = toCssGradient(presentation.gradient);

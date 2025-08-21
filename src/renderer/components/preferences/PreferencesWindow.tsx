@@ -88,7 +88,7 @@ export default function PreferencesWindow() {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden', // Prevent this container from growing beyond available space
+    overflow: 'hidden',
   };
 
   const mainContentStyles: React.CSSProperties = {

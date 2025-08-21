@@ -69,8 +69,6 @@ ipcMain.on('log', (_event, payload: LogMessage) => {
   }
 });
 app.on('window-all-closed', () => {
-  // Only quit if tray is not visible
-  // When tray is visible, keep app running for both Windows and macOS
   if (!isTrayVisible()) {
     app.quit();
   }
@@ -85,8 +83,6 @@ app
       if (areOverlaysOpen()) {
         showScreenshotOverlays();
       } else {
-        // Route through the screenshot-capture flow so pre-capture snapshots are prepared
-        // and overlays are created in the correct order.
         ipcMain.emit('screenshot-capture');
       }
     };
@@ -158,6 +154,9 @@ app
         {
           triggerMain: triggerScreenshot,
           triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+          triggerRecapture(): void {
+            throw new Error('Function not implemented.');
+          },
         },
       );
       const win = getMainWindow();
@@ -177,6 +176,7 @@ app
             triggerMain: triggerScreenshot,
             triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
             triggerRecapture: () => {
+
               const prefsPromise = import('./preferences').then((m) =>
                 m.loadPreferences(),
               );
@@ -207,8 +207,6 @@ app
       updateTrayVisibility(show, getMainWindow, triggerScreenshot);
     });
     app.on('activate', () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
       if (getMainWindow() === null) createMainWindow();
       app.disableHardwareAcceleration();
     });

@@ -65,7 +65,6 @@ function scaleImageToCanvas(
   );
 
   const cleanup = () => {
-    // Clear canvas and dispose context
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     canvas.width = 1;
     canvas.height = 1;
@@ -115,22 +114,21 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
 
     try {
       img = await loadImage(imageDataUrl);
-      const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200); // Reduced from 1600
+      const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200);
       canvasCleanup = cleanup;
 
-      // Use recognize() with explicit CDN paths and fallback to avoid importScripts failures
       const MAJOR = 'v5';
       const primaryOpts = {
         workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${MAJOR}/dist/worker.min.js`,
         corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
         langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        logger: () => {}, // Disable logging to save memory
+        logger: () => {},
       } as const;
       const fallbackOpts = {
         workerPath: `https://unpkg.com/tesseract.js@${MAJOR}/dist/worker.min.js`,
         corePath: `https://unpkg.com/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
         langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
-        logger: () => {}, // Disable logging to save memory
+        logger: () => {},
       } as const;
 
       let data;
@@ -180,15 +178,12 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       setError(e instanceof Error ? e.message : String(e));
       setStatus('error');
     } finally {
-      // Clean up resources
       canvasCleanup?.();
-      // Clear image reference
       img = null;
     }
   }, [imageDataUrl]);
 
   useEffect(() => {
-    // Skip auto-run in test environments to keep Jest stable
     if (
       typeof process !== 'undefined' &&
       process.env &&
@@ -196,7 +191,6 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
     ) {
       return;
     }
-    // Require DOM & Worker availability
     if (
       typeof window === 'undefined' ||
       typeof document === 'undefined' ||
@@ -205,7 +199,6 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       return;
     }
     if (!scannedOnce.has(imageDataUrl)) {
-      // run once per image URL
       run().catch(() => {});
     }
   }, [imageDataUrl, run]);

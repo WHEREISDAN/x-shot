@@ -8,7 +8,6 @@ import {
 } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import { loadPreferences } from './preferences';
-// Avoid static imports from './windows' to prevent cycles.
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -314,7 +313,7 @@ export default class MenuBuilder {
       if (this.mainWindow) this.mainWindow.hide();
       ipcMain.emit('screenshot-capture');
     } catch {
-      // Swallow to avoid breaking menu click
+      // noop
     }
   }
 

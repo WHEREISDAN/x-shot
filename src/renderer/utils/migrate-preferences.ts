@@ -20,11 +20,8 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
       return false;
     }
 
-    // Check if we already have preferences
     const existingPrefs = await api.invoke('get-preferences', {});
 
-    // Simple check to see if this looks like default preferences
-    // If they have non-default values, assume migration already happened
     if (
       existingPrefs.capture.hotkey !== 'CommandOrControl+Shift+1' ||
       existingPrefs.editor.defaultStrokeColor !== '#ef4444' ||
