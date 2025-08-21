@@ -17,7 +17,13 @@ import {
   showScreenshotOverlays,
   areOverlaysOpen,
 } from './windows';
-import { createTray, updateTrayVisibility, isTrayVisible, refreshTrayMenu } from './tray';
+import {
+  createTray,
+  updateTrayVisibility,
+  isTrayVisible,
+  refreshTrayMenu,
+} from './tray';
+import { refreshApplicationMenu } from './menu';
 import registerFileIpcHandlers from './ipc/files';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
 import registerWindowIpcHandlers, {
@@ -30,7 +36,6 @@ import registerPreferencesIpcHandlers, {
 } from './ipc/preferences';
 import {
   DEFAULT_SCREENSHOT_ACCELERATOR,
-  registerScreenshotHotkey,
   unregisterAllHotkeys,
   updateRegisteredHotkeys,
 } from './hotkeys';
@@ -121,7 +126,9 @@ app
           setTimeout(() => triggerScreenshot(), ms);
         },
         triggerRecapture: () => {
-          const prefsPromise = import('./preferences').then((m) => m.loadPreferences());
+          const prefsPromise = import('./preferences').then((m) =>
+            m.loadPreferences(),
+          );
           prefsPromise
             .then(async ({ capture }) => {
               const last = capture.lastSelection;
@@ -153,39 +160,47 @@ app
           triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
         },
       );
+      const win = getMainWindow();
+      if (win) refreshApplicationMenu(win).catch(() => {});
     });
 
     // Set up delay hotkeys change callback
-    setDelayHotkeysChangeCallback(({ hotkeyDelay3, hotkeyDelay5, hotkeyRecapture }) => {
-      updateRegisteredHotkeys(
-        {
-          delay3: { accelerator: hotkeyDelay3 || null, delayMs: 3000 },
-          delay5: { accelerator: hotkeyDelay5 || null, delayMs: 5000 },
-          recapture: hotkeyRecapture || null,
-        },
-        {
-          triggerMain: triggerScreenshot,
-          triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
-          triggerRecapture: () => {
-            const prefsPromise = import('./preferences').then((m) => m.loadPreferences());
-            prefsPromise
-              .then(async ({ capture }) => {
-                const last = capture.lastSelection;
-                if (!last) return;
-                ipcMain.emit('screenshot-data', undefined, {
-                  x: last.x,
-                  y: last.y,
-                  width: last.width,
-                  height: last.height,
-                });
-              })
-              .catch(() => {});
+    setDelayHotkeysChangeCallback(
+      ({ hotkeyDelay3, hotkeyDelay5, hotkeyRecapture }) => {
+        updateRegisteredHotkeys(
+          {
+            delay3: { accelerator: hotkeyDelay3 || null, delayMs: 3000 },
+            delay5: { accelerator: hotkeyDelay5 || null, delayMs: 5000 },
+            recapture: hotkeyRecapture || null,
           },
-        },
-      );
-      // Keep tray menu accelerators in sync with preferences
-      refreshTrayMenu(getMainWindow, triggerScreenshot).catch(() => {});
-    });
+          {
+            triggerMain: triggerScreenshot,
+            triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+            triggerRecapture: () => {
+              const prefsPromise = import('./preferences').then((m) =>
+                m.loadPreferences(),
+              );
+              prefsPromise
+                .then(async ({ capture }) => {
+                  const last = capture.lastSelection;
+                  if (!last) return;
+                  ipcMain.emit('screenshot-data', undefined, {
+                    x: last.x,
+                    y: last.y,
+                    width: last.width,
+                    height: last.height,
+                  });
+                })
+                .catch(() => {});
+            },
+          },
+        );
+        // Keep tray menu accelerators in sync with preferences
+        refreshTrayMenu(getMainWindow, triggerScreenshot).catch(() => {});
+        const win = getMainWindow();
+        if (win) refreshApplicationMenu(win).catch(() => {});
+      },
+    );
 
     // Set up tray visibility change callback
     setTrayVisibilityChangeCallback((show: boolean) => {

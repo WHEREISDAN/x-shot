@@ -219,7 +219,12 @@ export function useSelection({
         const top = Math.min(start.y, currentY);
         const width = Math.abs(currentX - start.x);
         const height = Math.abs(currentY - start.y);
-        setSelection({ x: snap(left), y: snap(top), width: snap(width), height: snap(height) });
+        setSelection({
+          x: snap(left),
+          y: snap(top),
+          width: snap(width),
+          height: snap(height),
+        });
       }
     },
     [isDragging, isResizing, isSelecting, selection, resizeHandle],

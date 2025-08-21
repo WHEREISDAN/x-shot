@@ -70,7 +70,10 @@ export function updateRegisteredHotkeys(
     }
     currentMainHotkey = hotkeys.main || null;
     if (currentMainHotkey) {
-      const ok = globalShortcut.register(currentMainHotkey, triggers.triggerMain);
+      const ok = globalShortcut.register(
+        currentMainHotkey,
+        triggers.triggerMain,
+      );
       if (!ok)
         logger.warn(`Failed to register main shortcut: ${currentMainHotkey}`);
     }
@@ -78,7 +81,10 @@ export function updateRegisteredHotkeys(
 
   // Delay 3
   if (hotkeys.delay3 !== undefined) {
-    if (currentDelay3Hotkey && globalShortcut.isRegistered(currentDelay3Hotkey)) {
+    if (
+      currentDelay3Hotkey &&
+      globalShortcut.isRegistered(currentDelay3Hotkey)
+    ) {
       globalShortcut.unregister(currentDelay3Hotkey);
     }
     currentDelay3Hotkey = hotkeys.delay3?.accelerator || null;
@@ -96,7 +102,10 @@ export function updateRegisteredHotkeys(
 
   // Delay 5
   if (hotkeys.delay5 !== undefined) {
-    if (currentDelay5Hotkey && globalShortcut.isRegistered(currentDelay5Hotkey)) {
+    if (
+      currentDelay5Hotkey &&
+      globalShortcut.isRegistered(currentDelay5Hotkey)
+    ) {
       globalShortcut.unregister(currentDelay5Hotkey);
     }
     currentDelay5Hotkey = hotkeys.delay5?.accelerator || null;

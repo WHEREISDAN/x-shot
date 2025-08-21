@@ -114,7 +114,8 @@ export default function GeneralSection({
   }, []);
 
   const hotkeyInputHandlers = {
-    onKeyDown: (setter: (accel: string) => void) =>
+    onKeyDown:
+      (setter: (accel: string) => void) =>
       (e: React.KeyboardEvent<HTMLInputElement>) => {
         e.preventDefault();
         e.stopPropagation();
@@ -127,35 +128,38 @@ export default function GeneralSection({
   const globalCaptureSetterRef = React.useRef<null | ((accel: string) => void)>(
     null,
   );
-  const globalKeyHandler = React.useCallback((ev: KeyboardEvent) => {
-    if (!globalCaptureSetterRef.current) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    // Build accelerator from native event and commit
-    const e = ev as unknown as React.KeyboardEvent;
-    // Shim minimal shape used by builder
-    // @ts-ignore
-    e.key = ev.key;
-    // @ts-ignore
-    e.code = ev.code;
-    // @ts-ignore
-    e.metaKey = ev.metaKey;
-    // @ts-ignore
-    e.ctrlKey = ev.ctrlKey;
-    // @ts-ignore
-    e.altKey = ev.altKey;
-    // @ts-ignore
-    e.shiftKey = ev.shiftKey;
-    const accel = buildAcceleratorFromEvent(e);
-    if (!accel) return;
-    try {
-      globalCaptureSetterRef.current(accel);
-    } finally {
-      globalCaptureSetterRef.current = null;
-      window.removeEventListener('keydown', globalKeyHandler, true);
-      (document.activeElement as HTMLElement | null)?.blur?.();
-    }
-  }, [buildAcceleratorFromEvent]);
+  const globalKeyHandler = React.useCallback(
+    (ev: KeyboardEvent) => {
+      if (!globalCaptureSetterRef.current) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      // Build accelerator from native event and commit
+      const e = ev as unknown as React.KeyboardEvent;
+      // Shim minimal shape used by builder
+      // @ts-ignore
+      e.key = ev.key;
+      // @ts-ignore
+      e.code = ev.code;
+      // @ts-ignore
+      e.metaKey = ev.metaKey;
+      // @ts-ignore
+      e.ctrlKey = ev.ctrlKey;
+      // @ts-ignore
+      e.altKey = ev.altKey;
+      // @ts-ignore
+      e.shiftKey = ev.shiftKey;
+      const accel = buildAcceleratorFromEvent(e);
+      if (!accel) return;
+      try {
+        globalCaptureSetterRef.current(accel);
+      } finally {
+        globalCaptureSetterRef.current = null;
+        window.removeEventListener('keydown', globalKeyHandler, true);
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }
+    },
+    [buildAcceleratorFromEvent],
+  );
   const startGlobalCapture = React.useCallback(
     (setter: (accel: string) => void) => () => {
       globalCaptureSetterRef.current = setter;

@@ -262,7 +262,8 @@ function ScreenshotCapture() {
             overflow: 'hidden',
             zIndex: 1004,
             pointerEvents: 'none',
-            boxShadow: '0 6px 16px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15)',
+            boxShadow:
+              '0 6px 16px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15)',
             backgroundImage: `url(${background.url})`,
             backgroundRepeat: 'no-repeat',
             // Scale up display snapshot; since snapshot is stretched to viewport, use viewport coords

@@ -1,10 +1,8 @@
 import path from 'path';
-import { app, BrowserWindow, Menu, Tray } from 'electron';
+import { app, BrowserWindow, Menu, Tray, ipcMain } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import getResourcesPath from '../shared/utils';
-import { createPreferencesWindow } from './windows';
-import { ensureMainWindowReady } from './windows';
-import { ipcMain } from 'electron';
+import { createPreferencesWindow, ensureMainWindowReady } from './windows';
 import { loadPreferences } from './preferences';
 import { getLogger } from './logger';
 
@@ -97,7 +95,7 @@ export default function createTray(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
 ) {
-  const logger = getLogger('tray');
+  // Use local logger in this scope only where needed
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
     path.join(RESOURCES_PATH, ...paths);
