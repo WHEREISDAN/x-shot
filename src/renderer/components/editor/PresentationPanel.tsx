@@ -81,7 +81,7 @@ interface PresentationPanelProps {
     setPadding: (n: number) => void;
     setInset: (n: number) => void;
     setRadius: (n: number) => void;
-    setAspectPreset: (a: any) => void;
+    setAspectPreset: (a: AspectPreset) => void;
     setCustomAspect: (w: number, h: number) => void;
     setExportScale: (n: number) => void;
     setShadow: (s: Partial<PresentationSettings['shadow']>) => void;
@@ -236,7 +236,7 @@ export default function PresentationPanel({
                 aria-label={`Gradient ${i + 1}`}
                 style={{
                   ...swatchButtonStyles,
-                  background: toCssGradient(g, 120, 36),
+                  background: toCssGradient(g),
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'scale(1.05)';

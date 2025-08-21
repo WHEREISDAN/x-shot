@@ -227,7 +227,6 @@ export interface EditorStageProps {
   // Refs and events
   containerRef: React.RefObject<HTMLDivElement | null>;
   imgRef: React.RefObject<HTMLImageElement | null>;
-  // eslint-disable-next-line react/require-default-props
   exportStageRef?: React.RefObject<HTMLDivElement> | null; // Ref to the main stage element for dom-to-image export
   onWheel: (e: React.WheelEvent) => void;
   onPointerDown: (e: React.PointerEvent) => void;
@@ -244,7 +243,6 @@ export interface EditorStageProps {
   ocrBoxes: Array<{ x: number; y: number; width: number; height: number }>;
   ocrKeyPrefix: string; // include textSelectLevel in key for stability
   // Export mode state - when true, hide interactive elements during export
-  // eslint-disable-next-line react/require-default-props
   isExporting?: boolean;
   // Optional render prop to inject selection overlay inside the SVG
   renderSelectionOverlay: (() => React.ReactNode) | undefined;
@@ -286,7 +284,7 @@ export const EditorStage = memo(function EditorStage({
       // Include position/size/repeat in shorthand to ensure exporters respect it
       stageBackground = `url(${presentation.backgroundImageUrl}) center / cover no-repeat`;
     } else {
-      stageBackground = toCssGradient(presentation.gradient, canvasW, canvasH);
+      stageBackground = toCssGradient(presentation.gradient);
     }
   }
 

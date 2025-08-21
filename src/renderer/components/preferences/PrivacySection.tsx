@@ -115,7 +115,7 @@ export default function PrivacySection({
       <div style={groupStyles}>
         <h3 style={labelStyles}>PII Detection</h3>
 
-        <div style={checkboxContainerStyles}>
+        <label htmlFor="auto-detect-pii" style={checkboxContainerStyles}>
           <input
             type="checkbox"
             id="auto-detect-pii"
@@ -123,17 +123,15 @@ export default function PrivacySection({
             onChange={(e) => handleAutoDetectChange(e.target.checked)}
             style={checkboxStyles}
           />
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label
-            htmlFor="auto-detect-pii"
+          <span
             style={{
               fontSize: typography.fontSize.base,
               color: colors.text.primary,
             }}
           >
             Automatically detect and hide potentially sensitive information
-          </label>
-        </div>
+          </span>
+        </label>
 
         <p style={descriptionStyles}>
           When enabled, X-Shot will automatically scan screenshots for
@@ -207,7 +205,11 @@ export default function PrivacySection({
             ['tokens', 'API keys and tokens'],
           ] as Array<[keyof AppPreferences['pii']['detectors'], string]>
         ).map(([key, label]) => (
-          <div key={key} style={checkboxContainerStyles}>
+          <label
+            htmlFor={`pii-detector-${key}`}
+            key={key}
+            style={checkboxContainerStyles}
+          >
             <input
               type="checkbox"
               id={`pii-detector-${key}`}
@@ -215,17 +217,15 @@ export default function PrivacySection({
               onChange={(e) => handleDetectorToggle(key, e.target.checked)}
               style={checkboxStyles}
             />
-            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-            <label
-              htmlFor={`pii-detector-${key}`}
+            <span
               style={{
                 fontSize: typography.fontSize.base,
                 color: colors.text.primary,
               }}
             >
               {label}
-            </label>
-          </div>
+            </span>
+          </label>
         ))}
       </div>
 

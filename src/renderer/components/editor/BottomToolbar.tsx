@@ -123,13 +123,17 @@ const BottomToolbar = memo(function BottomToolbar({
         active={false}
         onClick={async () => {
           try {
-            // Use EyeDropper API if available (Chromium 95+)
-            // @ts-expect-error EyeDropper may exist in chromium runtime
-            const EyeDropperCtor = (window as any).EyeDropper;
+            const EyeDropperCtor = (
+              window as Window & {
+                EyeDropper?: new () => {
+                  open: () => Promise<{ sRGBHex: string }>;
+                };
+              }
+            ).EyeDropper;
             if (EyeDropperCtor) {
               const ed = new EyeDropperCtor();
               const res = await ed.open();
-              const color = (res?.sRGBHex as string) || '#ffffff';
+              const color = res?.sRGBHex || '#ffffff';
               setStrokeColor(color);
             }
           } catch {

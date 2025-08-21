@@ -51,7 +51,17 @@ export async function exportDomToDataUrl({
     );
   }
 
-  const options: any = {
+  type DomToImageOptions = {
+    width?: number;
+    height?: number;
+    style?: Record<string, string>;
+    bgcolor?: string;
+    quality?: number;
+    cacheBust?: boolean;
+    filter?: (node: Node) => boolean;
+  };
+
+  const options: DomToImageOptions = {
     width: element.offsetWidth * finalScale,
     height: element.offsetHeight * finalScale,
     style: {

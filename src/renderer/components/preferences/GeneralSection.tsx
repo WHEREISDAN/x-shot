@@ -84,7 +84,16 @@ export default function GeneralSection({
     [preferences.capture, onUpdate],
   );
 
-  const buildAcceleratorFromEvent = useCallback((e: React.KeyboardEvent) => {
+  type MinimalKeyEvent = {
+    key?: string;
+    code?: string;
+    metaKey?: boolean;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+  };
+
+  const buildAcceleratorFromEvent = useCallback((e: MinimalKeyEvent) => {
     const parts: string[] = [];
     // Require at least one modifier for safety unless using F-keys
     const hasMeta = e.metaKey || e.ctrlKey;
@@ -133,22 +142,7 @@ export default function GeneralSection({
       if (!globalCaptureSetterRef.current) return;
       ev.preventDefault();
       ev.stopPropagation();
-      // Build accelerator from native event and commit
-      const e = ev as unknown as React.KeyboardEvent;
-      // Shim minimal shape used by builder
-      // @ts-ignore
-      e.key = ev.key;
-      // @ts-ignore
-      e.code = ev.code;
-      // @ts-ignore
-      e.metaKey = ev.metaKey;
-      // @ts-ignore
-      e.ctrlKey = ev.ctrlKey;
-      // @ts-ignore
-      e.altKey = ev.altKey;
-      // @ts-ignore
-      e.shiftKey = ev.shiftKey;
-      const accel = buildAcceleratorFromEvent(e);
+      const accel = buildAcceleratorFromEvent(ev);
       if (!accel) return;
       try {
         globalCaptureSetterRef.current(accel);
@@ -170,14 +164,13 @@ export default function GeneralSection({
 
   const handleDelayHotkeyChange = useCallback(
     async (field: 'hotkeyDelay3' | 'hotkeyDelay5', value: string) => {
-      await onUpdate({
-        capture: {
-          ...preferences.capture,
-          [field]: value || null,
-        } as any,
-      });
+      const nextCapture = {
+        ...preferences.capture,
+        [field]: value || null,
+      } as typeof preferences.capture;
+      await onUpdate({ capture: nextCapture });
     },
-    [preferences.capture, onUpdate],
+    [preferences, onUpdate],
   );
 
   const handleSaveLocationChange = useCallback(
@@ -189,7 +182,7 @@ export default function GeneralSection({
         },
       });
     },
-    [preferences.capture, onUpdate],
+    [preferences, onUpdate],
   );
 
   const handleAutoCopyChange = useCallback(
@@ -201,7 +194,7 @@ export default function GeneralSection({
         },
       });
     },
-    [preferences.capture, onUpdate],
+    [preferences, onUpdate],
   );
 
   const handleFormatChange = useCallback(
@@ -433,7 +426,7 @@ export default function GeneralSection({
           />
         </div>
 
-        <div style={checkboxContainerStyles}>
+        <label htmlFor="auto-copy" style={checkboxContainerStyles}>
           <input
             type="checkbox"
             id="auto-copy"
@@ -441,24 +434,22 @@ export default function GeneralSection({
             onChange={(e) => handleAutoCopyChange(e.target.checked)}
             style={checkboxStyles}
           />
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label
-            htmlFor="auto-copy"
+          <span
             style={{
               fontSize: typography.fontSize.base,
               color: colors.text.primary,
             }}
           >
             Auto-copy screenshots to clipboard
-          </label>
-        </div>
+          </span>
+        </label>
       </div>
 
       {/* System Integration */}
       <div style={groupStyles}>
         <h3 style={labelStyles}>System Integration</h3>
 
-        <div style={checkboxContainerStyles}>
+        <label htmlFor="launch-startup" style={checkboxContainerStyles}>
           <input
             type="checkbox"
             id="launch-startup"
@@ -466,19 +457,17 @@ export default function GeneralSection({
             onChange={(e) => handleStartupChange(e.target.checked)}
             style={checkboxStyles}
           />
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label
-            htmlFor="launch-startup"
+          <span
             style={{
               fontSize: typography.fontSize.base,
               color: colors.text.primary,
             }}
           >
             Launch X-Shot at system startup
-          </label>
-        </div>
+          </span>
+        </label>
 
-        <div style={checkboxContainerStyles}>
+        <label htmlFor="show-tray" style={checkboxContainerStyles}>
           <input
             type="checkbox"
             id="show-tray"
@@ -486,17 +475,15 @@ export default function GeneralSection({
             onChange={(e) => handleTrayChange(e.target.checked)}
             style={checkboxStyles}
           />
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label
-            htmlFor="show-tray"
+          <span
             style={{
               fontSize: typography.fontSize.base,
               color: colors.text.primary,
             }}
           >
             Show icon in system tray
-          </label>
-        </div>
+          </span>
+        </label>
       </div>
     </div>
   );

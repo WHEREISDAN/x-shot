@@ -1,6 +1,9 @@
 import React from 'react';
 import PresentationPanel from './PresentationPanel';
-import type { PresentationSettings } from '../../hooks/use-presentation-state';
+import type {
+  PresentationSettings,
+  AspectPreset,
+} from '../../hooks/use-presentation-state';
 
 interface SidePanelProps {
   settings: PresentationSettings;
@@ -8,7 +11,7 @@ interface SidePanelProps {
     setPadding: (n: number) => void;
     setInset: (n: number) => void;
     setRadius: (n: number) => void;
-    setAspectPreset: (a: any) => void;
+    setAspectPreset: (a: AspectPreset) => void;
     setCustomAspect: (w: number, h: number) => void;
     setExportScale: (n: number) => void;
     setShadow: (s: Partial<PresentationSettings['shadow']>) => void;

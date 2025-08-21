@@ -170,13 +170,7 @@ export const presets: GradientSettings[] = [
   },
 ];
 
-export function toCssGradient(
-  g: GradientSettings,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  w: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  h: number,
-): string {
+export function toCssGradient(g: GradientSettings): string {
   if (g.kind === 'linear') {
     const angle = `${g.angleDeg}deg`;
     const stops = g.stops

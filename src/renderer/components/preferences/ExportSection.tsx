@@ -151,7 +151,7 @@ export default function ExportSection({
       <div style={groupStyles}>
         <h3 style={labelStyles}>Save Behavior</h3>
 
-        <div style={checkboxContainerStyles}>
+        <label htmlFor="auto-save" style={checkboxContainerStyles}>
           <input
             type="checkbox"
             id="auto-save"
@@ -159,17 +159,15 @@ export default function ExportSection({
             onChange={(e) => handleAutoSaveChange(e.target.checked)}
             style={checkboxStyles}
           />
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label
-            htmlFor="auto-save"
+          <span
             style={{
               fontSize: typography.fontSize.base,
               color: colors.text.primary,
             }}
           >
             Auto-save screenshots without showing save dialog
-          </label>
-        </div>
+          </span>
+        </label>
         <p style={descriptionStyles}>
           When enabled, screenshots will be automatically saved to the default
           location without prompting. When disabled, a save dialog will appear

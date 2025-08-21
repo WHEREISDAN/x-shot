@@ -373,11 +373,10 @@ export function usePiiMasking(
       const parts = tokens.map((t) => t.text);
       const joined = parts.join(' ');
       const spans: Array<{ start: number; end: number }> = [];
-      let m: RegExpExecArray | null;
       const rx = new RegExp(pattern.source, pattern.flags);
-      // eslint-disable-next-line no-cond-assign
-      while ((m = rx.exec(joined)) !== null)
-        spans.push({ start: m.index, end: m.index + m[0].length });
+      for (let match = rx.exec(joined); match; match = rx.exec(joined)) {
+        spans.push({ start: match.index, end: match.index + match[0].length });
+      }
       if (spans.length === 0) return [];
       const ranges: Array<{ start: number; end: number }> = [];
       let pos = 0;
@@ -494,16 +493,15 @@ export function usePiiMasking(
       const parts = tokens.map((t) => t.text);
       const joined = parts.join(' ');
       const spans: Array<{ start: number; end: number; text: string }> = [];
-      let m: RegExpExecArray | null;
       const rx = new RegExp(pattern.source, pattern.flags);
-      // eslint-disable-next-line no-cond-assign
-      while ((m = rx.exec(joined)) !== null) {
-        if (accept(m[0]))
+      for (let match = rx.exec(joined); match; match = rx.exec(joined)) {
+        if (accept(match[0])) {
           spans.push({
-            start: m.index,
-            end: m.index + m[0].length,
-            text: m[0],
+            start: match.index,
+            end: match.index + match[0].length,
+            text: match[0],
           });
+        }
       }
       if (spans.length === 0) return [];
       const ranges: Array<{ start: number; end: number }> = [];

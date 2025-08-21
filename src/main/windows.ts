@@ -187,7 +187,6 @@ export const createScreenshotOverlays = async (): Promise<void> => {
   enableScreenSaverMode();
 
   // Resolve asset path if needed in future
-  // const RESOURCES_PATH = getResourcesPath();
 
   // Create one overlay window per display
   const primaryDisplayId = screen.getPrimaryDisplay().id;

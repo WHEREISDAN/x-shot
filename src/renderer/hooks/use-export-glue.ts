@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import type { PresentationSettings } from './use-presentation-state';
-import type { EditorShape } from './use-editor-state';
 import {
   exportAnnotatedDataUrl,
   exportPresentedDataUrl,
@@ -12,7 +11,6 @@ const logger = createRendererLogger('use-export-glue');
 export interface UseExportGlueInput {
   stageRef: React.RefObject<HTMLElement>;
   natural: { width: number; height: number };
-  shapes: EditorShape[];
   presentation: PresentationSettings;
   setIsExporting?: (isExporting: boolean) => void;
 }
@@ -20,7 +18,6 @@ export interface UseExportGlueInput {
 export function useExportGlue({
   stageRef,
   natural,
-  shapes,
   presentation,
   setIsExporting,
 }: UseExportGlueInput) {
@@ -50,16 +47,11 @@ export function useExportGlue({
       const startTime = Date.now();
 
       if (presentationDisabled) {
-        result = await exportAnnotatedDataUrl(
-          stageRef.current,
-          natural,
-          shapes,
-        );
+        result = await exportAnnotatedDataUrl(stageRef.current, natural);
       } else {
         result = await exportPresentedDataUrl(
           stageRef.current,
           natural,
-          shapes,
           presentation,
         );
       }
@@ -82,14 +74,7 @@ export function useExportGlue({
         });
       }
     }
-  }, [
-    presentationDisabled,
-    stageRef,
-    natural,
-    shapes,
-    presentation,
-    setIsExporting,
-  ]);
+  }, [presentationDisabled, stageRef, natural, presentation, setIsExporting]);
 
   return { presentationDisabled, exportDataUrl };
 }

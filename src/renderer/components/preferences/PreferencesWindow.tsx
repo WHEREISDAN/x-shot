@@ -30,6 +30,7 @@ export default function PreferencesWindow() {
   const { preferences, loading, error, updatePreferences, resetPreferences } =
     usePreferences();
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const containerStyles: React.CSSProperties = {
     display: 'flex',
@@ -225,14 +226,51 @@ export default function PreferencesWindow() {
   };
 
   const handleReset = async () => {
-    // eslint-disable-next-line no-alert
-    if (
-      window.confirm(
-        'Are you sure you want to reset all preferences to defaults? This cannot be undone.',
-      )
-    ) {
-      await resetPreferences();
-    }
+    setShowResetConfirm(true);
+  };
+
+  const confirmOverlayStyles: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10000,
+  };
+
+  const confirmDialogStyles: React.CSSProperties = {
+    width: 420,
+    maxWidth: '90vw',
+    borderRadius: borderRadius.lg,
+    background: colors.background.secondary,
+    border: `1px solid ${colors.border.emphasis}`,
+    boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+    color: colors.text.primary,
+  };
+
+  const confirmHeaderStyles: React.CSSProperties = {
+    padding: `${spacing[4]} ${spacing[4]} ${spacing[2]}`,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+  };
+
+  const confirmBodyStyles: React.CSSProperties = {
+    padding: `0 ${spacing[4]} ${spacing[4]}`,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 1.6,
+  };
+
+  const confirmFooterStyles: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    padding: `${spacing[3]} ${spacing[4]}`,
+    borderTop: `1px solid ${colors.border.default}`,
+    background: colors.background.primary,
+    borderBottomLeftRadius: borderRadius.lg,
+    borderBottomRightRadius: borderRadius.lg,
   };
 
   return (
@@ -306,6 +344,44 @@ export default function PreferencesWindow() {
           Reset to Defaults
         </button>
       </div>
+
+      {showResetConfirm && (
+        <div
+          style={confirmOverlayStyles}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-title"
+        >
+          <div style={confirmDialogStyles}>
+            <div style={confirmHeaderStyles} id="reset-title">
+              Reset preferences?
+            </div>
+            <div style={confirmBodyStyles}>
+              Are you sure you want to reset all preferences to defaults? This
+              cannot be undone.
+            </div>
+            <div style={confirmFooterStyles}>
+              <button
+                type="button"
+                style={buttonStyles}
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={resetButtonStyles}
+                onClick={async () => {
+                  await resetPreferences();
+                  setShowResetConfirm(false);
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

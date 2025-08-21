@@ -1,12 +1,10 @@
-import type { EditorShape } from '../../hooks/use-editor-state';
+// No shapes needed here because DOM export captures rendered shapes
 import type { PresentationSettings } from '../../hooks/use-presentation-state';
 import { exportAnnotatedDom, exportPresentationDom } from './editor-export-dom';
 
 export async function exportAnnotatedDataUrl(
   stageElement: HTMLElement,
   natural: { width: number; height: number },
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _shapes: EditorShape[], // Note: shapes are rendered as DOM elements in stage, captured automatically
 ): Promise<string> {
   if (!stageElement) {
     throw new Error('Stage element is required for export');
@@ -32,8 +30,6 @@ export async function exportAnnotatedDataUrl(
 export async function exportPresentedDataUrl(
   stageElement: HTMLElement,
   natural: { width: number; height: number },
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _shapes: EditorShape[], // Note: shapes are rendered as DOM elements in stage, captured automatically
   settings: PresentationSettings,
 ): Promise<string> {
   if (!stageElement) {
@@ -42,7 +38,7 @@ export async function exportPresentedDataUrl(
 
   // When presentation is effectively disabled, fall back to plain export
   if (settings.padding === 0 && settings.inset === 0) {
-    return exportAnnotatedDataUrl(stageElement, natural, _shapes);
+    return exportAnnotatedDataUrl(stageElement, natural);
   }
 
   // Use the export scale from presentation settings

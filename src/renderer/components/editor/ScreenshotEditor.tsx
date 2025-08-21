@@ -77,7 +77,6 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const { exportDataUrl } = useExportGlue({
     stageRef: exportStageRef as React.RefObject<HTMLElement>,
     natural: { width: natural.width, height: natural.height },
-    shapes: state.shapes,
     presentation,
     setIsExporting,
   });
