@@ -22,19 +22,17 @@ import {
 import { updatePreferences } from '../preferences';
 
 export default function registerScreenshotIpcHandlers() {
+  type DisplaySnapshot = {
+    image: NativeImage;
+    dataUrl: string;
+    width: number;
+    height: number;
+    bounds: Rectangle;
+    scaleFactor: number;
+    timestamp: number;
+  };
   // In-memory store of pre-captured display images for the current screenshot session
-  const displaySnapshots = new Map<
-    number,
-    {
-      image: NativeImage;
-      dataUrl: string;
-      width: number;
-      height: number;
-      bounds: Rectangle;
-      scaleFactor: number;
-      timestamp: number;
-    }
-  >();
+  const displaySnapshots = new Map<number, DisplaySnapshot>();
 
   // Memory management constants
   const MAX_SNAPSHOT_AGE_MS = 30000; // 30 seconds
@@ -235,7 +233,7 @@ export default function registerScreenshotIpcHandlers() {
     const { displayId } = (req as { displayId?: number | string }) || {};
     if (displayId === undefined || displayId === null) return null;
     const key = Number(displayId);
-    let snap = displaySnapshots.get(key);
+    let snap: DisplaySnapshot | undefined = displaySnapshots.get(key);
     if (!snap) {
       // Fallback: choose snapshot with closest aspect ratio to the requested display
       const d = screen.getAllDisplays().find((dd) => dd.id === key);
@@ -244,7 +242,7 @@ export default function registerScreenshotIpcHandlers() {
         const targetW = Math.max(1, Math.floor(d.bounds.width * deviceScale));
         const targetH = Math.max(1, Math.floor(d.bounds.height * deviceScale));
         const targetRatio = targetW / targetH;
-        let bestEntry: typeof snap;
+        let bestEntry: DisplaySnapshot | undefined;
         let bestDelta = Number.POSITIVE_INFINITY;
         displaySnapshots.forEach((value) => {
           const r =
