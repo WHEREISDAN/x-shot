@@ -17,7 +17,7 @@ export * from './components/Card';
 
 // Design system utilities
 export const designSystem = {
-  version: '1.0.0',
+  version: '1.0.1',
 
   colors: {
     primary: '#4f46e5',
