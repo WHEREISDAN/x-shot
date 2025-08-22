@@ -39,7 +39,7 @@ import {
   unregisterAllHotkeys,
   updateRegisteredHotkeys,
 } from './hotkeys';
-import { loadPreferences } from './preferences';
+import { loadPreferences } from './preferences.js';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -122,7 +122,7 @@ app
           setTimeout(() => triggerScreenshot(), ms);
         },
         triggerRecapture: () => {
-          const prefsPromise = import('./preferences').then((m) =>
+          const prefsPromise = import('./preferences.js').then((m) =>
             m.loadPreferences(),
           );
           prefsPromise
@@ -176,8 +176,7 @@ app
             triggerMain: triggerScreenshot,
             triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
             triggerRecapture: () => {
-
-              const prefsPromise = import('./preferences').then((m) =>
+              const prefsPromise = import('./preferences.js').then((m) =>
                 m.loadPreferences(),
               );
               prefsPromise

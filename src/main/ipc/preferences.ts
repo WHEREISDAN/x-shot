@@ -10,6 +10,7 @@ import {
   resetPreferences,
 } from '../preferences';
 import { createPreferencesWindow } from '../windows';
+
 ipcMain.on('open-preferences', async () => {
   try {
     await createPreferencesWindow();
