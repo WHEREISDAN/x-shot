@@ -2,6 +2,8 @@
 
 A powerful screenshot capture and editing app built with Electron and React. X‑Shot lives in your system tray, lets you capture any screen or window, and includes advanced editing with PII masking, text detection (OCR), and polished presentation exports.
 
+![Preview](https://i.imgur.com/CV2LHi4.png)
+
 ## Features
 
 - **Instant capture**: Global hotkey (default: CommandOrControl+Shift+1) and tray menu
