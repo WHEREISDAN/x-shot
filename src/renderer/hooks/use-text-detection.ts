@@ -3,6 +3,9 @@ import { recognize } from 'tesseract.js';
 import workerUrl from 'tesseract.js/dist/worker.min.js';
 import coreUrl from 'tesseract.js-core/tesseract-core.wasm.js';
 import engDataUrl from '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz';
+import { createRendererLogger } from '../utils/logger';
+
+const logger = createRendererLogger('text-detection');
 
 export interface OcrBox {
   x: number;
@@ -120,7 +123,13 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200);
       canvasCleanup = cleanup;
 
-      const langPath = new URL('./', engDataUrl).toString();
+      // Bundled asset URLs are relative (dev: '/ocr/...', prod: './ocr/...'),
+      // so they must be resolved against the document before taking their
+      // directory; `new URL('./', relativePath)` throws.
+      const langPath = new URL(
+        '.',
+        new URL(engDataUrl, window.location.href),
+      ).toString();
       const localOcrOptions = {
         workerPath: workerUrl,
         corePath: coreUrl,
@@ -168,7 +177,9 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
 
       setStatus('done');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      logger.error('OCR recognition failed', { message });
+      setError(message);
       setStatus('error');
     } finally {
       canvasCleanup?.();
