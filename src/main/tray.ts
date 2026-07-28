@@ -1,16 +1,18 @@
 import path from 'path';
-import { app, BrowserWindow, Menu, Tray, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, Tray } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import getResourcesPath from '../shared/utils';
 import { createPreferencesWindow, ensureMainWindowReady } from './windows';
 import { loadPreferences } from './preferences';
 import { getLogger } from './logger';
+import { scheduleCapture } from './capture-coordinator';
 
 let tray: Tray | null = null;
 
 async function buildContextMenu(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
+  onRecapture: () => void,
 ) {
   const logger = getLogger('tray');
   const prefs = await loadPreferences();
@@ -42,32 +44,17 @@ async function buildContextMenu(
     {
       label: 'Re-capture Last Area',
       ...(accRecapture ? { accelerator: accRecapture } : {}),
-      click: async () => {
-        try {
-          const latest = await loadPreferences();
-          const last = latest.capture.lastSelection;
-          if (last) {
-            ipcMain.emit('screenshot-data', undefined, {
-              x: last.x,
-              y: last.y,
-              width: last.width,
-              height: last.height,
-            });
-          }
-        } catch (err) {
-          logger.error('Failed to re-capture last area', err);
-        }
-      },
+      click: onRecapture,
     },
     {
       label: 'Delayed Screenshot (3s)',
       ...(acc3 ? { accelerator: acc3 } : {}),
-      click: () => setTimeout(() => onScreenshot(), 3000),
+      click: () => scheduleCapture(3000, 'delayed'),
     },
     {
       label: 'Delayed Screenshot (5s)',
       ...(acc5 ? { accelerator: acc5 } : {}),
-      click: () => setTimeout(() => onScreenshot(), 5000),
+      click: () => scheduleCapture(5000, 'delayed'),
     },
     { type: 'separator' },
     {
@@ -93,6 +80,7 @@ async function buildContextMenu(
 export default function createTray(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
+  onRecapture: () => void,
 ) {
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
@@ -101,7 +89,7 @@ export default function createTray(
   const iconPath = getAssetPath('icons', '16x16.png');
   tray = new Tray(iconPath);
 
-  buildContextMenu(mainWindowGetter, onScreenshot)
+  buildContextMenu(mainWindowGetter, onScreenshot, onRecapture)
     .then((contextMenu) => tray?.setContextMenu(contextMenu))
     .catch((e) => getLogger('tray').warn('Failed to build tray menu', e));
   tray.setToolTip('Screenshot Tool');
@@ -143,9 +131,10 @@ export function updateTrayVisibility(
   show: boolean,
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
+  onRecapture: () => void,
 ) {
   if (show && !tray) {
-    createTray(mainWindowGetter, onScreenshot);
+    createTray(mainWindowGetter, onScreenshot, onRecapture);
   } else if (!show && tray) {
     hideTray();
   }
@@ -154,10 +143,15 @@ export function updateTrayVisibility(
 export async function refreshTrayMenu(
   mainWindowGetter: () => BrowserWindow | null,
   onScreenshot: () => void,
+  onRecapture: () => void,
 ): Promise<void> {
   if (!tray) return;
   try {
-    const menu = await buildContextMenu(mainWindowGetter, onScreenshot);
+    const menu = await buildContextMenu(
+      mainWindowGetter,
+      onScreenshot,
+      onRecapture,
+    );
     tray.setContextMenu(menu);
   } catch (e) {
     getLogger('tray').warn('Failed to refresh tray menu', e);

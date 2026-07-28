@@ -8,15 +8,10 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, screen } from 'electron';
 import log from 'electron-log';
 import type { LogMessage } from '../shared/ipc-types';
-import {
-  createMainWindow,
-  getMainWindow,
-  showScreenshotOverlays,
-  areOverlaysOpen,
-} from './windows';
+import { createMainWindow, getMainWindow } from './windows';
 import {
   createTray,
   updateTrayVisibility,
@@ -40,7 +35,12 @@ import {
   updateRegisteredHotkeys,
 } from './hotkeys';
 import { loadPreferences } from './preferences';
-import { beginCaptureSession } from './capture-diagnostics';
+import {
+  cancelCapture,
+  scheduleCapture,
+  startCapture,
+  startRecapture,
+} from './capture-coordinator';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -78,43 +78,48 @@ app.on('window-all-closed', () => {
 app
   .whenReady()
   .then(async () => {
-    const triggerScreenshot = async () => {
-      const main = getMainWindow();
-      if (main) main.hide();
-      if (areOverlaysOpen()) {
-        showScreenshotOverlays();
-      } else {
-        ipcMain.emit('screenshot-capture');
-      }
-    };
-    const triggerRecapture = () => {
-      loadPreferences()
-        .then(async ({ capture }) => {
-          const last = capture.lastSelection;
-          if (!last) return;
-          beginCaptureSession('recapture');
-          ipcMain.emit('screenshot-data', undefined, {
-            x: last.x,
-            y: last.y,
-            width: last.width,
-            height: last.height,
-          });
-        })
-        .catch(() => {});
-    };
-
-    // Register IPC handlers first
+    // Register IPC handlers first; this also configures the coordinator.
     registerFileIpcHandlers();
     registerScreenshotIpcHandlers();
     registerWindowIpcHandlers();
     registerPreferencesIpcHandlers();
+
+    const runDetached = (work: Promise<unknown>) => {
+      work.catch((err) => log.error('Capture coordinator error:', err));
+    };
+    const triggerScreenshot = () => {
+      runDetached(startCapture('hotkey'));
+    };
+    const triggerTrayScreenshot = () => {
+      runDetached(startCapture('tray'));
+    };
+    const triggerDelayedScreenshot = (delayMs: number) => {
+      scheduleCapture(delayMs, 'delayed');
+    };
+    const triggerRecapture = () => {
+      loadPreferences()
+        .then(({ capture }) => {
+          const last = capture.lastSelection;
+          if (last) {
+            runDetached(
+              startRecapture({
+                x: last.x,
+                y: last.y,
+                width: last.width,
+                height: last.height,
+              }),
+            );
+          }
+        })
+        .catch((err) => log.warn('Failed to re-capture last area', err));
+    };
 
     // Load preferences to get the correct settings
     const preferences = await loadPreferences();
 
     // Create tray only if enabled in preferences
     if (preferences.system.showInTray) {
-      createTray(getMainWindow, triggerScreenshot);
+      createTray(getMainWindow, triggerTrayScreenshot, triggerRecapture);
     }
 
     const hotkey = preferences.capture.hotkey || DEFAULT_SCREENSHOT_ACCELERATOR;
@@ -134,9 +139,7 @@ app
       },
       {
         triggerMain: triggerScreenshot,
-        triggerDelay: (ms: number) => {
-          setTimeout(() => triggerScreenshot(), ms);
-        },
+        triggerDelay: triggerDelayedScreenshot,
         triggerRecapture,
       },
     );
@@ -152,7 +155,7 @@ app
         { main: newHotkey },
         {
           triggerMain: triggerScreenshot,
-          triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+          triggerDelay: triggerDelayedScreenshot,
           triggerRecapture,
         },
       );
@@ -171,12 +174,16 @@ app
           },
           {
             triggerMain: triggerScreenshot,
-            triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
+            triggerDelay: triggerDelayedScreenshot,
             triggerRecapture,
           },
         );
         // Keep tray menu accelerators in sync with preferences
-        refreshTrayMenu(getMainWindow, triggerScreenshot).catch(() => {});
+        refreshTrayMenu(
+          getMainWindow,
+          triggerTrayScreenshot,
+          triggerRecapture,
+        ).catch(() => {});
         const win = getMainWindow();
         if (win) refreshApplicationMenu(win).catch(() => {});
       },
@@ -184,14 +191,38 @@ app
 
     // Set up tray visibility change callback
     setTrayVisibilityChangeCallback((show: boolean) => {
-      updateTrayVisibility(show, getMainWindow, triggerScreenshot);
+      updateTrayVisibility(
+        show,
+        getMainWindow,
+        triggerTrayScreenshot,
+        triggerRecapture,
+      );
     });
+    // Display topology changes invalidate snapshots and overlay geometry.
+    const cancelForDisplayChange = () => {
+      runDetached(cancelCapture('display-changed'));
+    };
+    screen.on('display-added', cancelForDisplayChange);
+    screen.on('display-removed', cancelForDisplayChange);
+
     app.on('activate', () => {
       if (getMainWindow() === null) createMainWindow();
       app.disableHardwareAcceleration();
     });
   })
   .catch((err) => log.error(err));
+
+app.on('render-process-gone', () => {
+  cancelCapture('renderer-crash').catch((err) =>
+    log.error('Failed to cancel capture after renderer crash:', err),
+  );
+});
+
+app.on('before-quit', () => {
+  cancelCapture('app-quit').catch((err) =>
+    log.error('Failed to cancel capture on quit:', err),
+  );
+});
 
 app.on('will-quit', () => {
   unregisterAllHotkeys();

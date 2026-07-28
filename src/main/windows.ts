@@ -108,6 +108,31 @@ export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
   return win;
 };
 
+/**
+ * Hides the main window and waits for the compositor to acknowledge the
+ * hidden state, so a capture taken immediately afterwards cannot include
+ * the X-Shot editor in its pixels.
+ */
+export const hideMainWindowAndWait = async (): Promise<void> => {
+  const win = mainWindow;
+  if (!win || win.isDestroyed() || !win.isVisible()) return;
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 300 /* ms safety timeout */);
+    win.once('hide', () => {
+      clearTimeout(timeout);
+      // Give the compositor one frame to drop the window from the screen.
+      setTimeout(resolve, 60);
+    });
+    try {
+      win.hide();
+    } catch {
+      clearTimeout(timeout);
+      resolve();
+    }
+  });
+};
+
 export const enableScreenSaverMode = (): void => {
   if (!mainWindow) return;
   mainWindow.setAlwaysOnTop(true, 'floating');
@@ -120,7 +145,7 @@ export const disableScreenSaverMode = (): void => {
   mainWindow.setVisibleOnAllWorkspaces(false);
 };
 
-export const closeScreenshotOverlays = (): void => {
+export const closeScreenshotOverlays = async (): Promise<void> => {
   const logger = getLogger('windows');
   if (screenshotWindows.length === 0) {
     disableScreenSaverMode();
@@ -168,12 +193,13 @@ export const closeScreenshotOverlays = (): void => {
       }
     });
 
-  Promise.all(windowsToClose.map((w) => gracefulClose(w)))
-    .then(() => disableScreenSaverMode())
-    .catch((err) => {
-      logger.warn('Error while closing screenshot overlays', err);
-      disableScreenSaverMode();
-    });
+  try {
+    await Promise.all(windowsToClose.map((w) => gracefulClose(w)));
+  } catch (err) {
+    logger.warn('Error while closing screenshot overlays', err);
+  } finally {
+    disableScreenSaverMode();
+  }
 };
 
 export const createScreenshotOverlays = async (): Promise<void> => {

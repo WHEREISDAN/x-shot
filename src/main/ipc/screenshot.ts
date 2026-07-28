@@ -18,15 +18,27 @@ import {
   ensureMainWindowReady,
   getMainWindow,
   enableScreenSaverMode,
+  hideMainWindowAndWait,
 } from '../windows';
 import { updatePreferences } from '../preferences';
 import { computeCropRect } from '../../shared/crop-geometry';
 import {
   beginCaptureSession,
   endCaptureSession,
-  getActiveCaptureSessionId,
   markCaptureStage,
 } from '../capture-diagnostics';
+import {
+  cancelCapture,
+  configureCaptureCoordinator,
+  confirmCapture,
+  confirmSelection,
+  isSessionCurrent,
+  startCapture,
+  type CancelReason,
+  type CaptureCoordinatorHooks,
+  type CaptureRect,
+  type CaptureSessionRef,
+} from '../capture-coordinator';
 
 export default function registerScreenshotIpcHandlers() {
   type DisplaySnapshot = {
@@ -198,23 +210,44 @@ export default function registerScreenshotIpcHandlers() {
     }
   };
 
-  // Start screenshot capture (show overlays)
-  ipcMain.on('screenshot-capture', async () => {
-    beginCaptureSession('capture');
-    markCaptureStage('trigger', { platform: process.platform });
-    const main = getMainWindow();
-    if (main) main.hide();
+  const prepareSession = async (session: CaptureSessionRef) => {
+    markCaptureStage('trigger', {
+      platform: process.platform,
+      source: session.source,
+    });
+    await hideMainWindowAndWait();
+    if (!isSessionCurrent(session)) return;
     await prepareDisplaySnapshots();
+    if (!isSessionCurrent(session)) return;
     enableScreenSaverMode();
     await createScreenshotOverlays();
+  };
+
+  const cleanupSession = async (
+    _session: CaptureSessionRef,
+    reason: CancelReason,
+  ) => {
+    await closeScreenshotOverlays();
+    releaseDisplaySnapshots();
+    // Only restore the editor for user-visible cancellations; a replaced
+    // session is immediately followed by a new one.
+    if (reason !== 'replaced' && reason !== 'app-quit') {
+      const main = getMainWindow();
+      if (main && !main.isDestroyed()) main.show();
+    }
+  };
+
+  const runDetached = (work: Promise<unknown>) => {
+    work.catch((err) => log.error('Capture coordinator error:', err));
+  };
+
+  // Start screenshot capture (show overlays)
+  ipcMain.on('screenshot-capture', () => {
+    runDetached(startCapture('renderer'));
   });
 
   ipcMain.on('screenshot-cancel', () => {
-    endCaptureSession('canceled');
-    closeScreenshotOverlays();
-    releaseDisplaySnapshots();
-    const main = getMainWindow();
-    if (main) main.show();
+    runDetached(cancelCapture('escape'));
   });
 
   ipcMain.handle(
@@ -285,205 +318,267 @@ export default function registerScreenshotIpcHandlers() {
     return true;
   });
 
-  ipcMain.on('screenshot-window', async (_event, payload: unknown) => {
-    closeScreenshotOverlays();
+  const deliverWindowCapture = async (
+    session: CaptureSessionRef,
+    sourceId: string,
+  ) => {
+    await closeScreenshotOverlays();
     releaseDisplaySnapshots();
-    try {
-      if (!isScreenshotWindowRequest(payload)) {
-        throw new Error('Invalid payload for screenshot-window');
-      }
-      const sources = await desktopCapturer.getSources({
-        types: ['window'],
-        thumbnailSize: {
-          width: MAX_SNAPSHOT_DIMENSION,
-          height: MAX_SNAPSHOT_DIMENSION,
-        },
-      });
-      const source = sources.find((s) => s.id === payload.sourceId);
-      if (!source) throw new Error('Window source not found');
-      const { thumbnail, name } = source;
-      const size = thumbnail.getSize();
-      const imageDataUrl = thumbnail.toDataURL();
-      const win = await ensureMainWindowReady();
-      const screenshotData: ScreenshotResult = {
-        imageDataUrl,
-        width: size.width,
-        height: size.height,
-        sourceId: source.id,
-        windowTitle: name,
-        isWindowCapture: true,
-      };
-      win.webContents.send('screenshot-data', screenshotData);
-    } catch (error) {
-      log.error('Error capturing window source:', error);
-      const main = getMainWindow();
-      if (main) {
-        main.show();
-        main.focus();
-      }
-    }
-  });
+    await hideMainWindowAndWait();
+    if (!isSessionCurrent(session)) return;
 
-  ipcMain.on('screenshot-screen', async (_event, payload: unknown) => {
-    closeScreenshotOverlays();
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      thumbnailSize: {
+        width: MAX_SNAPSHOT_DIMENSION,
+        height: MAX_SNAPSHOT_DIMENSION,
+      },
+    });
+    const source = sources.find((s) => s.id === sourceId);
+    if (!source) throw new Error('Window source not found');
+    const { thumbnail, name } = source;
+    const size = thumbnail.getSize();
+    const win = await ensureMainWindowReady();
+    markCaptureStage('editor-sent', {
+      captureKind: 'window',
+      sourceId: source.id,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    });
+    win.webContents.send('screenshot-data', {
+      imageDataUrl: thumbnail.toDataURL(),
+      width: size.width,
+      height: size.height,
+      sourceId: source.id,
+      windowTitle: name,
+      isWindowCapture: true,
+      sessionId: session.id,
+    } satisfies ScreenshotResult);
+  };
+
+  const deliverScreenCapture = async (
+    session: CaptureSessionRef,
+    request: { sourceId?: string; displayId?: number | string },
+  ) => {
+    await closeScreenshotOverlays();
     releaseDisplaySnapshots();
-    try {
-      if (!isScreenshotScreenRequest(payload)) {
-        throw new Error('Invalid payload for screenshot-screen');
-      }
-      const sources = await desktopCapturer.getSources({
+    await hideMainWindowAndWait();
+    if (!isSessionCurrent(session)) return;
+
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: MAX_SNAPSHOT_DIMENSION,
+        height: MAX_SNAPSHOT_DIMENSION,
+      },
+    });
+    let source = sources.find((s) => s.id === request.sourceId);
+    if (!source && request.displayId !== undefined) {
+      source = sources.find(
+        (s) =>
+          (s as unknown as { display_id?: string }).display_id ===
+          String(request.displayId),
+      );
+    }
+    if (!source) [source] = sources;
+    if (!source) throw new Error('Screen source not found');
+
+    const { thumbnail } = source;
+    const size = thumbnail.getSize();
+    const win = await ensureMainWindowReady();
+    markCaptureStage('editor-sent', {
+      captureKind: 'screen',
+      sourceId: source.id,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    });
+    win.webContents.send('screenshot-data', {
+      imageDataUrl: thumbnail.toDataURL(),
+      width: size.width,
+      height: size.height,
+      sourceId: source.id,
+      displayId:
+        (source as unknown as { display_id?: string }).display_id ?? null,
+      isDisplayCapture: true,
+      sessionId: session.id,
+    } satisfies ScreenshotResult);
+  };
+
+  const deliverSelectionCapture = async (
+    session: CaptureSessionRef,
+    data: CaptureRect,
+  ) => {
+    markCaptureStage('selection-confirmed');
+    // Overlays must be gone before any post-selection acquisition so they
+    // can never appear in the resulting pixels.
+    await closeScreenshotOverlays();
+    if (!isSessionCurrent(session)) return;
+
+    const selectionRect = {
+      x: Math.round(data.x),
+      y: Math.round(data.y),
+      width: Math.round(data.width),
+      height: Math.round(data.height),
+    };
+    const targetDisplay = screen.getDisplayMatching(selectionRect);
+    const { bounds, scaleFactor, id } = targetDisplay;
+    const deviceScale = scaleFactor || 1;
+
+    // Prefer pre-captured snapshot for the matched display
+    let snapshot = displaySnapshots.get(id);
+    if (!snapshot) {
+      // Fallback (recapture and expired-snapshot paths): acquire live, but
+      // only after the editor window is confirmed hidden.
+      await hideMainWindowAndWait();
+      if (!isSessionCurrent(session)) return;
+      const fallbackSources = await desktopCapturer.getSources({
         types: ['screen'],
         thumbnailSize: {
-          width: MAX_SNAPSHOT_DIMENSION,
-          height: MAX_SNAPSHOT_DIMENSION,
+          width: Math.max(1, Math.floor(bounds.width * deviceScale)),
+          height: Math.max(1, Math.floor(bounds.height * deviceScale)),
         },
       });
-      let source = sources.find((s) => s.id === payload.sourceId);
-      if (!source && payload.displayId !== undefined) {
-        source = sources.find(
-          (s) =>
-            (s as unknown as { display_id?: string }).display_id ===
-            String(payload.displayId),
-        );
-      }
-      if (!source) [source] = sources;
-      if (!source) throw new Error('Screen source not found');
-
-      const { thumbnail } = source;
-      const size = thumbnail.getSize();
-      const imageDataUrl = thumbnail.toDataURL();
-
-      const win = await ensureMainWindowReady();
-      const screenshotData: ScreenshotResult = {
-        imageDataUrl,
-        width: size.width,
-        height: size.height,
-        sourceId: source.id,
-        displayId:
-          (source as unknown as { display_id?: string }).display_id ?? null,
-        isDisplayCapture: true,
+      const match = fallbackSources.find((s) => s.display_id === String(id));
+      if (!match) throw new Error('No screen source found');
+      const img = match.thumbnail;
+      snapshot = {
+        image: img,
+        dataUrl: img.toDataURL(),
+        width: img.getSize().width,
+        height: img.getSize().height,
+        bounds,
+        scaleFactor: deviceScale,
+        timestamp: Date.now(),
+        sourceId: match.id,
       };
-      win.webContents.send('screenshot-data', screenshotData);
-    } catch (error) {
-      log.error('Error capturing screen source:', error);
-      const main = getMainWindow();
-      if (main) {
-        main.show();
-        main.focus();
-      }
     }
+
+    const cropRect = computeCropRect(data, bounds, {
+      width: snapshot.width,
+      height: snapshot.height,
+      bounds: snapshot.bounds,
+    });
+    const croppedImage = snapshot.image.crop(cropRect);
+    const imageDataUrl = croppedImage.toDataURL();
+    const win = await ensureMainWindowReady();
+
+    // Persist last selection for quick re-capture
+    try {
+      await updatePreferences({
+        capture: {
+          lastSelection: {
+            x: data.x,
+            y: data.y,
+            width: data.width,
+            height: data.height,
+            displayId: id,
+          },
+        } as any,
+      });
+    } catch {
+      // noop
+    }
+
+    markCaptureStage('editor-sent', {
+      captureKind: 'selection',
+      displayId: id,
+      displayBounds: bounds,
+      scaleFactor,
+      sourceId: snapshot.sourceId,
+      frameWidth: snapshot.width,
+      frameHeight: snapshot.height,
+      cropRect,
+      outputWidth: cropRect.width,
+      outputHeight: cropRect.height,
+    });
+    win.webContents.send('screenshot-data', {
+      imageDataUrl,
+      width: cropRect.width,
+      height: cropRect.height,
+      x: data.x,
+      y: data.y,
+      sourceId: String(id),
+      displayId: id,
+      sessionId: session.id,
+    } satisfies ScreenshotResult);
+    releaseDisplaySnapshots();
+  };
+
+  const sendCaptureFailure = async (selection?: CaptureRect) => {
+    const win = await ensureMainWindowReady();
+    win.webContents.send('screenshot-data', {
+      imageDataUrl: '',
+      width: selection?.width ?? 0,
+      height: selection?.height ?? 0,
+      x: selection?.x ?? 0,
+      y: selection?.y ?? 0,
+    } satisfies ScreenshotResult);
+  };
+
+  const commitSession: CaptureCoordinatorHooks['commit'] = async (
+    session,
+    payload,
+  ) => {
+    try {
+      if (payload.kind === 'window') {
+        await deliverWindowCapture(session, payload.sourceId);
+        return;
+      }
+      if (payload.kind === 'screen') {
+        await deliverScreenCapture(session, payload);
+        return;
+      }
+      await deliverSelectionCapture(session, payload.rect);
+    } catch (error) {
+      log.error('Error capturing screenshot:', error);
+      releaseDisplaySnapshots();
+      await sendCaptureFailure(
+        payload.kind === 'selection' ? payload.rect : undefined,
+      );
+      throw error;
+    }
+  };
+
+  ipcMain.on('screenshot-window', (_event, payload: unknown) => {
+    if (!isScreenshotWindowRequest(payload)) {
+      log.warn('Invalid payload for screenshot-window');
+      return;
+    }
+    runDetached(confirmCapture({ kind: 'window', sourceId: payload.sourceId }));
   });
 
-  ipcMain.on('screenshot-data', async (_event, data: unknown) => {
-    markCaptureStage('selection-confirmed');
-    closeScreenshotOverlays();
-    try {
-      if (!isScreenshotSelection(data)) {
-        throw new Error('Invalid selection payload');
-      }
-      const selectionRect = {
-        x: Math.round(data.x),
-        y: Math.round(data.y),
-        width: Math.round(data.width),
-        height: Math.round(data.height),
-      };
-      const targetDisplay = screen.getDisplayMatching(selectionRect);
-      const { bounds, scaleFactor, id } = targetDisplay;
-      const deviceScale = scaleFactor || 1;
-
-      // Prefer pre-captured snapshot for the matched display
-      let snapshot = displaySnapshots.get(id);
-      if (!snapshot) {
-        // Fallback: capture current screen if snapshot is missing
-        const fallbackSources = await desktopCapturer.getSources({
-          types: ['screen'],
-          thumbnailSize: {
-            width: Math.max(1, Math.floor(bounds.width * deviceScale)),
-            height: Math.max(1, Math.floor(bounds.height * deviceScale)),
-          },
-        });
-        const match = fallbackSources.find((s) => s.display_id === String(id));
-        if (!match) throw new Error('No screen source found');
-        const img = match.thumbnail;
-        snapshot = {
-          image: img,
-          dataUrl: img.toDataURL(),
-          width: img.getSize().width,
-          height: img.getSize().height,
-          bounds,
-          scaleFactor: deviceScale,
-          timestamp: Date.now(),
-        };
-      }
-
-      if (!snapshot) {
-        throw new Error('No display snapshot available');
-      }
-
-      const cropRect = computeCropRect(data, bounds, {
-        width: snapshot.width,
-        height: snapshot.height,
-        bounds: snapshot.bounds,
-      });
-      const croppedImage = snapshot.image.crop(cropRect);
-
-      const imageDataUrl = croppedImage.toDataURL();
-      const win = await ensureMainWindowReady();
-      const screenshotData: ScreenshotResult = {
-        imageDataUrl,
-        width: cropRect.width,
-        height: cropRect.height,
-        x: data.x,
-        y: data.y,
-        sourceId: String(id),
-        displayId: id,
-        sessionId: getActiveCaptureSessionId() ?? undefined,
-      };
-      // Persist last selection for quick re-capture
-      try {
-        await updatePreferences({
-          capture: {
-            lastSelection: {
-              x: data.x,
-              y: data.y,
-              width: data.width,
-              height: data.height,
-              displayId: id,
-            },
-          } as any,
-        });
-      } catch {
-        // noop
-      }
-      markCaptureStage('editor-sent', {
-        displayId: id,
-        displayBounds: bounds,
-        scaleFactor,
-        sourceId: snapshot.sourceId,
-        frameWidth: snapshot.width,
-        frameHeight: snapshot.height,
-        cropRect,
-        outputWidth: cropRect.width,
-        outputHeight: cropRect.height,
-      });
-      win.webContents.send('screenshot-data', screenshotData);
-      releaseDisplaySnapshots();
-      endCaptureSession('completed');
-    } catch (error) {
-      endCaptureSession('error');
-      log.error('Error capturing screenshot:', error);
-      const win = await ensureMainWindowReady();
-      const fallbackData = isScreenshotSelection(data)
-        ? data
-        : { x: 0, y: 0, width: 0, height: 0 };
-      const fallback: ScreenshotResult = {
-        imageDataUrl: '',
-        width: fallbackData.width,
-        height: fallbackData.height,
-        x: fallbackData.x,
-        y: fallbackData.y,
-      };
-      win.webContents.send('screenshot-data', fallback);
+  ipcMain.on('screenshot-screen', (_event, payload: unknown) => {
+    if (!isScreenshotScreenRequest(payload)) {
+      log.warn('Invalid payload for screenshot-screen');
+      return;
     }
+    runDetached(
+      confirmCapture({
+        kind: 'screen',
+        sourceId: payload.sourceId,
+        displayId: payload.displayId,
+      }),
+    );
+  });
+
+  ipcMain.on('screenshot-data', (_event, data: unknown) => {
+    if (!isScreenshotSelection(data)) {
+      log.warn('Invalid selection payload');
+      return;
+    }
+    runDetached(confirmSelection(data));
+  });
+
+  configureCaptureCoordinator({
+    hooks: {
+      prepare: prepareSession,
+      commit: commitSession,
+      cleanup: cleanupSession,
+    },
+    observer: {
+      onSessionStart: (session) =>
+        beginCaptureSession(session.source, session.id),
+      onSessionEnd: (_session, outcome) => endCaptureSession(outcome),
+    },
   });
 }

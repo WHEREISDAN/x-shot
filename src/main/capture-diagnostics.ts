@@ -10,7 +10,14 @@ export type CaptureStage =
   | 'export-copy'
   | 'export-save';
 
-export type CaptureTrigger = 'capture' | 'recapture' | 'unknown';
+export type CaptureTrigger =
+  | 'capture'
+  | 'recapture'
+  | 'hotkey'
+  | 'tray'
+  | 'delayed'
+  | 'renderer'
+  | 'unknown';
 export type CaptureOutcome = 'completed' | 'canceled' | 'error';
 
 interface ActiveSession {
@@ -65,9 +72,12 @@ export function getActiveCaptureSessionId(): string | null {
   return activeSession?.sessionId ?? null;
 }
 
-export function beginCaptureSession(trigger: CaptureTrigger): string {
+export function beginCaptureSession(
+  trigger: CaptureTrigger,
+  explicitSessionId?: string,
+): string {
   const now = performance.now();
-  const sessionId = randomUUID();
+  const sessionId = explicitSessionId ?? randomUUID();
   if (activeSession) {
     logger.warn('capture-session-replaced', {
       sessionId: activeSession.sessionId,
