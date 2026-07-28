@@ -160,6 +160,8 @@ export interface ScreenshotResult {
   windowTitle?: string;
   isWindowCapture?: boolean;
   isDisplayCapture?: boolean;
+  /** Capture diagnostics correlation id; never contains image data. */
+  sessionId?: string;
 }
 
 export interface ScreenshotWindowRequest {

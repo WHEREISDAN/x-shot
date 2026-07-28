@@ -1,12 +1,14 @@
 import path from 'path';
 import { app, clipboard, dialog, ipcMain, nativeImage } from 'electron';
-import log from 'electron-log';
 import type {
   CopyImageRequest,
   SaveImageRequest,
   SaveImageResponse,
 } from '../../shared/ipc-types';
 import { loadPreferences, sanitizeFilenamePattern } from '../preferences';
+import { getLogger } from '../logger';
+
+const log = getLogger('files');
 
 const MAX_DATA_URL_LENGTH = 80 * 1024 * 1024;
 
@@ -22,6 +24,7 @@ export default function registerFileIpcHandlers() {
   ipcMain.handle(
     'copy-image',
     async (_event, payload: CopyImageRequest | unknown): Promise<boolean> => {
+      const startTime = performance.now();
       try {
         if (
           typeof payload !== 'object' ||
@@ -30,11 +33,15 @@ export default function registerFileIpcHandlers() {
         ) {
           return false;
         }
-        const image = nativeImage.createFromDataURL(
-          (payload as CopyImageRequest).dataUrl,
-        );
+        const { dataUrl } = payload as CopyImageRequest;
+        const image = nativeImage.createFromDataURL(dataUrl);
         if (image.isEmpty()) return false;
         clipboard.writeImage(image);
+        log.info('export-copy', {
+          op: 'copy-image',
+          durationMs: Math.round(performance.now() - startTime),
+          dataUrlChars: dataUrl.length,
+        });
         return true;
       } catch (err) {
         log.error('Failed to copy image:', err);
@@ -49,6 +56,15 @@ export default function registerFileIpcHandlers() {
       _event,
       payload: SaveImageRequest | unknown,
     ): Promise<SaveImageResponse> => {
+      const startTime = performance.now();
+      const logSave = (outcome: string, dataUrlChars: number) => {
+        log.info('export-save', {
+          op: 'save-image',
+          outcome,
+          durationMs: Math.round(performance.now() - startTime),
+          dataUrlChars,
+        });
+      };
       try {
         if (
           typeof payload !== 'object' ||
@@ -94,6 +110,7 @@ export default function registerFileIpcHandlers() {
           const buffer = format === 'png' ? image.toPNG() : image.toJPEG(90);
           const fs = await import('fs/promises');
           await fs.writeFile(filePath, buffer);
+          logSave('auto-saved', request.dataUrl.length);
           return { filePath, canceled: false };
         }
 
@@ -132,6 +149,7 @@ export default function registerFileIpcHandlers() {
         const buffer = useFormat === 'png' ? image.toPNG() : image.toJPEG(90);
         const fs = await import('fs/promises');
         await fs.writeFile(result.filePath, buffer);
+        logSave('saved', request.dataUrl.length);
         return { filePath: result.filePath, canceled: false };
       } catch (err) {
         log.error('Failed to save image:', err);

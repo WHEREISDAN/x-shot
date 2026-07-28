@@ -5,6 +5,7 @@ import {
   exportPresentedDataUrl,
 } from '../components/editor/editor-export';
 import { createRendererLogger } from '../utils/logger';
+import { getCurrentCaptureSessionId } from '../utils/capture-session';
 
 const logger = createRendererLogger('use-export-glue');
 
@@ -56,7 +57,12 @@ export function useExportGlue({
       }
 
       const duration = Date.now() - startTime;
-      logger.info(`Total export pipeline took ${duration}ms`);
+      logger.info('export-complete', {
+        sessionId: getCurrentCaptureSessionId(),
+        durationMs: duration,
+        mode: presentationDisabled ? 'annotated' : 'presented',
+        outputChars: result.length,
+      });
 
       return result;
     } finally {

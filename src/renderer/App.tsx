@@ -13,6 +13,7 @@ import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
 import { createRendererLogger } from './utils/logger';
+import { setCurrentCaptureSessionId } from './utils/capture-session';
 
 const logger = createRendererLogger('app');
 
@@ -27,6 +28,12 @@ function Hello() {
     const api = window?.electron?.ipcRenderer;
     if (!api) return () => {};
     const unsubscribe = api.on('screenshot-data', async (data) => {
+      setCurrentCaptureSessionId(data.sessionId);
+      logger.info('capture-editor-received', {
+        sessionId: data.sessionId,
+        width: data.width,
+        height: data.height,
+      });
       setScreenshotData(data);
 
       try {

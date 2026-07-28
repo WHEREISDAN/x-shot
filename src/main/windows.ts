@@ -4,6 +4,7 @@ import { app, BrowserWindow, shell, screen } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { getLogger } from './logger';
+import { markCaptureStage } from './capture-diagnostics';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import getResourcesPath from '../shared/utils';
@@ -245,6 +246,10 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       } catch (error) {
         logger.warn('Failed to set fullscreen on screenshot overlay', error);
       }
+      markCaptureStage('overlay-visible', {
+        displayId: display.id,
+        focused: display.id === focusedDisplay.id,
+      });
       if (display.id === focusedDisplay.id) {
         overlay.show();
         overlay.focus();

@@ -40,6 +40,7 @@ import {
   updateRegisteredHotkeys,
 } from './hotkeys';
 import { loadPreferences } from './preferences';
+import { beginCaptureSession } from './capture-diagnostics';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -91,6 +92,7 @@ app
         .then(async ({ capture }) => {
           const last = capture.lastSelection;
           if (!last) return;
+          beginCaptureSession('recapture');
           ipcMain.emit('screenshot-data', undefined, {
             x: last.x,
             y: last.y,

@@ -42,7 +42,9 @@
     "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon . -- {@}\" --",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "ci": "npm run lint && npm run typecheck && npm run build && npm test -- --runInBand"
   },
   "browserslist": [
     "extends browserslist-config-erb"
@@ -64,8 +66,10 @@
   "jest": {
     "moduleDirectories": [
       "node_modules",
-      "release/app/node_modules",
       "src"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/release/"
     ],
     "moduleFileExtensions": [
       "js",
@@ -90,7 +94,8 @@
     },
     "testPathIgnorePatterns": [
       "release/app/dist",
-      ".erb/dll"
+      ".erb/dll",
+      "<rootDir>/src/__tests__/fixtures/"
     ],
     "transform": {
       "\\.(ts|tsx|js|jsx)$": "ts-jest"
@@ -151,7 +156,7 @@
     "html-webpack-plugin": "^5.6.3",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^30.3.0",
+    "jest-environment-jsdom": "^29.7.0",
     "mini-css-extract-plugin": "^2.9.2",
     "prettier": "^3.5.3",
     "react-refresh": "^0.16.0",

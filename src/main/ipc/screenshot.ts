@@ -20,6 +20,13 @@ import {
   enableScreenSaverMode,
 } from '../windows';
 import { updatePreferences } from '../preferences';
+import { computeCropRect } from '../../shared/crop-geometry';
+import {
+  beginCaptureSession,
+  endCaptureSession,
+  getActiveCaptureSessionId,
+  markCaptureStage,
+} from '../capture-diagnostics';
 
 export default function registerScreenshotIpcHandlers() {
   type DisplaySnapshot = {
@@ -30,6 +37,7 @@ export default function registerScreenshotIpcHandlers() {
     bounds: Rectangle;
     scaleFactor: number;
     timestamp: number;
+    sourceId?: string;
   };
   const displaySnapshots = new Map<number, DisplaySnapshot>();
 
@@ -161,6 +169,7 @@ export default function registerScreenshotIpcHandlers() {
           bounds,
           scaleFactor: scaleFactor || 1,
           timestamp,
+          sourceId: source.id,
         });
         log.info(
           `Pre-capture: stored snapshot for display ${id} -> ${size.width}x${size.height}`,
@@ -170,6 +179,18 @@ export default function registerScreenshotIpcHandlers() {
       log.info(
         `Prepared ${displaySnapshots.size} display snapshots (${Math.round(totalMemoryMB)}MB total)`,
       );
+      markCaptureStage('snapshot-ready', {
+        displays: Array.from(displaySnapshots.entries()).map(
+          ([displayId, snap]) => ({
+            displayId,
+            bounds: snap.bounds,
+            scaleFactor: snap.scaleFactor,
+            sourceId: snap.sourceId,
+            frameWidth: snap.width,
+            frameHeight: snap.height,
+          }),
+        ),
+      });
       scheduleCleanup();
     } catch (err) {
       log.error('Failed to prepare display snapshots:', err);
@@ -179,6 +200,8 @@ export default function registerScreenshotIpcHandlers() {
 
   // Start screenshot capture (show overlays)
   ipcMain.on('screenshot-capture', async () => {
+    beginCaptureSession('capture');
+    markCaptureStage('trigger', { platform: process.platform });
     const main = getMainWindow();
     if (main) main.hide();
     await prepareDisplaySnapshots();
@@ -187,6 +210,7 @@ export default function registerScreenshotIpcHandlers() {
   });
 
   ipcMain.on('screenshot-cancel', () => {
+    endCaptureSession('canceled');
     closeScreenshotOverlays();
     releaseDisplaySnapshots();
     const main = getMainWindow();
@@ -351,6 +375,7 @@ export default function registerScreenshotIpcHandlers() {
   });
 
   ipcMain.on('screenshot-data', async (_event, data: unknown) => {
+    markCaptureStage('selection-confirmed');
     closeScreenshotOverlays();
     try {
       if (!isScreenshotSelection(data)) {
@@ -395,33 +420,24 @@ export default function registerScreenshotIpcHandlers() {
         throw new Error('No display snapshot available');
       }
 
-      const scaleX = snapshot.width / Math.max(1, snapshot.bounds.width);
-      const scaleY = snapshot.height / Math.max(1, snapshot.bounds.height);
-      const cropX = Math.max(0, Math.round((data.x - bounds.x) * scaleX));
-      const cropY = Math.max(0, Math.round((data.y - bounds.y) * scaleY));
-      const cropWidth = Math.round(data.width * scaleX);
-      const cropHeight = Math.round(data.height * scaleY);
-      const snapSize = snapshot.image.getSize();
-      const finalWidth = Math.min(cropWidth, snapSize.width - cropX);
-      const finalHeight = Math.min(cropHeight, snapSize.height - cropY);
-
-      const croppedImage = snapshot.image.crop({
-        x: cropX,
-        y: cropY,
-        width: finalWidth,
-        height: finalHeight,
+      const cropRect = computeCropRect(data, bounds, {
+        width: snapshot.width,
+        height: snapshot.height,
+        bounds: snapshot.bounds,
       });
+      const croppedImage = snapshot.image.crop(cropRect);
 
       const imageDataUrl = croppedImage.toDataURL();
       const win = await ensureMainWindowReady();
       const screenshotData: ScreenshotResult = {
         imageDataUrl,
-        width: finalWidth,
-        height: finalHeight,
+        width: cropRect.width,
+        height: cropRect.height,
         x: data.x,
         y: data.y,
         sourceId: String(id),
         displayId: id,
+        sessionId: getActiveCaptureSessionId() ?? undefined,
       };
       // Persist last selection for quick re-capture
       try {
@@ -439,9 +455,22 @@ export default function registerScreenshotIpcHandlers() {
       } catch {
         // noop
       }
+      markCaptureStage('editor-sent', {
+        displayId: id,
+        displayBounds: bounds,
+        scaleFactor,
+        sourceId: snapshot.sourceId,
+        frameWidth: snapshot.width,
+        frameHeight: snapshot.height,
+        cropRect,
+        outputWidth: cropRect.width,
+        outputHeight: cropRect.height,
+      });
       win.webContents.send('screenshot-data', screenshotData);
       releaseDisplaySnapshots();
+      endCaptureSession('completed');
     } catch (error) {
+      endCaptureSession('error');
       log.error('Error capturing screenshot:', error);
       const win = await ensureMainWindowReady();
       const fallbackData = isScreenshotSelection(data)
