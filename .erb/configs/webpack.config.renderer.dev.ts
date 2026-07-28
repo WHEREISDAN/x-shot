@@ -93,6 +93,27 @@ const configuration: webpack.Configuration = {
         test: /\.(png|jpg|jpeg|gif)$/i,
         type: 'asset/resource',
       },
+      {
+        test: /tesseract\.js[/\\]dist[/\\]worker\.min\.js$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'ocr/[name].[contenthash:8][ext]',
+        },
+      },
+      {
+        test: /tesseract-core\.wasm\.js$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'ocr/[name].[contenthash:8][ext]',
+        },
+      },
+      {
+        test: /eng\.traineddata\.gz$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'ocr/[name][ext]',
+        },
+      },
       // SVG
       {
         test: /\.svg$/,

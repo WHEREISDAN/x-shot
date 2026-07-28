@@ -75,6 +75,9 @@
       "json"
     ],
     "moduleNameMapper": {
+      "^tesseract\\.js/dist/worker\\.min\\.js$": "<rootDir>/.erb/mocks/fileMock.js",
+      "^tesseract\\.js-core/tesseract-core\\.wasm\\.js$": "<rootDir>/.erb/mocks/fileMock.js",
+      "^@tesseract\\.js-data/eng/4\\.0\\.0/eng\\.traineddata\\.gz$": "<rootDir>/.erb/mocks/fileMock.js",
       "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/.erb/mocks/fileMock.js",
       "\\.(css|less|sass|scss)$": "identity-obj-proxy"
     },
@@ -95,6 +98,7 @@
   },
   "dependencies": {
     "@electron/notarize": "^3.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "dom-to-image-more": "^3.6.3",
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
@@ -105,7 +109,7 @@
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
+    "@electron/rebuild": "^4.0.4",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.15",
     "@svgr/webpack": "^8.1.0",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
@@ -125,10 +129,10 @@
     "core-js": "^3.41.0",
     "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
-    "css-minimizer-webpack-plugin": "^7.0.2",
+    "css-minimizer-webpack-plugin": "^8.0.0",
     "detect-port": "^2.1.0",
-    "electron": "^35.0.2",
-    "electron-builder": "^25.1.8",
+    "electron": "^42.0.0",
+    "electron-builder": "^26.8.1",
     "electron-devtools-installer": "^4.0.0",
     "electronmon": "^2.0.3",
     "eslint": "^8.57.1",
@@ -147,7 +151,7 @@
     "html-webpack-plugin": "^5.6.3",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
+    "jest-environment-jsdom": "^30.3.0",
     "mini-css-extract-plugin": "^2.9.2",
     "prettier": "^3.5.3",
     "react-refresh": "^0.16.0",
@@ -256,5 +260,12 @@
       ".erb/dll/**"
     ],
     "logLevel": "quiet"
+  },
+  "overrides": {
+    "eslint-config-erb": {
+      "@typescript-eslint/typescript-estree": {
+        "minimatch": "^9.0.9"
+      }
+    }
   }
 }

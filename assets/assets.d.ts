@@ -33,3 +33,18 @@ declare module '*.css' {
   const content: Styles;
   export default content;
 }
+
+declare module 'tesseract.js/dist/worker.min.js' {
+  const content: string;
+  export default content;
+}
+
+declare module 'tesseract.js-core/tesseract-core.wasm.js' {
+  const content: string;
+  export default content;
+}
+
+declare module '*.traineddata.gz' {
+  const content: string;
+  export default content;
+}

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { recognize } from 'tesseract.js';
+import workerUrl from 'tesseract.js/dist/worker.min.js';
+import coreUrl from 'tesseract.js-core/tesseract-core.wasm.js';
+import engDataUrl from '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz';
 
 export interface OcrBox {
   x: number;
@@ -117,26 +120,16 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200);
       canvasCleanup = cleanup;
 
-      const MAJOR = 'v5';
-      const primaryOpts = {
-        workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${MAJOR}/dist/worker.min.js`,
-        corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        logger: () => {},
-      } as const;
-      const fallbackOpts = {
-        workerPath: `https://unpkg.com/tesseract.js@${MAJOR}/dist/worker.min.js`,
-        corePath: `https://unpkg.com/tesseract.js-core@${MAJOR}/tesseract-core.wasm.js`,
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
+      const langPath = new URL('./', engDataUrl).toString();
+      const localOcrOptions = {
+        workerPath: workerUrl,
+        corePath: coreUrl,
+        langPath,
+        workerBlobURL: false,
         logger: () => {},
       } as const;
 
-      let data;
-      try {
-        ({ data } = await recognize(canvas, 'eng', primaryOpts));
-      } catch {
-        ({ data } = await recognize(canvas, 'eng', fallbackOpts));
-      }
+      const { data } = await recognize(canvas, 'eng', localOcrOptions);
 
       const invScale = scale > 0 ? 1 / scale : 1;
       const toBox = (b: {
