@@ -50,7 +50,13 @@ export function ArrowSvg({ a }: { a: ArrowShape }) {
   );
 }
 
-export function ShapeSvg({ shape }: { shape: EditorShape }) {
+export function ShapeSvg({
+  shape,
+  forcePiiRedaction = false,
+}: {
+  shape: EditorShape;
+  forcePiiRedaction?: boolean;
+}) {
   switch (shape.type) {
     case 'pen':
     case 'highlighter': {
@@ -73,6 +79,24 @@ export function ShapeSvg({ shape }: { shape: EditorShape }) {
     case 'rect': {
       const r = shape as RectShape;
       const isPiiBlur = r.tag?.startsWith('pii-') && r.fillColor === '#808080';
+      const isPiiShape = r.tag?.startsWith('pii-');
+
+      if (forcePiiRedaction && isPiiShape) {
+        return (
+          <rect
+            x={Math.min(r.x, r.x + r.width)}
+            y={Math.min(r.y, r.y + r.height)}
+            width={Math.abs(r.width)}
+            height={Math.abs(r.height)}
+            fill="#000000"
+            fillOpacity={1}
+            stroke="transparent"
+            strokeWidth={0}
+            rx={r.radius ?? 0}
+            ry={r.radius ?? 0}
+          />
+        );
+      }
 
       if (isPiiBlur) {
         const featherSize = 6;
@@ -372,7 +396,10 @@ export const EditorStage = memo(function EditorStage({
                   >
                     {shapes.map((shape) => (
                       <g key={shape.id}>
-                        <ShapeSvg shape={shape} />
+                        <ShapeSvg
+                          shape={shape}
+                          forcePiiRedaction={isExporting}
+                        />
                       </g>
                     ))}
                     {showOcrOverlay && !isExporting && (
@@ -393,7 +420,12 @@ export const EditorStage = memo(function EditorStage({
                         ))}
                       </g>
                     )}
-                    {provisionalShape && <ShapeSvg shape={provisionalShape} />}
+                    {provisionalShape && (
+                      <ShapeSvg
+                        shape={provisionalShape}
+                        forcePiiRedaction={isExporting}
+                      />
+                    )}
                     {!isExporting && renderSelectionOverlay?.()}
                   </svg>
                 </div>
@@ -435,7 +467,7 @@ export const EditorStage = memo(function EditorStage({
             >
               {shapes.map((shape) => (
                 <g key={shape.id}>
-                  <ShapeSvg shape={shape} />
+                  <ShapeSvg shape={shape} forcePiiRedaction={isExporting} />
                 </g>
               ))}
               {showOcrOverlay && !isExporting && (
@@ -456,7 +488,12 @@ export const EditorStage = memo(function EditorStage({
                   ))}
                 </g>
               )}
-              {provisionalShape && <ShapeSvg shape={provisionalShape} />}
+              {provisionalShape && (
+                <ShapeSvg
+                  shape={provisionalShape}
+                  forcePiiRedaction={isExporting}
+                />
+              )}
               {!isExporting && renderSelectionOverlay?.()}
             </svg>
           </div>
