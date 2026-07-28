@@ -19,6 +19,16 @@ ipcMain.on('open-preferences', async () => {
   }
 });
 
+function isPreferencesRequest(value: unknown): value is SetPreferencesRequest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { preferences?: unknown }).preferences === 'object' &&
+    (value as { preferences?: unknown }).preferences !== null &&
+    !Array.isArray((value as { preferences?: unknown }).preferences)
+  );
+}
+
 // Callback for delayed hotkeys changes
 let onDelayHotkeysChange:
   | ((payload: {
@@ -70,6 +80,9 @@ export default function registerPreferencesIpcHandlers() {
     'set-preferences',
     async (_event, request: SetPreferencesRequest): Promise<boolean> => {
       try {
+        if (!isPreferencesRequest(request)) {
+          throw new Error('Invalid preferences request');
+        }
         await updatePreferences(request.preferences);
 
         // Handle special system preferences that require immediate action

@@ -444,12 +444,15 @@ export default function registerScreenshotIpcHandlers() {
     } catch (error) {
       log.error('Error capturing screenshot:', error);
       const win = await ensureMainWindowReady();
+      const fallbackData = isScreenshotSelection(data)
+        ? data
+        : { x: 0, y: 0, width: 0, height: 0 };
       const fallback: ScreenshotResult = {
         imageDataUrl: '',
-        width: (data as { width: number }).width,
-        height: (data as { height: number }).height,
-        x: (data as { x: number }).x,
-        y: (data as { y: number }).y,
+        width: fallbackData.width,
+        height: fallbackData.height,
+        x: fallbackData.x,
+        y: fallbackData.y,
       };
       win.webContents.send('screenshot-data', fallback);
     }

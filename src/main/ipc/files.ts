@@ -6,14 +6,33 @@ import type {
   SaveImageRequest,
   SaveImageResponse,
 } from '../../shared/ipc-types';
-import { loadPreferences } from '../preferences';
+import { loadPreferences, sanitizeFilenamePattern } from '../preferences';
+
+const MAX_DATA_URL_LENGTH = 80 * 1024 * 1024;
+
+function isSupportedImageDataUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_DATA_URL_LENGTH &&
+    /^data:image\/(?:png|jpe?g);base64,/i.test(value)
+  );
+}
 
 export default function registerFileIpcHandlers() {
   ipcMain.handle(
     'copy-image',
-    async (_event, payload: CopyImageRequest): Promise<boolean> => {
+    async (_event, payload: CopyImageRequest | unknown): Promise<boolean> => {
       try {
-        const image = nativeImage.createFromDataURL(payload.dataUrl);
+        if (
+          typeof payload !== 'object' ||
+          payload === null ||
+          !isSupportedImageDataUrl((payload as CopyImageRequest).dataUrl)
+        ) {
+          return false;
+        }
+        const image = nativeImage.createFromDataURL(
+          (payload as CopyImageRequest).dataUrl,
+        );
         if (image.isEmpty()) return false;
         clipboard.writeImage(image);
         return true;
@@ -26,9 +45,20 @@ export default function registerFileIpcHandlers() {
 
   ipcMain.handle(
     'save-image',
-    async (_event, payload: SaveImageRequest): Promise<SaveImageResponse> => {
+    async (
+      _event,
+      payload: SaveImageRequest | unknown,
+    ): Promise<SaveImageResponse> => {
       try {
-        const image = nativeImage.createFromDataURL(payload.dataUrl);
+        if (
+          typeof payload !== 'object' ||
+          payload === null ||
+          !isSupportedImageDataUrl((payload as SaveImageRequest).dataUrl)
+        ) {
+          return { filePath: null, canceled: true };
+        }
+        const request = payload as SaveImageRequest;
+        const image = nativeImage.createFromDataURL(request.dataUrl);
         if (image.isEmpty()) {
           return { filePath: null, canceled: true };
         }
@@ -48,7 +78,7 @@ export default function registerFileIpcHandlers() {
         // Generate filename using pattern from preferences
         const filenamePattern =
           preferences.export.filenamePattern || 'X-Shot_$TIMESTAMP';
-        const filename = filenamePattern
+        const filename = sanitizeFilenamePattern(filenamePattern)
           .replace('$TIMESTAMP', timestamp)
           .replace('$DATE', new Date().toISOString().slice(0, 10))
           .replace(
@@ -59,7 +89,7 @@ export default function registerFileIpcHandlers() {
         const defaultName = `${filename}.${format}`;
 
         // Check if auto-save is enabled
-        if (preferences.export.autoSave && !payload.defaultPath) {
+        if (preferences.export.autoSave && !request.defaultPath) {
           const filePath = path.join(defaultDir, defaultName);
           const buffer = format === 'png' ? image.toPNG() : image.toJPEG(90);
           const fs = await import('fs/promises');
@@ -82,7 +112,7 @@ export default function registerFileIpcHandlers() {
 
         const result = await dialog.showSaveDialog({
           defaultPath:
-            payload.defaultPath ?? path.join(defaultDir, defaultName),
+            request.defaultPath ?? path.join(defaultDir, defaultName),
           filters,
         });
 
@@ -114,11 +144,14 @@ export default function registerFileIpcHandlers() {
     'select-folder',
     async (
       _event,
-      payload: { defaultPath?: string },
+      payload: { defaultPath?: string } | unknown,
     ): Promise<{ filePath: string | null; canceled: boolean }> => {
       try {
         const result = await dialog.showOpenDialog({
-          defaultPath: payload.defaultPath,
+          defaultPath:
+            typeof payload === 'object' && payload !== null
+              ? (payload as { defaultPath?: string }).defaultPath
+              : undefined,
           properties: ['openDirectory'],
         });
 

@@ -86,6 +86,20 @@ app
         ipcMain.emit('screenshot-capture');
       }
     };
+    const triggerRecapture = () => {
+      loadPreferences()
+        .then(async ({ capture }) => {
+          const last = capture.lastSelection;
+          if (!last) return;
+          ipcMain.emit('screenshot-data', undefined, {
+            x: last.x,
+            y: last.y,
+            width: last.width,
+            height: last.height,
+          });
+        })
+        .catch(() => {});
+    };
 
     // Register IPC handlers first
     registerFileIpcHandlers();
@@ -121,24 +135,7 @@ app
         triggerDelay: (ms: number) => {
           setTimeout(() => triggerScreenshot(), ms);
         },
-        triggerRecapture: () => {
-          const prefsPromise = import('./preferences').then((m) =>
-            m.loadPreferences(),
-          );
-          prefsPromise
-            .then(async ({ capture }) => {
-              const last = capture.lastSelection;
-              if (!last) return;
-              // Dispatch through existing handler path
-              ipcMain.emit('screenshot-data', undefined, {
-                x: last.x,
-                y: last.y,
-                width: last.width,
-                height: last.height,
-              });
-            })
-            .catch(() => {});
-        },
+        triggerRecapture,
       },
     );
 
@@ -154,9 +151,7 @@ app
         {
           triggerMain: triggerScreenshot,
           triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
-          triggerRecapture(): void {
-            throw new Error('Function not implemented.');
-          },
+          triggerRecapture,
         },
       );
       const win = getMainWindow();
@@ -175,25 +170,7 @@ app
           {
             triggerMain: triggerScreenshot,
             triggerDelay: (ms) => setTimeout(() => triggerScreenshot(), ms),
-            triggerRecapture: () => {
-
-              // TODO: fix later
-              const prefsPromise = import('./preferences').then((m) =>
-                m.loadPreferences(),
-              );
-              prefsPromise
-                .then(async ({ capture }) => {
-                  const last = capture.lastSelection;
-                  if (!last) return;
-                  ipcMain.emit('screenshot-data', undefined, {
-                    x: last.x,
-                    y: last.y,
-                    width: last.width,
-                    height: last.height,
-                  });
-                })
-                .catch(() => {});
-            },
+            triggerRecapture,
           },
         );
         // Keep tray menu accelerators in sync with preferences

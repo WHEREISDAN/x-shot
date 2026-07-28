@@ -20,6 +20,17 @@ let mainWindow: BrowserWindow | null = null;
 let preferencesWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
 
+function openAllowedExternalUrl(rawUrl: string): void {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol === 'https:') {
+      shell.openExternal(url.toString());
+    }
+  } catch {
+    // Deny malformed or non-web external URLs.
+  }
+}
+
 export function createMainWindow(): BrowserWindow {
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
@@ -42,6 +53,7 @@ export function createMainWindow(): BrowserWindow {
         : path.join(__dirname, '../../.erb/dll/preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   });
 
@@ -64,7 +76,7 @@ export function createMainWindow(): BrowserWindow {
   menuBuilder.buildMenu();
 
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    shell.openExternal(edata.url);
+    openAllowedExternalUrl(edata.url);
     return { action: 'deny' } as const;
   });
 
@@ -207,6 +219,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
           : path.join(__dirname, '../../.erb/dll/preload.js'),
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         backgroundThrottling: false,
       },
     });
@@ -296,6 +309,7 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
         : path.join(__dirname, '../../.erb/dll/preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   });
 
@@ -316,7 +330,7 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
 
   // Prevent external links from opening in preferences window
   preferencesWindow.webContents.setWindowOpenHandler((edata) => {
-    shell.openExternal(edata.url);
+    openAllowedExternalUrl(edata.url);
     return { action: 'deny' } as const;
   });
 

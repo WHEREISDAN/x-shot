@@ -287,9 +287,15 @@ export function isScreenshotSelection(
   const v = value as Record<string, unknown>;
   return (
     typeof v.x === 'number' &&
+    Number.isFinite(v.x) &&
     typeof v.y === 'number' &&
+    Number.isFinite(v.y) &&
     typeof v.width === 'number' &&
-    typeof v.height === 'number'
+    Number.isFinite(v.width) &&
+    v.width > 0 &&
+    typeof v.height === 'number' &&
+    Number.isFinite(v.height) &&
+    v.height > 0
   );
 }
 
