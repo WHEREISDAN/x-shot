@@ -4,30 +4,66 @@ import { getLogger } from './logger';
 export const DEFAULT_SCREENSHOT_ACCELERATOR =
   process.env.XSHOT_HOTKEY || 'CommandOrControl+Shift+1';
 
-export function registerScreenshotHotkey(
+type HotkeyLabel = 'main' | '3s delayed' | '5s delayed' | 'recapture';
+
+let currentMainHotkey: string | null = null;
+let currentDelay3Hotkey: string | null = null;
+let currentDelay5Hotkey: string | null = null;
+let currentRecaptureHotkey: string | null = null;
+
+/**
+ * Electron throws a TypeError for accelerators it cannot parse, so every
+ * registration is guarded; a bad value must never abort app startup.
+ */
+function registerSafely(
   accelerator: string,
-  onTrigger: () => void,
+  callback: () => void,
+  label: HotkeyLabel,
 ): boolean {
   const logger = getLogger('hotkeys');
-  if (!app.isReady()) {
-    throw new Error(
-      'registerScreenshotHotkey must be called after app.whenReady',
-    );
+  try {
+    if (globalShortcut.isRegistered(accelerator)) {
+      logger.warn(
+        `Skipping ${label} shortcut: ${accelerator} is already bound to another X-Shot shortcut`,
+      );
+      return false;
+    }
+    const ok = globalShortcut.register(accelerator, callback);
+    if (!ok) {
+      logger.warn(`Failed to register ${label} shortcut: ${accelerator}`);
+    }
+    return ok;
+  } catch (err) {
+    logger.error(`Invalid ${label} shortcut: ${accelerator}`, err);
+    return false;
   }
+}
 
+function unregisterSafely(accelerator: string | null): void {
+  if (!accelerator) return;
   try {
     if (globalShortcut.isRegistered(accelerator)) {
       globalShortcut.unregister(accelerator);
     }
-    const ok = globalShortcut.register(accelerator, onTrigger);
-    if (!ok) {
-      logger.warn(`Failed to register global shortcut: ${accelerator}`);
-    }
-    return ok;
   } catch (err) {
-    logger.error('Error registering global shortcut', err);
-    return false;
+    getLogger('hotkeys').error(
+      `Failed to unregister shortcut: ${accelerator}`,
+      err,
+    );
   }
+}
+
+/** Rebinds one slot and returns the accelerator it now holds, if any. */
+function rebind(
+  current: string | null,
+  next: string | null | undefined,
+  callback: () => void,
+  label: HotkeyLabel,
+): string | null {
+  unregisterSafely(current);
+  const accelerator = next || null;
+  if (!accelerator) return null;
+  return registerSafely(accelerator, callback, label) ? accelerator : null;
 }
 
 export function unregisterAllHotkeys(): void {
@@ -38,11 +74,6 @@ export function unregisterAllHotkeys(): void {
     logger.error('Error unregistering global shortcuts', err);
   }
 }
-
-let currentMainHotkey: string | null = null;
-let currentDelay3Hotkey: string | null = null;
-let currentDelay5Hotkey: string | null = null;
-let currentRecaptureHotkey: string | null = null;
 
 export function updateRegisteredHotkeys(
   hotkeys: {
@@ -63,82 +94,41 @@ export function updateRegisteredHotkeys(
     return;
   }
 
-  // Main
   if (hotkeys.main !== undefined) {
-    if (currentMainHotkey && globalShortcut.isRegistered(currentMainHotkey)) {
-      globalShortcut.unregister(currentMainHotkey);
-    }
-    currentMainHotkey = hotkeys.main || null;
-    if (currentMainHotkey) {
-      const ok = globalShortcut.register(
-        currentMainHotkey,
-        triggers.triggerMain,
-      );
-      if (!ok)
-        logger.warn(`Failed to register main shortcut: ${currentMainHotkey}`);
-    }
+    currentMainHotkey = rebind(
+      currentMainHotkey,
+      hotkeys.main,
+      triggers.triggerMain,
+      'main',
+    );
   }
 
-  // Delay 3
   if (hotkeys.delay3 !== undefined) {
-    if (
-      currentDelay3Hotkey &&
-      globalShortcut.isRegistered(currentDelay3Hotkey)
-    ) {
-      globalShortcut.unregister(currentDelay3Hotkey);
-    }
-    currentDelay3Hotkey = hotkeys.delay3?.accelerator || null;
-    if (currentDelay3Hotkey) {
-      const d = hotkeys.delay3?.delayMs ?? 3000;
-      const ok = globalShortcut.register(currentDelay3Hotkey, () =>
-        triggers.triggerDelay(d),
-      );
-      if (!ok)
-        logger.warn(
-          `Failed to register 3s delayed shortcut: ${currentDelay3Hotkey}`,
-        );
-    }
+    const delayMs = hotkeys.delay3?.delayMs ?? 3000;
+    currentDelay3Hotkey = rebind(
+      currentDelay3Hotkey,
+      hotkeys.delay3?.accelerator,
+      () => triggers.triggerDelay(delayMs),
+      '3s delayed',
+    );
   }
 
-  // Delay 5
   if (hotkeys.delay5 !== undefined) {
-    if (
-      currentDelay5Hotkey &&
-      globalShortcut.isRegistered(currentDelay5Hotkey)
-    ) {
-      globalShortcut.unregister(currentDelay5Hotkey);
-    }
-    currentDelay5Hotkey = hotkeys.delay5?.accelerator || null;
-    if (currentDelay5Hotkey) {
-      const d = hotkeys.delay5?.delayMs ?? 5000;
-      const ok = globalShortcut.register(currentDelay5Hotkey, () =>
-        triggers.triggerDelay(d),
-      );
-      if (!ok)
-        logger.warn(
-          `Failed to register 5s delayed shortcut: ${currentDelay5Hotkey}`,
-        );
-    }
+    const delayMs = hotkeys.delay5?.delayMs ?? 5000;
+    currentDelay5Hotkey = rebind(
+      currentDelay5Hotkey,
+      hotkeys.delay5?.accelerator,
+      () => triggers.triggerDelay(delayMs),
+      '5s delayed',
+    );
   }
 
-  // Recapture last area
   if (hotkeys.recapture !== undefined) {
-    if (
-      currentRecaptureHotkey &&
-      globalShortcut.isRegistered(currentRecaptureHotkey)
-    ) {
-      globalShortcut.unregister(currentRecaptureHotkey);
-    }
-    currentRecaptureHotkey = hotkeys.recapture || null;
-    if (currentRecaptureHotkey) {
-      const ok = globalShortcut.register(
-        currentRecaptureHotkey,
-        triggers.triggerRecapture,
-      );
-      if (!ok)
-        logger.warn(
-          `Failed to register recapture shortcut: ${currentRecaptureHotkey}`,
-        );
-    }
+    currentRecaptureHotkey = rebind(
+      currentRecaptureHotkey,
+      hotkeys.recapture,
+      triggers.triggerRecapture,
+      'recapture',
+    );
   }
 }

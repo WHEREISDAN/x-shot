@@ -15,6 +15,7 @@ export type CaptureTrigger =
   | 'recapture'
   | 'hotkey'
   | 'tray'
+  | 'menu'
   | 'delayed'
   | 'renderer'
   | 'unknown';

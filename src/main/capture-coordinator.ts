@@ -21,6 +21,7 @@ export type CaptureState =
 export type CaptureSource =
   | 'hotkey'
   | 'tray'
+  | 'menu'
   | 'delayed'
   | 'renderer'
   | 'recapture'

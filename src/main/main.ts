@@ -39,8 +39,8 @@ import {
   cancelCapture,
   scheduleCapture,
   startCapture,
-  startRecapture,
 } from './capture-coordinator';
+import { recaptureLastSelection } from './capture-actions';
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -97,21 +97,7 @@ app
       scheduleCapture(delayMs, 'delayed');
     };
     const triggerRecapture = () => {
-      loadPreferences()
-        .then(({ capture }) => {
-          const last = capture.lastSelection;
-          if (last) {
-            runDetached(
-              startRecapture({
-                x: last.x,
-                y: last.y,
-                width: last.width,
-                height: last.height,
-              }),
-            );
-          }
-        })
-        .catch((err) => log.warn('Failed to re-capture last area', err));
+      runDetached(recaptureLastSelection());
     };
 
     // Load preferences to get the correct settings
@@ -207,7 +193,6 @@ app
 
     app.on('activate', () => {
       if (getMainWindow() === null) createMainWindow();
-      app.disableHardwareAcceleration();
     });
   })
   .catch((err) => log.error(err));

@@ -122,47 +122,69 @@ export default function GeneralSection({
     return parts.join('+');
   }, []);
 
-  const hotkeyInputHandlers = {
-    onKeyDown:
-      (setter: (accel: string) => void) =>
-      (e: React.KeyboardEvent<HTMLInputElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const accel = buildAcceleratorFromEvent(e);
-        if (accel) setter(accel);
-      },
-  } as const;
+  type HotkeyRecorderTarget = {
+    onAccelerator: (accel: string) => void;
+    onClear?: () => void;
+  };
 
-  const globalCaptureSetterRef = React.useRef<null | ((accel: string) => void)>(
-    null,
-  );
-  const globalKeyHandler = React.useCallback(
+  const recorderTargetRef = React.useRef<HotkeyRecorderTarget | null>(null);
+
+  // Captures the next key combo while a hotkey field is focused. The listener
+  // is removed on blur, Escape, or once a combo is recorded so it can never
+  // hijack keystrokes elsewhere in the window.
+  const recorderKeyHandler = React.useCallback(
     (ev: KeyboardEvent) => {
-      if (!globalCaptureSetterRef.current) return;
+      const target = recorderTargetRef.current;
+      if (!target) return;
       ev.preventDefault();
       ev.stopPropagation();
+
+      const finish = () => {
+        recorderTargetRef.current = null;
+        window.removeEventListener('keydown', recorderKeyHandler, true);
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      };
+
+      const hasModifier = ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey;
+      if (ev.key === 'Escape' && !hasModifier) {
+        finish();
+        return;
+      }
+      if ((ev.key === 'Backspace' || ev.key === 'Delete') && !hasModifier) {
+        if (target.onClear) {
+          target.onClear();
+          finish();
+        }
+        return;
+      }
       const accel = buildAcceleratorFromEvent(ev);
       if (!accel) return;
-      try {
-        globalCaptureSetterRef.current(accel);
-      } finally {
-        globalCaptureSetterRef.current = null;
-        window.removeEventListener('keydown', globalKeyHandler, true);
-        (document.activeElement as HTMLElement | null)?.blur?.();
-      }
+      target.onAccelerator(accel);
+      finish();
     },
     [buildAcceleratorFromEvent],
   );
-  const startGlobalCapture = React.useCallback(
-    (setter: (accel: string) => void) => () => {
-      globalCaptureSetterRef.current = setter;
-      window.addEventListener('keydown', globalKeyHandler, true);
+
+  const stopRecording = React.useCallback(() => {
+    recorderTargetRef.current = null;
+    window.removeEventListener('keydown', recorderKeyHandler, true);
+  }, [recorderKeyHandler]);
+
+  const startRecording = React.useCallback(
+    (target: HotkeyRecorderTarget) => () => {
+      recorderTargetRef.current = target;
+      window.addEventListener('keydown', recorderKeyHandler, true);
     },
-    [globalKeyHandler],
+    [recorderKeyHandler],
   );
 
-  const handleDelayHotkeyChange = useCallback(
-    async (field: 'hotkeyDelay3' | 'hotkeyDelay5', value: string) => {
+  React.useEffect(() => stopRecording, [stopRecording]);
+
+  const handleOptionalHotkeyChange = useCallback(
+    async (
+      field: 'hotkeyDelay3' | 'hotkeyDelay5' | 'hotkeyRecapture',
+      value: string | null,
+    ) => {
       const nextCapture = {
         ...preferences.capture,
         [field]: value || null,
@@ -273,10 +295,8 @@ export default function GeneralSection({
             type="text"
             value={preferences.capture.hotkey}
             onChange={() => {}}
-            onFocus={startGlobalCapture((accel) => handleHotkeyChange(accel))}
-            onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
-              if (accel) handleHotkeyChange(accel);
-            })}
+            onFocus={startRecording({ onAccelerator: handleHotkeyChange })}
+            onBlur={stopRecording}
             placeholder="Click then press shortcut"
             variant="filled"
             size="md"
@@ -290,7 +310,8 @@ export default function GeneralSection({
             Delayed Capture Hotkeys
           </div>
           <p style={descriptionStyles}>
-            Optional shortcuts for delayed capture. Leave blank to disable.
+            Optional shortcuts for delayed capture and re-capture. Press
+            Backspace while a field is focused to clear it, Escape to cancel.
           </p>
           <div
             style={{
@@ -306,12 +327,13 @@ export default function GeneralSection({
                 type="text"
                 value={preferences.capture.hotkeyDelay3 || ''}
                 onChange={() => {}}
-                onFocus={startGlobalCapture((accel) =>
-                  handleDelayHotkeyChange('hotkeyDelay3', accel),
-                )}
-                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
-                  if (accel) handleDelayHotkeyChange('hotkeyDelay3', accel);
+                onFocus={startRecording({
+                  onAccelerator: (accel) =>
+                    handleOptionalHotkeyChange('hotkeyDelay3', accel),
+                  onClear: () =>
+                    handleOptionalHotkeyChange('hotkeyDelay3', null),
                 })}
+                onBlur={stopRecording}
                 placeholder="Click then press shortcut (3s)"
                 variant="filled"
                 size="md"
@@ -325,12 +347,13 @@ export default function GeneralSection({
                 type="text"
                 value={preferences.capture.hotkeyDelay5 || ''}
                 onChange={() => {}}
-                onFocus={startGlobalCapture((accel) =>
-                  handleDelayHotkeyChange('hotkeyDelay5', accel),
-                )}
-                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
-                  if (accel) handleDelayHotkeyChange('hotkeyDelay5', accel);
+                onFocus={startRecording({
+                  onAccelerator: (accel) =>
+                    handleOptionalHotkeyChange('hotkeyDelay5', accel),
+                  onClear: () =>
+                    handleOptionalHotkeyChange('hotkeyDelay5', null),
                 })}
+                onBlur={stopRecording}
                 placeholder="Click then press shortcut (5s)"
                 variant="filled"
                 size="md"
@@ -344,23 +367,13 @@ export default function GeneralSection({
                 type="text"
                 value={preferences.capture.hotkeyRecapture || ''}
                 onChange={() => {}}
-                onFocus={startGlobalCapture((accel) =>
-                  onUpdate({
-                    capture: {
-                      ...preferences.capture,
-                      hotkeyRecapture: accel,
-                    },
-                  }),
-                )}
-                onKeyDown={hotkeyInputHandlers.onKeyDown((accel) => {
-                  if (!accel) return;
-                  onUpdate({
-                    capture: {
-                      ...preferences.capture,
-                      hotkeyRecapture: accel,
-                    },
-                  });
+                onFocus={startRecording({
+                  onAccelerator: (accel) =>
+                    handleOptionalHotkeyChange('hotkeyRecapture', accel),
+                  onClear: () =>
+                    handleOptionalHotkeyChange('hotkeyRecapture', null),
                 })}
+                onBlur={stopRecording}
                 placeholder="Click then press shortcut (Re-capture last area)"
                 variant="filled"
                 size="md"

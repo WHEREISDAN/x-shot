@@ -8,6 +8,15 @@ import {
 } from 'electron';
 import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
 import { loadPreferences } from './preferences';
+import { getLogger } from './logger';
+import { recaptureLastSelection } from './capture-actions';
+import { scheduleCapture, startCapture } from './capture-coordinator';
+
+const logger = getLogger('menu');
+
+function runDetached(work: Promise<unknown>): void {
+  work.catch((err) => logger.error('Capture menu action failed', err));
+}
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -308,15 +317,6 @@ export default class MenuBuilder {
     return templateDefault;
   }
 
-  private triggerScreenshotNow(): void {
-    try {
-      if (this.mainWindow) this.mainWindow.hide();
-      ipcMain.emit('screenshot-capture');
-    } catch {
-      // noop
-    }
-  }
-
   buildCaptureMenuItems(accelerators?: {
     main?: string | null;
     delay3?: string | null;
@@ -332,12 +332,12 @@ export default class MenuBuilder {
       {
         label: 'Show App',
         click: () => {
-          const anyOpen = BrowserWindow.getAllWindows().find(
-            (w) => !w.isDestroyed(),
-          );
-          if (anyOpen) {
-            anyOpen.show();
-            anyOpen.focus();
+          const target = this.mainWindow.isDestroyed()
+            ? BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+            : this.mainWindow;
+          if (target) {
+            target.show();
+            target.focus();
           } else {
             // Defer to app's activate handler to create the main window
             app.emit('activate');
@@ -347,37 +347,22 @@ export default class MenuBuilder {
       {
         label: 'Take Screenshot',
         accelerator: mainAcc || undefined,
-        click: () => this.triggerScreenshotNow(),
+        click: () => runDetached(startCapture('menu')),
       },
       {
         label: 'Re-capture Last Area',
         accelerator: recaptureAcc,
-        click: async () => {
-          try {
-            const prefs = await loadPreferences();
-            const last = prefs.capture.lastSelection;
-            if (last) {
-              ipcMain.emit('screenshot-data', undefined, {
-                x: last.x,
-                y: last.y,
-                width: last.width,
-                height: last.height,
-              });
-            }
-          } catch {
-            // noop
-          }
-        },
+        click: () => runDetached(recaptureLastSelection()),
       },
       {
         label: 'Delayed Screenshot (3s)',
         accelerator: delay3Acc,
-        click: () => setTimeout(() => this.triggerScreenshotNow(), 3000),
+        click: () => scheduleCapture(3000, 'delayed'),
       },
       {
         label: 'Delayed Screenshot (5s)',
         accelerator: delay5Acc,
-        click: () => setTimeout(() => this.triggerScreenshotNow(), 5000),
+        click: () => scheduleCapture(5000, 'delayed'),
       },
       { type: 'separator' },
       {
