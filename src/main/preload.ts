@@ -28,7 +28,7 @@ const sendChannels = new Set<keyof RendererToMainPayloads>([
 
 const receiveChannels = new Set<keyof MainToRendererEvents>([
   'ipc-example',
-  'screenshot-data',
+  'capture-result',
   'window-state',
 ]);
 

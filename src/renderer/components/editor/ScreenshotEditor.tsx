@@ -548,6 +548,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
 
   return (
     <div
+      data-session-id={screenshot.sessionId}
       style={{
         display: 'flex',
         flexDirection: 'column',

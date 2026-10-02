@@ -4,53 +4,23 @@ import {
   Route,
   useLocation,
 } from 'react-router-dom';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { ScreenshotResult } from '../shared/ipc-types';
+import { useCallback, useEffect, type ReactNode } from 'react';
 import ScreenshotCapture from './ScreenshotCapture';
 import './App.css';
 import ScreenshotEditor from './components/editor/ScreenshotEditor';
+import CaptureErrorToast from './components/CaptureErrorToast';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
-import { createRendererLogger } from './utils/logger';
-import { setCurrentCaptureSessionId } from './utils/capture-session';
-
-const logger = createRendererLogger('app');
+import { useCaptureResult } from './hooks/use-capture-result';
 
 function Hello() {
-  const [screenshotData, setScreenshotData] = useState<ScreenshotResult | null>(
-    null,
-  );
+  const { screenshot, failure, dismissFailure, clearScreenshot } =
+    useCaptureResult();
 
   useEffect(() => {
     checkAndMigrateIfNeeded();
-
-    const api = window?.electron?.ipcRenderer;
-    if (!api) return () => {};
-    const unsubscribe = api.on('screenshot-data', async (data) => {
-      setCurrentCaptureSessionId(data.sessionId);
-      logger.info('capture-editor-received', {
-        sessionId: data.sessionId,
-        width: data.width,
-        height: data.height,
-      });
-      setScreenshotData(data);
-
-      try {
-        const preferences = await api.invoke('get-preferences', {});
-        if (preferences?.capture?.autoCopyToClipboard && data.imageDataUrl) {
-          await api.invoke('copy-image', { dataUrl: data.imageDataUrl });
-        }
-      } catch (error) {
-        logger.warn('Failed to auto-copy screenshot', error);
-      }
-    });
-    return unsubscribe;
   }, []);
-
-  const handleNewScreenshot = () => {
-    setScreenshotData(null);
-  };
 
   const handleCopy = useCallback(async (dataUrl: string) => {
     const api = window?.electron?.ipcRenderer;
@@ -71,10 +41,20 @@ function Hello() {
 
   return (
     <div className="app-container">
-      {screenshotData && screenshotData.imageDataUrl ? (
+      {failure && (
+        <CaptureErrorToast
+          key={failure.sessionId}
+          message={failure.message}
+          onDismiss={dismissFailure}
+        />
+      )}
+      {screenshot ? (
+        // Keyed by session so every capture starts with a fresh editor:
+        // shapes, selection, undo history, text editing and OCR state.
         <ScreenshotEditor
-          screenshot={screenshotData}
-          onDelete={handleNewScreenshot}
+          key={screenshot.sessionId}
+          screenshot={screenshot}
+          onDelete={clearScreenshot}
           onCopy={handleCopy}
           onSave={handleSave}
         />

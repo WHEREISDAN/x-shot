@@ -1,11 +1,17 @@
 import { desktopCapturer, ipcMain, screen } from 'electron';
-import type { NativeImage, Rectangle } from 'electron';
+import type { BrowserWindow, NativeImage, Rectangle } from 'electron';
 import log from 'electron-log';
 import type {
+  CaptureResult,
   IpcInvokes,
   ListCaptureSourcesResponse,
   ScreenshotResult,
 } from '../../shared/ipc-types';
+import {
+  CaptureSourceUnavailableError,
+  toCaptureFailure,
+  toCaptureSuccess,
+} from '../capture-result';
 import {
   isScreenshotScreenRequest,
   isScreenshotSelection,
@@ -318,6 +324,10 @@ export default function registerScreenshotIpcHandlers() {
     return true;
   });
 
+  const sendCaptureResult = (win: BrowserWindow, result: CaptureResult) => {
+    win.webContents.send('capture-result', result);
+  };
+
   const deliverWindowCapture = async (
     session: CaptureSessionRef,
     sourceId: string,
@@ -335,17 +345,12 @@ export default function registerScreenshotIpcHandlers() {
       },
     });
     const source = sources.find((s) => s.id === sourceId);
-    if (!source) throw new Error('Window source not found');
+    if (!source) {
+      throw new CaptureSourceUnavailableError('Window source not found');
+    }
     const { thumbnail, name } = source;
     const size = thumbnail.getSize();
-    const win = await ensureMainWindowReady();
-    markCaptureStage('editor-sent', {
-      captureKind: 'window',
-      sourceId: source.id,
-      outputWidth: size.width,
-      outputHeight: size.height,
-    });
-    win.webContents.send('screenshot-data', {
+    const result = toCaptureSuccess({
       imageDataUrl: thumbnail.toDataURL(),
       width: size.width,
       height: size.height,
@@ -354,6 +359,14 @@ export default function registerScreenshotIpcHandlers() {
       isWindowCapture: true,
       sessionId: session.id,
     } satisfies ScreenshotResult);
+    const win = await ensureMainWindowReady();
+    markCaptureStage('editor-sent', {
+      captureKind: 'window',
+      sourceId: source.id,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    });
+    sendCaptureResult(win, result);
   };
 
   const deliverScreenCapture = async (
@@ -381,18 +394,13 @@ export default function registerScreenshotIpcHandlers() {
       );
     }
     if (!source) [source] = sources;
-    if (!source) throw new Error('Screen source not found');
+    if (!source) {
+      throw new CaptureSourceUnavailableError('Screen source not found');
+    }
 
     const { thumbnail } = source;
     const size = thumbnail.getSize();
-    const win = await ensureMainWindowReady();
-    markCaptureStage('editor-sent', {
-      captureKind: 'screen',
-      sourceId: source.id,
-      outputWidth: size.width,
-      outputHeight: size.height,
-    });
-    win.webContents.send('screenshot-data', {
+    const result = toCaptureSuccess({
       imageDataUrl: thumbnail.toDataURL(),
       width: size.width,
       height: size.height,
@@ -402,6 +410,14 @@ export default function registerScreenshotIpcHandlers() {
       isDisplayCapture: true,
       sessionId: session.id,
     } satisfies ScreenshotResult);
+    const win = await ensureMainWindowReady();
+    markCaptureStage('editor-sent', {
+      captureKind: 'screen',
+      sourceId: source.id,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    });
+    sendCaptureResult(win, result);
   };
 
   const deliverSelectionCapture = async (
@@ -439,7 +455,9 @@ export default function registerScreenshotIpcHandlers() {
         },
       });
       const match = fallbackSources.find((s) => s.display_id === String(id));
-      if (!match) throw new Error('No screen source found');
+      if (!match) {
+        throw new CaptureSourceUnavailableError('No screen source found');
+      }
       const img = match.thumbnail;
       snapshot = {
         image: img,
@@ -459,7 +477,16 @@ export default function registerScreenshotIpcHandlers() {
       bounds: snapshot.bounds,
     });
     const croppedImage = snapshot.image.crop(cropRect);
-    const imageDataUrl = croppedImage.toDataURL();
+    const result = toCaptureSuccess({
+      imageDataUrl: croppedImage.toDataURL(),
+      width: cropRect.width,
+      height: cropRect.height,
+      x: data.x,
+      y: data.y,
+      sourceId: String(id),
+      displayId: id,
+      sessionId: session.id,
+    } satisfies ScreenshotResult);
     const win = await ensureMainWindowReady();
 
     // Persist last selection for quick re-capture
@@ -491,28 +518,17 @@ export default function registerScreenshotIpcHandlers() {
       outputWidth: cropRect.width,
       outputHeight: cropRect.height,
     });
-    win.webContents.send('screenshot-data', {
-      imageDataUrl,
-      width: cropRect.width,
-      height: cropRect.height,
-      x: data.x,
-      y: data.y,
-      sourceId: String(id),
-      displayId: id,
-      sessionId: session.id,
-    } satisfies ScreenshotResult);
+    sendCaptureResult(win, result);
     releaseDisplaySnapshots();
   };
 
-  const sendCaptureFailure = async (selection?: CaptureRect) => {
+  // The editor shows the failure but keeps whatever the user is editing.
+  const sendCaptureFailure = async (
+    session: CaptureSessionRef,
+    error: unknown,
+  ) => {
     const win = await ensureMainWindowReady();
-    win.webContents.send('screenshot-data', {
-      imageDataUrl: '',
-      width: selection?.width ?? 0,
-      height: selection?.height ?? 0,
-      x: selection?.x ?? 0,
-      y: selection?.y ?? 0,
-    } satisfies ScreenshotResult);
+    sendCaptureResult(win, toCaptureFailure(session.id, error));
   };
 
   const commitSession: CaptureCoordinatorHooks['commit'] = async (
@@ -532,8 +548,8 @@ export default function registerScreenshotIpcHandlers() {
     } catch (error) {
       log.error('Error capturing screenshot:', error);
       releaseDisplaySnapshots();
-      await sendCaptureFailure(
-        payload.kind === 'selection' ? payload.rect : undefined,
+      await sendCaptureFailure(session, error).catch((sendError) =>
+        log.error('Failed to report capture failure:', sendError),
       );
       throw error;
     }
