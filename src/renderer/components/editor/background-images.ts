@@ -1,4 +1,5 @@
 import type { BackgroundImageRef } from '../../../shared/ipc-types';
+import type { BuiltinBackgroundId } from '../../../shared/builtin-backgrounds';
 import { backgroundAssetUrl } from '../../../shared/capture-asset';
 import bg1 from '../../../../assets/backgrounds/1.png';
 import bg2 from '../../../../assets/backgrounds/2.png';
@@ -9,15 +10,26 @@ import bg6 from '../../../../assets/backgrounds/6.png';
 import bg7 from '../../../../assets/backgrounds/7.png';
 import bg8 from '../../../../assets/backgrounds/8.png';
 
-/** Backgrounds bundled with the app, as URLs of their bundle files. */
-export const BUILTIN_BACKGROUNDS = [bg1, bg2, bg3, bg4, bg5, bg6, bg7, bg8];
-
-const fileName = (url: string) => url.split(/[?#]/)[0].split('/').pop() ?? '';
-
-/** Preferences name a bundled background by its bundle file. */
-export function builtinBackgroundRef(src: string): BackgroundImageRef {
-  return { kind: 'builtin', file: fileName(src) };
+export interface BuiltinBackground {
+  id: BuiltinBackgroundId;
+  src: string;
 }
+
+/** Backgrounds bundled with the app, by their stable id. */
+export const BUILTIN_BACKGROUNDS: readonly BuiltinBackground[] = [
+  { id: '1', src: bg1 },
+  { id: '2', src: bg2 },
+  { id: '3', src: bg3 },
+  { id: '4', src: bg4 },
+  { id: '5', src: bg5 },
+  { id: '6', src: bg6 },
+  { id: '7', src: bg7 },
+  { id: '8', src: bg8 },
+];
+
+export const builtinBackgroundRef = (
+  id: BuiltinBackgroundId,
+): BackgroundImageRef => ({ kind: 'builtin', id });
 
 /** The URL to draw a background from, or null if it is unknown. */
 export function backgroundImageSrc(
@@ -25,7 +37,5 @@ export function backgroundImageSrc(
 ): string | null {
   if (!image) return null;
   if (image.kind === 'file') return backgroundAssetUrl(image.id);
-  return (
-    BUILTIN_BACKGROUNDS.find((src) => fileName(src) === image.file) ?? null
-  );
+  return BUILTIN_BACKGROUNDS.find(({ id }) => id === image.id)?.src ?? null;
 }

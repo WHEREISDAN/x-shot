@@ -90,6 +90,12 @@ export function unregisterAllHotkeys(): void {
   }
 }
 
+export interface HotkeyTriggers {
+  triggerMain: () => void;
+  triggerDelay: (delayMs: number) => void;
+  triggerRecapture: () => void;
+}
+
 export function updateRegisteredHotkeys(
   hotkeys: {
     main?: string | null;
@@ -97,11 +103,7 @@ export function updateRegisteredHotkeys(
     delay5?: { accelerator: string | null; delayMs: number } | null;
     recapture?: string | null;
   },
-  triggers: {
-    triggerMain: () => void;
-    triggerDelay: (delayMs: number) => void;
-    triggerRecapture: () => void;
-  },
+  triggers: HotkeyTriggers,
 ): HotkeyFailure[] {
   const logger = getLogger('hotkeys');
   const failures: HotkeyFailure[] = [];

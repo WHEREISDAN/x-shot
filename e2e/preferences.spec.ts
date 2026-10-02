@@ -70,6 +70,33 @@ async function mainPreferences({ window: page }: PackagedApp) {
   );
 }
 
+/** Every background image URL the editor stage is drawn with. */
+async function stageBackgroundUrls(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>('[data-session-id] *'),
+      (element) =>
+        element.style.backgroundImage.match(/url\("?([^")]+)"?\)/)?.[1] ?? '',
+    ).filter(Boolean),
+  );
+}
+
+/** The bundled image a built-in background swatch shows. */
+async function builtinSwatchUrl(page: Page, id: string): Promise<string> {
+  const url = await page
+    .getByRole('button', { name: `Background image ${id}` })
+    .evaluate(
+      (button: HTMLElement) =>
+        button.style.background.match(/url\("?([^")]+)"?\)/)?.[1] ?? '',
+    );
+  expect(url).not.toBe('');
+  return url;
+}
+
+const storedBackground = (dir: string) =>
+  JSON.parse(fs.readFileSync(path.join(dir, 'preferences.json'), 'utf-8'))
+    .presentation.backgroundImage;
+
 const exportScale = (page: Page) =>
   page.getByRole('combobox', { name: 'Export scale' });
 
@@ -190,6 +217,46 @@ test.describe('preferences persistence', () => {
     expect(stored.presentation).not.toHaveProperty('exportScale');
     expect(stored.presentation).not.toHaveProperty('backgroundImageUrl');
     expect(JSON.stringify(stored)).not.toContain('data:');
+  });
+
+  test('built-in backgrounds are saved by stable id; old hash names still load', async () => {
+    // How earlier builds saved built-in background 4: by its bundle file.
+    packaged = await launchPackagedApp(
+      {
+        ...SEED,
+        presentation: {
+          backgroundImage: {
+            kind: 'builtin',
+            file: '0d52cdb6142e117aeec9.png',
+          } as never,
+        },
+      },
+      { userDataDir: dir },
+    );
+    await expect
+      .poll(() => storedBackground(dir))
+      .toEqual({ kind: 'builtin', id: '4' });
+    await deliverScreenshot(packaged, fixture('builtin-1'));
+    const first = packaged;
+    const four = await builtinSwatchUrl(first.window, '4');
+    await expect.poll(() => stageBackgroundUrls(first.window)).toContain(four);
+
+    await first.window
+      .getByRole('button', { name: 'Background image 2' })
+      .click();
+    const two = await builtinSwatchUrl(first.window, '2');
+    await expect.poll(() => stageBackgroundUrls(first.window)).toContain(two);
+    await expect
+      .poll(() => storedBackground(dir))
+      .toEqual({ kind: 'builtin', id: '2' });
+
+    await packaged.close();
+    packaged = await launchPackagedApp(null, { userDataDir: dir });
+    await deliverScreenshot(packaged, fixture('builtin-2'));
+    const restarted = packaged;
+    await expect
+      .poll(() => stageBackgroundUrls(restarted.window))
+      .toContain(two);
   });
 
   test('the default export scale from Preferences starts every capture', async () => {

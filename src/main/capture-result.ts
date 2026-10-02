@@ -14,7 +14,8 @@ type Platform = typeof process.platform;
 export type CaptureErrorKind =
   | 'source-unavailable'
   | 'screen-permission'
-  | 'empty-selection';
+  | 'empty-selection'
+  | 'window-size-unknown';
 
 /** A capture failure main understands well enough to explain to the user. */
 export class CaptureError extends Error {
@@ -68,6 +69,15 @@ export function toCaptureFailure(
       reason: 'empty-selection',
       message:
         'Nothing was captured because the selected area is empty. Drag to select an area, then capture again.',
+    };
+  }
+  if (isCaptureError(error, 'window-size-unknown')) {
+    return {
+      ok: false,
+      sessionId,
+      reason: 'window-size-unknown',
+      message:
+        "The window was not captured because X-Shot couldn't read its size in time. Try again, or capture an area instead.",
     };
   }
   if (isCaptureError(error, 'source-unavailable')) {

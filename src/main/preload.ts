@@ -17,25 +17,24 @@ type Listener<K extends keyof MainToRendererEvents> = (
 ) => void;
 
 const sendChannels = new Set<keyof RendererToMainPayloads>([
-  'ipc-example',
   'screenshot-capture',
   'screenshot-cancel',
   'screenshot-window',
   'screenshot-screen',
   'screenshot-data',
   'log',
+  'preferences-flushed',
 ]);
 
 const receiveChannels = new Set<keyof MainToRendererEvents>([
-  'ipc-example',
   'capture-result',
   'window-state',
+  'flush-preferences',
 ]);
 
 const invokeChannels = new Set<keyof IpcInvokes>([
   'list-capture-sources',
   'get-display-snapshot',
-  'release-display-snapshots',
   'release-capture-asset',
   'copy-image',
   'save-image',

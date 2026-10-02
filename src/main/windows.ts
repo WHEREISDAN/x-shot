@@ -1,21 +1,11 @@
-/* eslint global-require: off, no-console: off */
 import path from 'path';
-import { app, BrowserWindow, shell, screen } from 'electron';
-import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
+import { app, BrowserWindow, Menu, screen } from 'electron';
 import { getLogger } from './logger';
 import { markCaptureStage } from './capture-diagnostics';
-import MenuBuilder from './menu';
+import { flushPreferencesOnClose } from './preferences-flush';
+import { trackWindowState } from './window-state';
 import { resolveHtmlPath } from './util';
 import getResourcesPath from '../shared/utils';
-
-class AppUpdater {
-  constructor() {
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
-    autoUpdater.checkForUpdatesAndNotify();
-  }
-}
 
 let mainWindow: BrowserWindow | null = null;
 let preferencesWindow: BrowserWindow | null = null;
@@ -32,15 +22,18 @@ const nextFrame = () =>
     setTimeout(resolve, COMPOSITOR_FRAME_MS);
   });
 
-function openAllowedExternalUrl(rawUrl: string): void {
-  try {
-    const url = new URL(rawUrl);
-    if (url.protocol === 'https:') {
-      shell.openExternal(url.toString());
-    }
-  } catch {
-    // Deny malformed or non-web external URLs.
-  }
+const isDevelopment = () =>
+  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
+
+function addInspectElementMenu(win: BrowserWindow): void {
+  win.webContents.on('context-menu', (_event, { x, y }) => {
+    Menu.buildFromTemplate([
+      {
+        label: 'Inspect element',
+        click: () => win.webContents.inspectElement(x, y),
+      },
+    ]).popup({ window: win });
+  });
 }
 
 export function createMainWindow(): BrowserWindow {
@@ -48,7 +41,7 @@ export function createMainWindow(): BrowserWindow {
   const getAssetPath = (...paths: string[]): string =>
     path.join(RESOURCES_PATH, ...paths);
 
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     show: false,
     width: 1425,
     height: 980,
@@ -69,37 +62,40 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
-  mainWindow.loadURL(resolveHtmlPath('index.html'));
+  mainWindow = win;
+  win.loadURL(resolveHtmlPath('index.html'));
 
-  mainWindow.on('ready-to-show', () => {
-    if (!mainWindow) throw new Error('"mainWindow" is not defined');
+  win.on('ready-to-show', () => {
     if (process.env.START_MINIMIZED) {
-      mainWindow.minimize();
+      win.minimize();
     } else {
-      mainWindow.show();
+      win.show();
     }
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null;
   });
 
-  const menuBuilder = new MenuBuilder(mainWindow);
-  menuBuilder.buildMenu();
+  trackWindowState(win);
+  flushPreferencesOnClose(win);
+  if (isDevelopment()) addInspectElementMenu(win);
 
-  mainWindow.webContents.setWindowOpenHandler((edata) => {
-    openAllowedExternalUrl(edata.url);
-    return { action: 'deny' } as const;
-  });
-
-  // eslint-disable-next-line no-new
-  new AppUpdater();
-
-  return mainWindow;
+  return win;
 }
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
+}
+
+/** Brings the editor to the front, creating it if it was closed. */
+export function showMainWindow(): void {
+  const win = mainWindow ?? createMainWindow();
+  // A new window shows itself once its page is ready.
+  if (win.webContents.isLoading()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 }
 
 export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
@@ -399,11 +395,8 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
     preferencesWindow = null;
   });
 
-  // Prevent external links from opening in preferences window
-  preferencesWindow.webContents.setWindowOpenHandler((edata) => {
-    openAllowedExternalUrl(edata.url);
-    return { action: 'deny' } as const;
-  });
+  trackWindowState(preferencesWindow);
+  flushPreferencesOnClose(preferencesWindow);
 
   return preferencesWindow;
 }

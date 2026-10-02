@@ -16,14 +16,6 @@ import {
 import { isPlainObject, isPreferencesUpdate } from '../preferences-schema';
 import { createPreferencesWindow } from '../windows';
 
-ipcMain.on('open-preferences', async () => {
-  try {
-    await createPreferencesWindow();
-  } catch {
-    // ignore
-  }
-});
-
 /** Shortcut slots an update changes; undefined slots stay as they are. */
 export interface HotkeyChanges {
   main?: string;

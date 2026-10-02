@@ -4,6 +4,7 @@ import type {
   SetPreferencesResponse,
 } from '../../shared/ipc-types';
 import { deepMerge } from '../../shared/deep-merge';
+import { registerPreferencesFlush } from './pending-preferences';
 
 /** How long sliders and text fields wait for more changes before saving. */
 export const PREFERENCES_DEBOUNCE_MS = 300;
@@ -34,7 +35,8 @@ async function sendUpdates(
 
 /**
  * Batches preference writes. Pending changes are saved on flush, when the
- * component unmounts and when the window closes, so none are lost.
+ * component unmounts, and when main asks before closing the window or
+ * quitting, so none are lost.
  */
 export default function usePreferencesWriter(
   onResult: (result: SetPreferencesResponse) => void,
@@ -69,14 +71,16 @@ export default function usePreferencesWriter(
   );
 
   useEffect(() => {
-    // The IPC message leaves synchronously, so it survives the window.
-    const onClose = () => {
+    const unregister = registerPreferencesFlush(flush);
+    // Covers reloads, which main does not announce.
+    const onUnload = () => {
       flush().catch(() => {});
     };
-    window.addEventListener('beforeunload', onClose);
+    window.addEventListener('beforeunload', onUnload);
     return () => {
-      window.removeEventListener('beforeunload', onClose);
-      onClose();
+      unregister();
+      window.removeEventListener('beforeunload', onUnload);
+      onUnload();
     };
   }, [flush]);
 

@@ -1,4 +1,5 @@
 // Preferences shared by main, preload and renderer.
+import type { BuiltinBackgroundId } from './builtin-backgrounds';
 
 export interface CapturePreferences {
   hotkey: string;
@@ -69,7 +70,7 @@ export interface PiiPreferences {
  * bundle file, or one the user added, stored under userData/backgrounds.
  */
 export type BackgroundImageRef =
-  | { kind: 'builtin'; file: string }
+  | { kind: 'builtin'; id: BuiltinBackgroundId }
   | { kind: 'file'; id: string };
 
 export interface PresentationPreferences {

@@ -71,6 +71,7 @@ export type CaptureFailureReason =
   | 'screen-permission'
   | 'source-unavailable'
   | 'empty-selection'
+  | 'window-size-unknown'
   | 'capture-error';
 
 export interface CaptureSuccess {
@@ -145,21 +146,27 @@ export interface WindowState {
   platform: 'darwin' | 'win32' | 'linux';
 }
 
+/** Main asks a window to save its pending preference changes now. */
+export interface FlushPreferencesRequest {
+  requestId: string;
+}
+
 // IPC channel maps
 export type RendererToMainPayloads = {
-  'ipc-example': string[];
   'screenshot-capture': void;
   'screenshot-cancel': void;
   'screenshot-window': ScreenshotWindowRequest;
   'screenshot-screen': ScreenshotScreenRequest;
   'screenshot-data': ScreenshotSelection;
   log: LogMessage;
+  /** The window saved everything a 'flush-preferences' request asked for. */
+  'preferences-flushed': FlushPreferencesRequest;
 };
 
 export type MainToRendererEvents = {
-  'ipc-example': string;
   'capture-result': CaptureResult;
   'window-state': WindowState;
+  'flush-preferences': FlushPreferencesRequest;
 };
 
 export interface IpcInvokes {
@@ -170,10 +177,6 @@ export interface IpcInvokes {
   'get-display-snapshot': {
     req: GetDisplaySnapshotRequest;
     res: GetDisplaySnapshotResponse | null;
-  };
-  'release-display-snapshots': {
-    req: undefined;
-    res: boolean;
   };
   'release-capture-asset': {
     req: { assetId: string };

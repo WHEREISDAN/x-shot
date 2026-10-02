@@ -1,161 +1,52 @@
 import path from 'path';
-import { app, BrowserWindow, Menu, Tray } from 'electron';
-import { DEFAULT_SCREENSHOT_ACCELERATOR } from './hotkeys';
+import { Menu, Tray } from 'electron';
 import getResourcesPath from '../shared/utils';
-import { createPreferencesWindow, ensureMainWindowReady } from './windows';
-import { loadPreferences } from './preferences';
 import { getLogger } from './logger';
-import { scheduleCapture } from './capture-coordinator';
+import { menuActions, savedAccelerators } from './menu';
+import { captureMenuItems } from './menu-template';
+
+const logger = getLogger('tray');
 
 let tray: Tray | null = null;
 
-async function buildContextMenu(
-  mainWindowGetter: () => BrowserWindow | null,
-  onScreenshot: () => void,
-  onRecapture: () => void,
-) {
-  const logger = getLogger('tray');
-  const prefs = await loadPreferences();
-  const accMain = prefs.capture.hotkey || DEFAULT_SCREENSHOT_ACCELERATOR;
-  const acc3 = prefs.capture.hotkeyDelay3 || undefined;
-  const acc5 = prefs.capture.hotkeyDelay5 || undefined;
-  const accRecapture = prefs.capture.hotkeyRecapture || undefined;
-
-  return Menu.buildFromTemplate([
-    {
-      label: 'Show App',
-      click: () => {
-        ensureMainWindowReady().catch(() => {
-          const win = mainWindowGetter();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-        });
-      },
-    },
-    {
-      label: 'Take Screenshot',
-      accelerator: accMain,
-      click: () => {
-        onScreenshot();
-      },
-    },
-    {
-      label: 'Re-capture Last Area',
-      ...(accRecapture ? { accelerator: accRecapture } : {}),
-      click: onRecapture,
-    },
-    {
-      label: 'Delayed Screenshot (3s)',
-      ...(acc3 ? { accelerator: acc3 } : {}),
-      click: () => scheduleCapture(3000, 'delayed'),
-    },
-    {
-      label: 'Delayed Screenshot (5s)',
-      ...(acc5 ? { accelerator: acc5 } : {}),
-      click: () => scheduleCapture(5000, 'delayed'),
-    },
-    { type: 'separator' },
-    {
-      label: 'Preferences...',
-      click: async () => {
-        try {
-          await createPreferencesWindow();
-        } catch (error) {
-          logger.error('Failed to open preferences window', error);
-        }
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        app.quit();
-      },
-    },
-  ]);
+async function buildTrayMenu(): Promise<Menu> {
+  return Menu.buildFromTemplate(
+    captureMenuItems(await savedAccelerators(), menuActions('tray')),
+  );
 }
 
-export default function createTray(
-  mainWindowGetter: () => BrowserWindow | null,
-  onScreenshot: () => void,
-  onRecapture: () => void,
-) {
-  const RESOURCES_PATH = getResourcesPath();
-  const getAssetPath = (...paths: string[]): string =>
-    path.join(RESOURCES_PATH, ...paths);
-
-  const iconPath = getAssetPath('icons', '16x16.png');
-  tray = new Tray(iconPath);
-
-  buildContextMenu(mainWindowGetter, onScreenshot, onRecapture)
-    .then((contextMenu) => tray?.setContextMenu(contextMenu))
-    .catch((e) => getLogger('tray').warn('Failed to build tray menu', e));
-  tray.setToolTip('Screenshot Tool');
-  tray.on('click', () => tray?.popUpContextMenu());
-
-  return tray;
-}
-
-/**
- * Show the system tray icon
- */
-export function showTray() {
-  // Tray is already created, just make sure it's visible
-  // Note: Electron doesn't have a direct way to hide/show tray icons
-  // The tray is automatically visible when created
-}
-
-/**
- * Hide the system tray icon
- */
-export function hideTray() {
-  if (tray) {
-    tray.destroy();
-    tray = null;
+/** Rebuilds the tray menu, e.g. after the saved shortcuts changed. */
+export async function refreshTrayMenu(): Promise<void> {
+  if (!tray) return;
+  try {
+    const menu = await buildTrayMenu();
+    tray?.setContextMenu(menu);
+  } catch (error) {
+    logger.warn('Failed to build tray menu', error);
   }
 }
 
-/**
- * Check if the tray is currently visible
- */
+export function createTray(): Tray {
+  const iconPath = path.join(getResourcesPath(), 'icons', '16x16.png');
+  const created = new Tray(iconPath);
+  tray = created;
+  created.setToolTip('X-Shot');
+  created.on('click', () => created.popUpContextMenu());
+  refreshTrayMenu().catch(() => undefined);
+  return created;
+}
+
+export function hideTray(): void {
+  tray?.destroy();
+  tray = null;
+}
+
 export function isTrayVisible(): boolean {
   return tray !== null;
 }
 
-/**
- * Update tray visibility based on preference
- */
-export function updateTrayVisibility(
-  show: boolean,
-  mainWindowGetter: () => BrowserWindow | null,
-  onScreenshot: () => void,
-  onRecapture: () => void,
-) {
-  if (show && !tray) {
-    createTray(mainWindowGetter, onScreenshot, onRecapture);
-  } else if (!show && tray) {
-    hideTray();
-  }
+/** Shows or hides the tray icon to match the preference. */
+export function updateTrayVisibility(show: boolean): void {
+  if (show && !tray) createTray();
+  else if (!show && tray) hideTray();
 }
-
-export async function refreshTrayMenu(
-  mainWindowGetter: () => BrowserWindow | null,
-  onScreenshot: () => void,
-  onRecapture: () => void,
-): Promise<void> {
-  if (!tray) return;
-  try {
-    const menu = await buildContextMenu(
-      mainWindowGetter,
-      onScreenshot,
-      onRecapture,
-    );
-    tray.setContextMenu(menu);
-  } catch (e) {
-    getLogger('tray').warn('Failed to refresh tray menu', e);
-  }
-}
-
-export { createTray };
