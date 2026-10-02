@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import type { PresentationSettings } from '../../hooks/use-presentation-state';
 import { toCssGradient } from './gradient-presets';
+import { backgroundImageSrc } from './background-images';
 import type { EditorShape, RectShape } from '../../hooks/use-editor-state';
 import { StageLayers } from './editor-stage-layers';
 
@@ -74,8 +75,9 @@ export const EditorStage = memo(function EditorStage({
 
   let stageBackground = 'transparent';
   if (!presentationDisabled) {
-    if (presentation.backgroundImageUrl) {
-      stageBackground = `url(${presentation.backgroundImageUrl}) center / cover no-repeat`;
+    const backgroundSrc = backgroundImageSrc(presentation.backgroundImage);
+    if (backgroundSrc) {
+      stageBackground = `url("${backgroundSrc}") center / cover no-repeat`;
     } else {
       stageBackground = toCssGradient(presentation.gradient);
     }

@@ -1,5 +1,13 @@
 // Shared IPC types used across main, preload, and renderer
 import { isCaptureAssetId, type CaptureAssetRef } from './capture-asset';
+import type {
+  AppPreferences,
+  GetPreferencesRequest,
+  ImportBackgroundRequest,
+  ImportBackgroundResponse,
+  SetPreferencesRequest,
+  SetPreferencesResponse,
+} from './preferences-types';
 
 export type CaptureSourceType = 'window' | 'screen';
 
@@ -13,114 +21,7 @@ export interface LogMessage {
   meta?: Record<string, unknown> | unknown;
 }
 
-// Preferences System Types
-export interface CapturePreferences {
-  hotkey: string;
-  // Optional delayed capture hotkeys (Electron accelerator strings)
-  hotkeyDelay3?: string | null;
-  hotkeyDelay5?: string | null;
-  // Optional re-capture last area hotkey
-  hotkeyRecapture?: string | null;
-  defaultSaveLocation: string;
-  autoCopyToClipboard: boolean;
-  defaultFormat: 'png' | 'jpg';
-  // Last used area selection for quick re-capture
-  lastSelection?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    displayId: number;
-  } | null;
-}
-
-export interface EditorPreferences {
-  defaultStrokeColor: string;
-  defaultFillColor: string;
-  defaultStrokeWidth: number;
-  defaultTextSize: number;
-}
-
-export interface ExportPreferences {
-  filenamePattern: string;
-  autoSave: boolean;
-  defaultScale: number;
-}
-
-export interface SystemPreferences {
-  launchAtStartup: boolean;
-  showInTray: boolean;
-}
-
-export interface PiiDetectors {
-  email: boolean;
-  phone: boolean;
-  address: boolean;
-  ipv4: boolean;
-  url: boolean;
-  ssn: boolean;
-  creditCard: boolean;
-  dob: boolean;
-  postalUS: boolean;
-  postalCA: boolean;
-  postalUK: boolean;
-  uuid: boolean;
-  mac: boolean;
-  iban: boolean;
-  poBox: boolean;
-  tokens: boolean;
-}
-
-export interface PiiPreferences {
-  autoDetect: boolean;
-  defaultStyle: 'blur' | 'black';
-  detectors: PiiDetectors;
-}
-
-// Import presentation types (will be migrated from use-presentation-state.ts)
-export interface PresentationSettings {
-  gradient: {
-    kind: 'linear' | 'radial';
-    angleDeg: number;
-    stops: Array<{ offset: number; color: string }>;
-  };
-  // Optional background image; when set, overrides gradient background
-  backgroundImageUrl?: string | null;
-  padding: number;
-  inset: number;
-  radius: number;
-  shadow: {
-    enabled: boolean;
-    x: number;
-    y: number;
-    blur: number;
-    spread: number;
-    color: string;
-  };
-  aspect: {
-    preset: 'auto' | '1:1' | '4:3' | '3:2' | '16:9' | '9:16' | 'custom';
-    custom?: { w: number; h: number };
-  };
-  exportScale: number;
-  borderColor: string;
-}
-
-export interface AppPreferences {
-  capture: CapturePreferences;
-  editor: EditorPreferences;
-  export: ExportPreferences;
-  system: SystemPreferences;
-  pii: PiiPreferences;
-  presentation: PresentationSettings;
-}
-
-export interface GetPreferencesRequest {
-  // Empty for now, could add specific keys later
-}
-
-export interface SetPreferencesRequest {
-  preferences: Partial<AppPreferences>;
-}
+export * from './preferences-types';
 
 export interface ListCaptureSourcesRequest {
   type?: CaptureSourceType;
@@ -300,7 +201,11 @@ export interface IpcInvokes {
   };
   'set-preferences': {
     req: SetPreferencesRequest;
-    res: boolean;
+    res: SetPreferencesResponse;
+  };
+  'import-background-image': {
+    req: ImportBackgroundRequest;
+    res: ImportBackgroundResponse;
   };
   'open-preferences-window': {
     req: undefined;

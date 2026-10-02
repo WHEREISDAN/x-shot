@@ -1,17 +1,12 @@
 import React from 'react';
 import type {
-  PresentationSettings,
   AspectPreset,
+  PresentationActions,
+  PresentationSettings,
 } from '../../hooks/use-presentation-state';
+import type { BackgroundImageRef } from '../../../shared/ipc-types';
 import { presets, toCssGradient } from './gradient-presets';
-import bg1 from '../../../../assets/backgrounds/1.png';
-import bg2 from '../../../../assets/backgrounds/2.png';
-import bg3 from '../../../../assets/backgrounds/3.png';
-import bg4 from '../../../../assets/backgrounds/4.png';
-import bg5 from '../../../../assets/backgrounds/5.png';
-import bg6 from '../../../../assets/backgrounds/6.png';
-import bg7 from '../../../../assets/backgrounds/7.png';
-import bg8 from '../../../../assets/backgrounds/8.png';
+import { BUILTIN_BACKGROUNDS, builtinBackgroundRef } from './background-images';
 import { GlassPanel, Input, Select } from '../../design-system';
 import {
   colors,
@@ -20,10 +15,23 @@ import {
   typography,
 } from '../../design-system/tokens';
 
+/** Reads the picked file and stores it in main as a background. */
+async function importBackground(file: File): Promise<BackgroundImageRef> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const result = await window.electron.ipcRenderer.invoke(
+    'import-background-image',
+    { bytes },
+  );
+  if (!result.ok) throw new Error(result.error);
+  return result.image;
+}
+
 function UploadBackgroundButton({
   onSelect,
+  onError,
 }: {
-  onSelect: (url: string) => void;
+  onSelect: (image: BackgroundImageRef) => void;
+  onError: (message: string) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const handlePick = () => inputRef.current?.click();
@@ -36,12 +44,13 @@ function UploadBackgroundButton({
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0];
+          e.target.value = '';
           if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (typeof reader.result === 'string') onSelect(reader.result);
-          };
-          reader.readAsDataURL(file);
+          importBackground(file)
+            .then(onSelect)
+            .catch((error: Error) =>
+              onError(`Couldn't use that image: ${error.message}`),
+            );
         }}
       />
       <button
@@ -77,24 +86,19 @@ function UploadBackgroundButton({
 
 interface PresentationPanelProps {
   settings: PresentationSettings;
-  onChange: {
-    setPadding: (n: number) => void;
-    setInset: (n: number) => void;
-    setRadius: (n: number) => void;
-    setAspectPreset: (a: AspectPreset) => void;
-    setCustomAspect: (w: number, h: number) => void;
-    setExportScale: (n: number) => void;
-    setShadow: (s: Partial<PresentationSettings['shadow']>) => void;
-    setGradient: (g: Partial<PresentationSettings['gradient']>) => void;
-    setBackgroundImage: (url: string | null) => void;
-    setBorderColor: (c: string) => void;
-  };
+  onChange: PresentationActions;
 }
 
 export default function PresentationPanel({
   settings,
   onChange,
 }: PresentationPanelProps) {
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
+  const uploadErrorStyles: React.CSSProperties = {
+    marginTop: spacing[2],
+    fontSize: typography.fontSize.xs,
+    color: colors.error,
+  };
   const aspectPresets = [
     { value: 'auto', label: 'Auto' },
     { value: '1:1', label: '1:1' },
@@ -208,12 +212,12 @@ export default function PresentationPanel({
           <div style={sectionTitleStyles}>Background</div>
           <div style={gridStyles}>
             {/* 8 image swatches */}
-            {[bg1, bg2, bg3, bg4, bg5, bg6, bg7, bg8].map((src) => (
+            {BUILTIN_BACKGROUNDS.map((src) => (
               <button
                 type="button"
                 key={`img-${src}`}
                 onClick={() => {
-                  onChange.setBackgroundImage(src);
+                  onChange.setBackgroundImage(builtinBackgroundRef(src));
                 }}
                 aria-label={`Image ${src}`}
                 style={{
@@ -252,9 +256,18 @@ export default function PresentationPanel({
             ))}
             {/* Upload swatch */}
             <UploadBackgroundButton
-              onSelect={(url) => onChange.setBackgroundImage(url)}
+              onSelect={(image) => {
+                setUploadError(null);
+                onChange.setBackgroundImage(image);
+              }}
+              onError={setUploadError}
             />
           </div>
+          {uploadError && (
+            <div role="alert" style={uploadErrorStyles}>
+              {uploadError}
+            </div>
+          )}
         </div>
 
         <div style={sectionStyles}>
@@ -262,6 +275,7 @@ export default function PresentationPanel({
           <div style={colorInputGroupStyles}>
             <input
               type="color"
+              onBlur={onChange.flush}
               aria-label="Border color"
               value={settings.borderColor}
               onChange={(e) => onChange.setBorderColor(e.target.value)}
@@ -285,6 +299,7 @@ export default function PresentationPanel({
               <input
                 id="padding-range"
                 type="range"
+                onBlur={onChange.flush}
                 min={0}
                 max={400}
                 value={settings.padding}
@@ -297,6 +312,7 @@ export default function PresentationPanel({
               <input
                 id="inset-range"
                 type="range"
+                onBlur={onChange.flush}
                 min={0}
                 max={200}
                 value={settings.inset}
@@ -312,6 +328,7 @@ export default function PresentationPanel({
               <input
                 id="radius-range"
                 type="range"
+                onBlur={onChange.flush}
                 min={0}
                 max={200}
                 value={settings.radius}
@@ -347,6 +364,7 @@ export default function PresentationPanel({
               <input
                 id="shadow-x"
                 type="range"
+                onBlur={onChange.flush}
                 min={-64}
                 max={64}
                 value={settings.shadow.x}
@@ -362,6 +380,7 @@ export default function PresentationPanel({
               <input
                 id="shadow-y"
                 type="range"
+                onBlur={onChange.flush}
                 min={-64}
                 max={64}
                 value={settings.shadow.y}
@@ -377,6 +396,7 @@ export default function PresentationPanel({
               <input
                 id="shadow-blur"
                 type="range"
+                onBlur={onChange.flush}
                 min={0}
                 max={296}
                 value={settings.shadow.blur}
@@ -392,6 +412,7 @@ export default function PresentationPanel({
               <input
                 id="shadow-spread"
                 type="range"
+                onBlur={onChange.flush}
                 min={0}
                 max={264}
                 value={settings.shadow.spread}
@@ -419,6 +440,7 @@ export default function PresentationPanel({
               fullWidth
             />
             <Select
+              aria-label="Export scale"
               size="sm"
               variant="filled"
               value={settings.exportScale}

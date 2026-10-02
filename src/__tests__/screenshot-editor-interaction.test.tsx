@@ -22,16 +22,16 @@ const PREFERENCES = {
     defaultStrokeWidth: 3,
     defaultTextSize: 18,
   },
+  export: { filenamePattern: 'X-Shot', autoSave: false, defaultScale: 1 },
   pii: { autoDetect: false, defaultStyle: 'black', detectors: null },
   presentation: {
     gradient: { kind: 'linear', angleDeg: 45, stops: [] },
-    backgroundImageUrl: null,
+    backgroundImage: null,
     padding: 0,
     inset: 0,
     radius: 0,
     shadow: { enabled: false, x: 0, y: 0, blur: 0, spread: 0, color: '#000' },
     aspect: { preset: 'auto' },
-    exportScale: 1,
     borderColor: BORDER_COLOR,
   },
 } as unknown as AppPreferences;

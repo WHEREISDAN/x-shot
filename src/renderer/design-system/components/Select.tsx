@@ -165,6 +165,8 @@ export function Select({
         value={props.value}
         onChange={props.onChange}
         name={props.name}
+        aria-label={props['aria-label']}
+        aria-labelledby={props['aria-labelledby']}
       >
         {placeholder && (
           <option value="" disabled>

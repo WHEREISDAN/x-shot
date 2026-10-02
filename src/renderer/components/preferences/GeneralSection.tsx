@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
+import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { Input, Select } from '../../design-system';
 import {
   colors,
@@ -13,7 +14,7 @@ const logger = createRendererLogger('preferences-general');
 
 interface GeneralSectionProps {
   preferences: AppPreferences;
-  onUpdate: (updates: Partial<AppPreferences>) => Promise<boolean>;
+  onUpdate: UpdatePreferences;
 }
 
 export default function GeneralSection({
@@ -76,12 +77,11 @@ export default function GeneralSection({
     async (hotkey: string) => {
       await onUpdate({
         capture: {
-          ...preferences.capture,
           hotkey,
         },
       });
     },
-    [preferences.capture, onUpdate],
+    [onUpdate],
   );
 
   type MinimalKeyEvent = {
@@ -185,73 +185,64 @@ export default function GeneralSection({
       field: 'hotkeyDelay3' | 'hotkeyDelay5' | 'hotkeyRecapture',
       value: string | null,
     ) => {
-      const nextCapture = {
-        ...preferences.capture,
-        [field]: value || null,
-      } as typeof preferences.capture;
-      await onUpdate({ capture: nextCapture });
+      await onUpdate({ capture: { [field]: value || null } });
     },
-    [preferences, onUpdate],
+    [onUpdate],
   );
 
   const handleSaveLocationChange = useCallback(
     async (defaultSaveLocation: string) => {
       await onUpdate({
         capture: {
-          ...preferences.capture,
           defaultSaveLocation,
         },
       });
     },
-    [preferences, onUpdate],
+    [onUpdate],
   );
 
   const handleAutoCopyChange = useCallback(
     async (autoCopyToClipboard: boolean) => {
       await onUpdate({
         capture: {
-          ...preferences.capture,
           autoCopyToClipboard,
         },
       });
     },
-    [preferences, onUpdate],
+    [onUpdate],
   );
 
   const handleFormatChange = useCallback(
     async (defaultFormat: 'png' | 'jpg') => {
       await onUpdate({
         capture: {
-          ...preferences.capture,
           defaultFormat,
         },
       });
     },
-    [preferences.capture, onUpdate],
+    [onUpdate],
   );
 
   const handleStartupChange = useCallback(
     async (launchAtStartup: boolean) => {
       await onUpdate({
         system: {
-          ...preferences.system,
           launchAtStartup,
         },
       });
     },
-    [preferences.system, onUpdate],
+    [onUpdate],
   );
 
   const handleTrayChange = useCallback(
     async (showInTray: boolean) => {
       await onUpdate({
         system: {
-          ...preferences.system,
           showInTray,
         },
       });
     },
-    [preferences.system, onUpdate],
+    [onUpdate],
   );
 
   const selectFolder = useCallback(async () => {

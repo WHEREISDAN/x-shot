@@ -3,6 +3,7 @@
  */
 import { protocol } from 'electron';
 import {
+  backgroundAssetUrl,
   captureAssetIdFromUrl,
   captureAssetUrl,
   isCaptureAssetId,
@@ -11,6 +12,7 @@ import {
   createCaptureAssetStore,
   type CaptureAsset,
   type CaptureAssetKind,
+  type CaptureAssetStore,
   type NewCaptureAsset,
 } from '../main/capture-assets';
 import {
@@ -154,14 +156,20 @@ describe('createCaptureAssetStore', () => {
   });
 });
 
+const BACKGROUND_ID = `${UNKNOWN_ID}.png`;
+const backgrounds = {
+  read: jest.fn(async (id: string) =>
+    id === BACKGROUND_ID ? { bytes: PNG, contentType: 'image/png' } : null,
+  ),
+};
+const respond = (store: CaptureAssetStore, url: string, method = 'GET') =>
+  respondToAssetRequest({ captures: store, backgrounds }, get(url, method));
+
 describe('respondToAssetRequest', () => {
   it('serves a stored capture as an untainted PNG', async () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
-    const response = respondToAssetRequest(
-      store,
-      get(captureAssetUrl(assetId)),
-    );
+    const response = await respond(store, captureAssetUrl(assetId));
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
@@ -169,43 +177,48 @@ describe('respondToAssetRequest', () => {
     expect(Buffer.from(await response.arrayBuffer())).toEqual(PNG);
   });
 
-  it('ignores a cache-busting query', () => {
+  it('serves a stored background image', async () => {
+    const store = createCaptureAssetStore();
+    const response = await respond(store, backgroundAssetUrl(BACKGROUND_ID));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(PNG);
+  });
+
+  it('ignores a cache-busting query', async () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
     const url = `${captureAssetUrl(assetId)}?1712345678`;
-    expect(respondToAssetRequest(store, get(url)).status).toBe(200);
+    expect((await respond(store, url)).status).toBe(200);
   });
 
   it.each([
     captureAssetUrl(UNKNOWN_ID),
     'xshot-asset://capture/not-an-id',
     'xshot-asset://other/0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4',
-  ])('answers 404 for %s', (url) => {
+    backgroundAssetUrl(`${UNKNOWN_ID.replace('0b', 'ff')}.png`),
+    'xshot-asset://background/../preferences.json',
+    `xshot-asset://background/${UNKNOWN_ID}.exe`,
+  ])('answers 404 for %s', async (url) => {
     const store = createCaptureAssetStore();
     store.add(capture('s1'));
-    const response = respondToAssetRequest(store, get(url));
+    const response = await respond(store, url);
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type')).toBeNull();
   });
 
-  it('answers 404 once the asset is released', () => {
+  it('answers 404 once the asset is released', async () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
     store.releaseWhere(ofSession('s1'));
-    const response = respondToAssetRequest(
-      store,
-      get(captureAssetUrl(assetId)),
-    );
-    expect(response.status).toBe(404);
+    expect((await respond(store, captureAssetUrl(assetId))).status).toBe(404);
   });
 
-  it('refuses anything but GET', () => {
+  it('refuses anything but GET', async () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
-    const response = respondToAssetRequest(
-      store,
-      get(captureAssetUrl(assetId), 'POST'),
-    );
+    const response = await respond(store, captureAssetUrl(assetId), 'POST');
     expect(response.status).toBe(405);
   });
 });
@@ -227,12 +240,12 @@ describe('asset protocol registration', () => {
     ]);
   });
 
-  it('serves the scheme from the given store', () => {
+  it('serves the scheme from the given stores', async () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
-    handleAssetProtocol(store);
+    handleAssetProtocol({ captures: store, backgrounds });
     const [scheme, handler] = (protocol.handle as jest.Mock).mock.calls[0];
     expect(scheme).toBe('xshot-asset');
-    expect(handler(get(captureAssetUrl(assetId))).status).toBe(200);
+    expect((await handler(get(captureAssetUrl(assetId)))).status).toBe(200);
   });
 });

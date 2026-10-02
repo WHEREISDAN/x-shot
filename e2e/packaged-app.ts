@@ -93,15 +93,28 @@ export function findPackagedExecutable(
  * Launches the packaged app against a throwaway profile seeded with the given
  * preferences, so the user's real preferences and caches are never touched.
  */
+export interface LaunchOptions {
+  args?: string[];
+  /** Reuse this profile and keep it on close, e.g. to restart the app. */
+  userDataDir?: string;
+}
+
 export async function launchPackagedApp(
-  preferences: SeedPreferences,
-  extraArgs: string[] = [],
+  preferences: SeedPreferences | null,
+  {
+    args: extraArgs = [],
+    userDataDir: existingUserDataDir,
+  }: LaunchOptions = {},
 ): Promise<PackagedApp> {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xshot-smoke-'));
-  fs.writeFileSync(
-    path.join(userDataDir, 'preferences.json'),
-    JSON.stringify(preferences),
-  );
+  const userDataDir =
+    existingUserDataDir ??
+    fs.mkdtempSync(path.join(os.tmpdir(), 'xshot-smoke-'));
+  if (preferences) {
+    fs.writeFileSync(
+      path.join(userDataDir, 'preferences.json'),
+      JSON.stringify(preferences),
+    );
+  }
 
   const args = [`--user-data-dir=${userDataDir}`, ...extraArgs];
   // Unpacked Linux builds lack a SUID sandbox helper on CI runners.
@@ -127,7 +140,9 @@ export async function launchPackagedApp(
     logs,
     close: async () => {
       await app.close();
-      fs.rmSync(userDataDir, { recursive: true, force: true });
+      if (!existingUserDataDir) {
+        fs.rmSync(userDataDir, { recursive: true, force: true });
+      }
     },
   };
 }

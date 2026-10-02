@@ -1,7 +1,7 @@
 import safeLocalStorage from './storage';
 import type {
-  AppPreferences,
-  PresentationSettings,
+  PreferencesUpdate,
+  PresentationPreferences,
 } from '../../shared/ipc-types';
 import { createRendererLogger } from './logger';
 
@@ -31,17 +31,28 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
       return false;
     }
 
-    const updates: Partial<AppPreferences> = {};
+    const updates: PreferencesUpdate = {};
     let migrated = false;
 
     // Migrate presentation settings
     const presentationData = safeLocalStorage.getItem('xshot:presentation');
     if (presentationData) {
       try {
-        const presentation = JSON.parse(
+        // Very old versions kept a data-URL background and the export scale
+        // here; images never cross IPC, and the scale became a preference.
+        const { backgroundImageUrl, exportScale, ...presentation } = JSON.parse(
           presentationData,
-        ) as PresentationSettings;
+        ) as Partial<PresentationPreferences> & {
+          backgroundImageUrl?: unknown;
+          exportScale?: unknown;
+        };
         updates.presentation = presentation;
+        if (typeof exportScale === 'number') {
+          updates.export = { defaultScale: exportScale };
+        }
+        if (backgroundImageUrl) {
+          logger.warn('Old background image not migrated; pick it again');
+        }
         migrated = true;
         logger.info('Migrated presentation settings');
       } catch (error) {
@@ -91,10 +102,10 @@ export async function migrateLocalStoragePreferences(): Promise<boolean> {
 
     // Apply migrations if any were found
     if (migrated) {
-      const success = await api.invoke('set-preferences', {
+      const result = await api.invoke('set-preferences', {
         preferences: updates,
       });
-      if (success) {
+      if (result.ok) {
         logger.info('Successfully migrated localStorage preferences');
 
         // Clean up old localStorage keys
