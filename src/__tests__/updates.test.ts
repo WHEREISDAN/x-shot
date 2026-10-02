@@ -66,6 +66,17 @@ it('skips builds without update config', async () => {
   );
 });
 
+it('skips smoke-test runs, which must not reach the release server', async () => {
+  process.env.XSHOT_E2E = '1';
+  try {
+    await loadModule()();
+  } finally {
+    delete process.env.XSHOT_E2E;
+  }
+  expect(check).not.toHaveBeenCalled();
+  expect(log.info).toHaveBeenCalledWith('Update check skipped: smoke-test run');
+});
+
 it('skips unpackaged runs', async () => {
   Object.assign(app, { isPackaged: false });
   await loadModule()();
