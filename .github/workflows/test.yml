@@ -2,37 +2,41 @@ name: Test
 
 on:
   push:
+    branches: [main]
   pull_request:
   # The publish workflow runs this before building a release.
   workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # Every OS reports its result even when another one fails.
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Install Node.js and NPM
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
-      - name: npm install
-        run: |
-          npm install
+      - name: npm ci
+        run: npm ci
 
       - name: ci checks
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run ci
+        run: npm run ci
 
       - name: package app for smoke test
         run: npm run package:dir

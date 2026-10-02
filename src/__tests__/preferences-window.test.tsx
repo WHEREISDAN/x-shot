@@ -61,7 +61,8 @@ describe('Preferences window', () => {
   it('keeps focus in a text field while it saves', async () => {
     await openTab('Export');
     const field = screen.getByLabelText('Filename Pattern');
-    field.focus();
+    // Focusing updates the field's focus style.
+    act(() => field.focus());
 
     ['X-Shot_a', 'X-Shot_ab', 'X-Shot_abc'].forEach((value) =>
       fireEvent.change(field, { target: { value } }),
