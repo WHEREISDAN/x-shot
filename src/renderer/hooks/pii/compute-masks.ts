@@ -1,15 +1,12 @@
 import type { OcrLine, OcrWord, PiiMaskRect, PiiDetectors } from './types';
 import {
   addressRegex,
-  ccRegex,
   dobLabelRegex,
   dobRegex,
   domainRegex,
   emailRegex,
   ipv4Regex,
   ibanRegex,
-  lineBoxesFor,
-  lineBoxesForWithLabel,
   macRegex,
   obfuscatedEmailRegex,
   phoneRegex,
@@ -22,26 +19,9 @@ import {
   urlRegex,
   uuidRegex,
   zipUSRegex,
-  fallbackWordBoxesFor,
-  tokensToLineBoxesWithFilter,
 } from './regex';
-
-function luhnValid(raw: string) {
-  const digits = raw.replace(/[^0-9]/g, '');
-  if (digits.length < 13 || digits.length > 19) return false;
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = digits.length - 1; i >= 0; i -= 1) {
-    let d = parseInt(digits[i], 10);
-    if (shouldDouble) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-}
+import { fallbackWordBoxesFor, lineBoxesFor } from './line-boxes';
+import { findCardNumberSpans } from './card-numbers';
 
 function dedup(
   arr: Array<{ x: number; y: number; width: number; height: number }>,
@@ -147,16 +127,16 @@ export default function computePiiMasks(
       ]
     : [];
   const lineBoxesSsn = enabled.ssn
-    ? lineBoxesForWithLabel(lines, words, ssnRegex, ssnLabelRegex)
+    ? lineBoxesFor(lines, words, ssnRegex, ssnLabelRegex)
     : [];
   const wordBoxesSsn = enabled.ssn
-    ? fallbackWordBoxesFor(words, ssnRegex, lineBoxesSsn)
+    ? fallbackWordBoxesFor(words, ssnRegex, lineBoxesSsn, ssnLabelRegex)
     : [];
   const lineBoxesDob = enabled.dob
-    ? lineBoxesForWithLabel(lines, words, dobRegex, dobLabelRegex)
+    ? lineBoxesFor(lines, words, dobRegex, dobLabelRegex)
     : [];
   const wordBoxesDob = enabled.dob
-    ? fallbackWordBoxesFor(words, dobRegex, lineBoxesDob)
+    ? fallbackWordBoxesFor(words, dobRegex, lineBoxesDob, dobLabelRegex)
     : [];
   const lineBoxesZipUS = enabled.postalUS
     ? lineBoxesFor(lines, words, zipUSRegex)
@@ -206,37 +186,10 @@ export default function computePiiMasks(
     : [];
 
   const ccBoxesLine = enabled.creditCard
-    ? lines.flatMap((ln) => {
-        const ly0 = ln.bbox.y;
-        const ly1 = ln.bbox.y + ln.bbox.height;
-        const lineWords = words
-          .filter((w) => {
-            const wy0 = w.bbox.y;
-            const wy1 = w.bbox.y + w.bbox.height;
-            const overlap = Math.max(
-              0,
-              Math.min(ly1, wy1) - Math.max(ly0, wy0),
-            );
-            const minH = Math.min(ln.bbox.height, w.bbox.height);
-            return minH > 0 && overlap / minH >= 0.5;
-          })
-          .sort((a, b) => a.bbox.x - b.bbox.x);
-        return tokensToLineBoxesWithFilter(
-          lineWords as any,
-          ccRegex,
-          luhnValid,
-        );
-      })
+    ? lineBoxesFor(lines, words, findCardNumberSpans)
     : [];
-
   const ccBoxesWord = enabled.creditCard
-    ? tokensToLineBoxesWithFilter(
-        [...words].sort(
-          (a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x,
-        ) as any,
-        ccRegex,
-        luhnValid,
-      )
+    ? fallbackWordBoxesFor(words, findCardNumberSpans, ccBoxesLine)
     : [];
 
   const boxesRawEmail = [

@@ -4,6 +4,7 @@ import {
   ipv4Regex,
   phoneRegex,
 } from '../renderer/hooks/pii/regex';
+import { findCardNumberSpans } from '../renderer/hooks/pii/card-numbers';
 
 function firstMatch(regex: RegExp, text: string): string | null {
   return text.match(new RegExp(regex.source, regex.flags))?.[0] ?? null;
@@ -84,5 +85,32 @@ describe('emailRegex and ipv4Regex', () => {
     expect(firstMatch(ipv4Regex, 'Server at 192.168.10.24 is online')).toBe(
       '192.168.10.24',
     );
+  });
+});
+
+describe('findCardNumberSpans', () => {
+  const cards = (text: string) =>
+    findCardNumberSpans(text).map(({ start, end }) => text.slice(start, end));
+
+  it.each([
+    ['4111 1111 1111 1111', ['4111 1111 1111 1111']],
+    ['4111 1111 1111 1111 12/25', ['4111 1111 1111 1111']],
+    ['Card: 4111-1111-1111-1111 exp 12/25', ['4111-1111-1111-1111']],
+    ['4111111111111111', ['4111111111111111']],
+    ['Amex 3782 822463 10005', ['3782 822463 10005']],
+    [
+      '5555 5555 5555 4444 and 4012 8888 8888 1881',
+      ['5555 5555 5555 4444', '4012 8888 8888 1881'],
+    ],
+  ])('finds the card in %j', (text, expected) => {
+    expect(cards(text)).toEqual(expected);
+  });
+
+  it.each([
+    ['a number failing the Luhn check', '4111 1111 1111 1112'],
+    ['too few digits', 'Order 1234 5678 9012'],
+    ['one 20-digit number', 'ID 12345678901234567890'],
+  ])('finds nothing in %s', (_label, text) => {
+    expect(cards(text)).toEqual([]);
   });
 });
