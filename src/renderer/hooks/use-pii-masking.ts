@@ -1,256 +1,176 @@
-import { useCallback, useEffect, useRef } from 'react';
-import type { EditorShape } from './use-editor-state';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type {
+  MaskBox,
+  PiiLayerStatus,
+  PiiMask,
   UsePiiMaskingParams,
   UsePiiMaskingResult,
-  PiiMaskRect,
 } from './pii/types';
 import usePiiPreferences from './pii/preferences';
-import { usePersistedPiiMasks, usePiiStorageKey } from './pii/storage';
 import computePiiMasks from './pii/compute-masks';
-import applyMasksAsShapes from './pii/apply-masks';
+import { maskToShape, styleDetectedBox } from './pii/apply-masks';
+import {
+  MANUAL_MASK_TAG,
+  applyOverrides,
+  autoMaskId,
+  findMaskAt,
+  isDrawableMask,
+  isManualMaskId,
+  manualMaskId,
+  normalizeBox,
+  shiftBox,
+  type AutoMaskOverride,
+} from './pii/mask-layer';
 
-export function usePiiMasking(
-  params: UsePiiMaskingParams,
-): UsePiiMaskingResult {
-  const { screenshot, ocr, createRectForBox, editorApi } = params;
-  const {
-    shapes,
-    addShapes,
-    deleteShapesByIds,
-    getShapeById,
-    getBoundsForShape,
-  } = editorApi;
+function layerStatus(
+  preferencesLoaded: boolean,
+  censorPII: boolean,
+  ocrDone: boolean,
+  ocrFailed: boolean,
+): PiiLayerStatus {
+  if (!preferencesLoaded) return 'pending';
+  if (!censorPII || ocrDone) return 'ready';
+  if (ocrFailed) return 'ocr-failed';
+  return 'pending';
+}
 
-  // Preferences (censor toggle, style, detectors)
-  const { censorPII, setCensorPII, defaultStyle, detectors } =
+/**
+ * The PII mask layer for one capture. Auto masks are derived from the OCR
+ * result of the current image; the user's changes to them and the masks they
+ * draw are kept alongside. The layer lives outside the editor's undo stack.
+ */
+export function usePiiMasking({
+  screenshot,
+  ocr,
+}: UsePiiMaskingParams): UsePiiMaskingResult {
+  const { censorPII, setCensorPII, defaultStyle, detectors, loaded } =
     usePiiPreferences();
-
-  // Persisted per-screenshot masks
-  const piiStorageKey = usePiiStorageKey(screenshot);
-  const { setPiiMasks, piiMasksRef } = usePersistedPiiMasks(piiStorageKey);
-
-  // Map of editor shape id -> mask index within piiMasks
-  const piiMaskIdsRef = useRef<Map<string, number>>(new Map());
-  const autoCensorIdsRef = useRef<string[]>([]);
-  const censorAppliedRef = useRef<boolean>(false);
-
-  // Keep refs to editor actions to avoid stale closures
-  const addShapesRef = useRef(addShapes);
-  const deleteShapesByIdsRef = useRef(deleteShapesByIds);
-  const shapesRef = useRef(shapes);
-  useEffect(() => {
-    addShapesRef.current = addShapes;
-  }, [addShapes]);
-  useEffect(() => {
-    deleteShapesByIdsRef.current = deleteShapesByIds;
-  }, [deleteShapesByIds]);
-  useEffect(() => {
-    shapesRef.current = shapes;
-  }, [shapes]);
-
-  // Helper for removing all existing PII-tagged shapes
-  const removeAllTagged = useCallback(() => {
-    const taggedIds = shapesRef.current
-      .filter((s) => {
-        const t = s.tag;
-        return (
-          t === 'pii-email' ||
-          t === 'pii-phone' ||
-          t === 'pii-address' ||
-          t === 'pii-ipv4' ||
-          t === 'pii-url' ||
-          t === 'pii-ssn' ||
-          t === 'pii-cc' ||
-          t === 'pii-dob' ||
-          t === 'pii-postal-us' ||
-          t === 'pii-postal-ca' ||
-          t === 'pii-postal-uk' ||
-          t === 'pii-uuid' ||
-          t === 'pii-mac' ||
-          t === 'pii-iban' ||
-          t === 'pii-po-box' ||
-          t === 'pii-token' ||
-          t === 'pii-manual'
-        );
-      })
-      .map((s) => s.id);
-    if (taggedIds.length > 0) deleteShapesByIdsRef.current(taggedIds);
-    autoCensorIdsRef.current = [];
-    piiMaskIdsRef.current.clear();
-    censorAppliedRef.current = false;
-  }, []);
-
-  // Apply masks as editor shapes and build mapping
-  const applyMasks = useCallback(
-    (masks: PiiMaskRect[]) => {
-      if (!masks || masks.length === 0) return;
-      const shapesToAdd = applyMasksAsShapes(
-        masks,
-        defaultStyle,
-        { width: screenshot.width, height: screenshot.height },
-        createRectForBox,
-      );
-      const ids = addShapesRef.current(shapesToAdd);
-      autoCensorIdsRef.current = ids;
-      piiMaskIdsRef.current.clear();
-      ids.forEach((id, idx) => piiMaskIdsRef.current.set(id, idx));
-      censorAppliedRef.current = true;
-    },
-    [createRectForBox, defaultStyle, screenshot.width, screenshot.height],
+  const [overrides, setOverrides] = useState<Record<string, AutoMaskOverride>>(
+    {},
   );
+  const [manualMasks, setManualMasks] = useState<PiiMask[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const manualSequenceRef = useRef(0);
 
-  // Compute masks from OCR and auto-apply when enabled
-  const { status, words, lines } = ocr;
-  useEffect(() => {
-    if (!censorPII) {
-      removeAllTagged();
-      return;
-    }
-    // Only proceed when OCR done or persisted masks are available
-    if (status !== 'done' && piiMasksRef.current.length === 0) return;
-    if (censorAppliedRef.current) return;
+  // OCR results only count for the image they were computed from.
+  const ocrDone =
+    ocr.status === 'done' && ocr.resultFor === screenshot.imageDataUrl;
 
-    // Use existing masks for this screenshot if available
-    if (piiMasksRef.current.length > 0) {
-      applyMasks(piiMasksRef.current);
-      return;
-    }
-
-    // Ensure detectors are loaded
-    const enabled = detectors;
-    if (!enabled) return;
-
-    const masks = computePiiMasks(enabled, lines, words);
-    setPiiMasks(masks);
-    applyMasks(masks);
+  const autoMasks = useMemo<PiiMask[]>(() => {
+    if (!ocrDone || !detectors) return [];
+    const image = { width: screenshot.width, height: screenshot.height };
+    return computePiiMasks(detectors, ocr.lines, ocr.words).map(
+      (detection) => ({
+        id: autoMaskId(detection),
+        source: 'auto',
+        tag: detection.tag,
+        rect: styleDetectedBox(detection, defaultStyle, image),
+      }),
+    );
   }, [
-    status,
-    words,
-    lines,
-    censorPII,
-    applyMasks,
-    removeAllTagged,
-    ocr.lines,
+    ocrDone,
     detectors,
-    setPiiMasks,
-    piiMasksRef,
+    ocr.lines,
+    ocr.words,
+    defaultStyle,
+    screenshot.width,
+    screenshot.height,
   ]);
 
-  // Reset all PII state if screenshot changes
-  useEffect(() => {
-    censorAppliedRef.current = false;
-    piiMasksRef.current = [];
-    piiMaskIdsRef.current.clear();
-    autoCensorIdsRef.current = [];
-    setPiiMasks([]);
-  }, [screenshot.imageDataUrl, setPiiMasks, piiMasksRef]);
-
-  // Public helpers for editor interactions
-  const recordManualMaskOnCommit = useCallback(
-    (
-      shape: EditorShape,
-      bounds: { x: number; y: number; width: number; height: number },
-    ) => {
-      const { tag } = shape;
-      if (!tag || !tag.startsWith('pii-')) return;
-      const shapeId = shape.id;
-      setPiiMasks((prev) => {
-        const newIndex = prev.length;
-        piiMaskIdsRef.current.set(shapeId, newIndex);
-        return [
-          ...prev,
-          {
-            x: bounds.x,
-            y: bounds.y,
-            width: bounds.width,
-            height: bounds.height,
-            tag,
-          },
-        ];
-      });
-    },
-    [setPiiMasks],
+  const masks = useMemo(
+    () =>
+      censorPII
+        ? [...applyOverrides(autoMasks, overrides), ...manualMasks]
+        : [],
+    [censorPII, autoMasks, overrides, manualMasks],
   );
 
-  const updateMaskForShape = useCallback(
-    (
-      shapeId: string,
-      rect: { x: number; y: number; width: number; height: number },
-    ) => {
-      const maskIndex = piiMaskIdsRef.current.get(shapeId);
-      if (maskIndex === undefined) return;
-      setPiiMasks((prev) => {
-        if (maskIndex < 0 || maskIndex >= prev.length) return prev;
-        const next = prev.slice();
-        next[maskIndex] = {
-          ...next[maskIndex],
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-        };
-        return next;
-      });
-    },
-    [setPiiMasks],
+  const maskShapes = useMemo(
+    () => masks.map((mask) => maskToShape(mask, defaultStyle)),
+    [masks, defaultStyle],
   );
 
-  const syncDraggedMaskBounds = useCallback(
-    (shapeId: string) => {
-      const shape = getShapeById(shapeId);
-      if (!shape) return;
-      const { tag } = shape;
-      if (!tag || !tag.startsWith('pii-')) return;
-      const b = getBoundsForShape(shape);
-      const idx = piiMaskIdsRef.current.get(shapeId);
-      if (idx === undefined) return;
-      setPiiMasks((prev) => {
-        if (idx < 0 || idx >= prev.length) return prev;
-        const next = prev.slice();
-        next[idx] = {
-          ...next[idx],
-          x: b.x,
-          y: b.y,
-          width: b.width,
-          height: b.height,
-        };
-        return next;
-      });
-    },
-    [getShapeById, getBoundsForShape, setPiiMasks],
+  const selectedMaskId =
+    selectedId && masks.some((mask) => mask.id === selectedId)
+      ? selectedId
+      : null;
+
+  const hitTestMask = useCallback(
+    (x: number, y: number) => findMaskAt(masks, x, y),
+    [masks],
   );
 
-  const deletePiiForShapeId = useCallback(
-    (shapeId: string) => {
-      const shape = getShapeById(shapeId);
-      if (!shape) return;
-      const { tag } = shape;
-      if (!tag || !tag.startsWith('pii-')) return;
-      const idx = piiMaskIdsRef.current.get(shapeId);
-      if (idx === undefined) return;
-      setPiiMasks((prev) => {
-        if (idx < 0 || idx >= prev.length) return prev;
-        const next = prev.slice();
-        next.splice(idx, 1);
-        return next;
-      });
-      piiMaskIdsRef.current.delete(shapeId);
-      Array.from(piiMaskIdsRef.current.entries()).forEach(([key, value]) => {
-        if (value > idx) piiMaskIdsRef.current.set(key, value - 1);
+  const addManualMask = useCallback((box: MaskBox): string | null => {
+    if (!isDrawableMask(box)) return null;
+    manualSequenceRef.current += 1;
+    const id = manualMaskId(manualSequenceRef.current);
+    setManualMasks((prev) => [
+      ...prev,
+      { id, source: 'manual', tag: MANUAL_MASK_TAG, rect: normalizeBox(box) },
+    ]);
+    return id;
+  }, []);
+
+  const updateMask = useCallback((id: string, box: MaskBox) => {
+    const rect = normalizeBox(box);
+    if (isManualMaskId(id)) {
+      setManualMasks((prev) =>
+        prev.map((mask) => (mask.id === id ? { ...mask, rect } : mask)),
+      );
+      return;
+    }
+    setOverrides((prev) => ({ ...prev, [id]: { rect } }));
+  }, []);
+
+  const moveMask = useCallback(
+    (id: string, dx: number, dy: number) => {
+      if (isManualMaskId(id)) {
+        setManualMasks((prev) =>
+          prev.map((mask) =>
+            mask.id === id
+              ? { ...mask, rect: shiftBox(mask.rect, dx, dy) }
+              : mask,
+          ),
+        );
+        return;
+      }
+      setOverrides((prev) => {
+        const current = prev[id];
+        const base =
+          current && 'rect' in current
+            ? current.rect
+            : autoMasks.find((mask) => mask.id === id)?.rect;
+        if (!base || (current && 'deleted' in current)) return prev;
+        return { ...prev, [id]: { rect: shiftBox(base, dx, dy) } };
       });
     },
-    [getShapeById, setPiiMasks],
+    [autoMasks],
   );
+
+  const deleteMask = useCallback((id: string) => {
+    if (isManualMaskId(id)) {
+      setManualMasks((prev) => prev.filter((mask) => mask.id !== id));
+    } else {
+      setOverrides((prev) => ({ ...prev, [id]: { deleted: true } }));
+    }
+    setSelectedId((current) => (current === id ? null : current));
+  }, []);
 
   return {
     censorPII,
     setCensorPII,
     defaultStyle,
-    recordManualMaskOnCommit,
-    updateMaskForShape,
-    syncDraggedMaskBounds,
-    deletePiiForShapeId,
+    preferencesLoaded: loaded,
+    status: layerStatus(loaded, censorPII, ocrDone, ocr.status === 'error'),
+    masks,
+    maskShapes,
+    selectedMaskId,
+    selectMask: setSelectedId,
+    hitTestMask,
+    addManualMask,
+    updateMask,
+    moveMask,
+    deleteMask,
   };
 }
 

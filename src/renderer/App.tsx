@@ -13,6 +13,7 @@ import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
 import { useCaptureResult } from './hooks/use-capture-result';
+import removeLegacyPiiMaskKeys from './hooks/pii/legacy-mask-storage';
 
 function Hello() {
   const { screenshot, failure, dismissFailure, clearScreenshot } =
@@ -20,6 +21,7 @@ function Hello() {
 
   useEffect(() => {
     checkAndMigrateIfNeeded();
+    removeLegacyPiiMaskKeys();
   }, []);
 
   const handleCopy = useCallback(async (dataUrl: string) => {

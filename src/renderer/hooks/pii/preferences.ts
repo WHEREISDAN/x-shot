@@ -8,6 +8,8 @@ function usePiiPreferences() {
   const [censorPII, setCensorPIIState] = useState<boolean>(false);
   const [defaultStyle, setDefaultStyle] = useState<'blur' | 'black'>('black');
   const [detectors, setDetectors] = useState<PiiDetectors | null>(null);
+  // Censor PII reads as off until loaded; callers must not act on it before.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const loadPiiPreferences = async () => {
@@ -22,6 +24,8 @@ function usePiiPreferences() {
         }
       } catch (error) {
         logger.warn('Failed to load PII preferences', error);
+      } finally {
+        setLoaded(true);
       }
     };
     loadPiiPreferences();
@@ -47,7 +51,7 @@ function usePiiPreferences() {
     }
   }, []);
 
-  return { censorPII, setCensorPII, defaultStyle, detectors } as const;
+  return { censorPII, setCensorPII, defaultStyle, detectors, loaded } as const;
 }
 
 export default usePiiPreferences;

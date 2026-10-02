@@ -30,6 +30,16 @@ import { useExportGlue } from '../../hooks/use-export-glue';
 import TextEditOverlay from './TextEditOverlay';
 import { useTextDetection } from '../../hooks/use-text-detection';
 import { usePiiMasking } from '../../hooks/use-pii-masking';
+import { useAutoCopy } from '../../hooks/use-auto-copy';
+import { MANUAL_MASK_TAG } from '../../hooks/pii/mask-layer';
+import { piiShapeStyle } from '../../hooks/pii/apply-masks';
+import {
+  SelectionHandles,
+  type ResizeHandle,
+} from './editor-selection-overlay';
+
+// What the select tool acts on: an annotation or a PII mask.
+type SelectionTarget = { kind: 'shape' | 'mask'; id: string };
 
 interface ScreenshotEditorProps {
   screenshot: ScreenshotResult;
@@ -140,18 +150,16 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragLastPos = useRef<{ x: number; y: number } | null>(null);
-  const draggedShapeIdRef = useRef<string | null>(null);
+  const dragTargetRef = useRef<SelectionTarget | null>(null);
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeHandle, setResizeHandle] = useState<
-    'nw' | 'ne' | 'sw' | 'se' | null
-  >(null);
+  const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
   type ResizeStartData = {
     left: number;
     top: number;
     right: number;
     bottom: number;
-    shapeId: string;
-    handle: 'nw' | 'ne' | 'sw' | 'se';
+    target: SelectionTarget;
+    handle: ResizeHandle;
   };
   const resizeStartRef = useRef<ResizeStartData | null>(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -195,21 +203,23 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     words,
     lines,
     paragraphs,
+    resultFor,
   } = useTextDetection(screenshot.imageDataUrl);
   const [textSelectLevel, setTextSelectLevel] = useState<
     'word' | 'line' | 'paragraph'
   >('word');
   const pii = usePiiMasking({
     screenshot,
-    ocr: { status: ocrStatus, words, lines, paragraphs },
-    createRectForBox,
-    editorApi: {
-      shapes: state.shapes,
-      addShapes: state.addShapes,
-      deleteShapesByIds: state.deleteShapesByIds,
-      getShapeById: state.getShapeById,
-      getBoundsForShape,
-    },
+    ocr: { status: ocrStatus, words, lines, resultFor },
+  });
+
+  useAutoCopy({
+    rawDataUrl: screenshot.imageDataUrl,
+    censorPII: pii.censorPII,
+    piiPreferencesLoaded: pii.preferencesLoaded,
+    piiStatus: pii.status,
+    exportRedacted: exportDataUrl,
+    copy: onCopy,
   });
 
   const selectableItems = useMemo(() => {
@@ -218,12 +228,25 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     return paragraphs;
   }, [textSelectLevel, words, lines, paragraphs]);
 
-  // PII masking handled by usePiiMasking
-  const deleteSelectedShapePiiAware = useCallback(() => {
-    const id = state.selectedShapeId;
-    if (!id) return;
-    pii.deletePiiForShapeId(id);
+  const selectionTarget = useMemo<SelectionTarget | null>(() => {
+    if (pii.selectedMaskId) return { kind: 'mask', id: pii.selectedMaskId };
+    if (state.selectedShapeId) {
+      return { kind: 'shape', id: state.selectedShapeId };
+    }
+    return null;
+  }, [pii.selectedMaskId, state.selectedShapeId]);
+
+  const deleteSelection = useCallback(() => {
+    if (pii.selectedMaskId) {
+      pii.deleteMask(pii.selectedMaskId);
+      return;
+    }
     state.deleteSelectedShape();
+  }, [state, pii]);
+
+  const clearSelection = useCallback(() => {
+    state.selectShape(null);
+    pii.selectMask(null);
   }, [state, pii]);
 
   // Centralized keyboard shortcuts
@@ -239,8 +262,8 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     },
     onUndo: state.undo,
     onRedo: state.redo,
-    onDeleteSelected: deleteSelectedShapePiiAware,
-    onEscape: () => state.selectShape(null),
+    onDeleteSelected: deleteSelection,
+    onEscape: clearSelection,
     setZoom: (updater) =>
       setZoom(typeof updater === 'number' ? updater : updater(zoom)),
     resetView: () => setZoom(1),
@@ -293,12 +316,18 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       }
       const { x, y } = toImageCoords(e.clientX, e.clientY);
       if (state.activeTool === 'select') {
-        const hit = hitTest(x, y);
-        state.selectShape(hit);
-        if (hit) {
+        // Masks sit above annotations, so they win the hit test.
+        const maskHit = pii.hitTestMask(x, y);
+        const shapeHit = maskHit ? null : hitTest(x, y);
+        pii.selectMask(maskHit);
+        state.selectShape(shapeHit);
+        let target: SelectionTarget | null = null;
+        if (maskHit) target = { kind: 'mask', id: maskHit };
+        else if (shapeHit) target = { kind: 'shape', id: shapeHit };
+        if (target) {
           setIsDragging(true);
           dragLastPos.current = { x, y };
-          draggedShapeIdRef.current = hit;
+          dragTargetRef.current = target;
         } else if (e.button === 0) {
           // Empty space: start panning with left button
           setIsPanning(true);
@@ -334,14 +363,11 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         textSize: state.textSize,
       });
       if (pii.censorPII && state.activeTool === 'rect') {
-        const r = shape as RectShape;
-        // Use defaultStyle preference for manual PII masking
-        const isBlur = pii.defaultStyle === 'blur';
-        r.fillColor = isBlur ? '#808080' : '#000000'; // Gray for blur effect, black for solid
-        r.strokeColor = 'transparent';
-        r.opacity = isBlur ? 0.8 : 1; // Semi-transparent for blur effect
-        r.radius = isBlur ? 4 : 2; // Larger radius for blur for softer appearance
-        r.tag = 'pii-manual';
+        // With Censor PII on, the rect tool draws a manual mask.
+        Object.assign(shape as RectShape, piiShapeStyle(pii.defaultStyle), {
+          strokeColor: 'transparent',
+          tag: MANUAL_MASK_TAG,
+        });
       }
       state.startProvisionalShape(shape);
       setIsPointerDown(true);
@@ -353,8 +379,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       isSpacePressed,
       selectableItems,
       createRectForBox,
-      pii.censorPII,
-      pii.defaultStyle,
+      pii,
     ],
   );
 
@@ -392,24 +417,29 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         const ny = Math.min(top, bottom);
         const nw = Math.max(1, Math.abs(right - left));
         const nh = Math.max(1, Math.abs(bottom - top));
-        state.updateShape(start.shapeId, (s) => {
+        if (start.target.kind === 'mask') {
+          pii.updateMask(start.target.id, {
+            x: nx,
+            y: ny,
+            width: nw,
+            height: nh,
+          });
+          return;
+        }
+        state.updateShape(start.target.id, (s) => {
           if (s.type !== 'rect') return s;
           const r = s as RectShape;
           return { ...r, x: nx, y: ny, width: nw, height: nh } as RectShape;
         });
-        pii.updateMaskForShape(start.shapeId, {
-          x: nx,
-          y: ny,
-          width: nw,
-          height: nh,
-        });
         return;
       }
-      if (isDragging && dragLastPos.current && state.selectedShapeId) {
+      if (isDragging && dragLastPos.current && dragTargetRef.current) {
         const dx = x - dragLastPos.current.x;
         const dy = y - dragLastPos.current.y;
         dragLastPos.current = { x, y };
-        state.moveSelectedShapeBy(dx, dy);
+        const target = dragTargetRef.current;
+        if (target.kind === 'mask') pii.moveMask(target.id, dx, dy);
+        else state.moveSelectedShapeBy(dx, dy);
         return;
       }
       if (!isPointerDown || !state.provisionalShape) return;
@@ -469,25 +499,23 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     }
     if (isDragging) {
       setIsDragging(false);
-      const draggedId = draggedShapeIdRef.current;
-      draggedShapeIdRef.current = null;
-      if (draggedId) {
-        pii.syncDraggedMaskBounds(draggedId);
-      }
+      dragTargetRef.current = null;
       dragLastPos.current = null;
       return;
     }
     if (!isPointerDown) return;
     setIsPointerDown(false);
-    if (state.provisionalShape) {
-      const s = state.provisionalShape as EditorShape;
-      const { tag } = s;
-      const bounds = getBoundsForShapeMemo(s);
+    const provisional = state.provisionalShape as EditorShape | null;
+    if (!provisional) return;
+    if (provisional.tag !== MANUAL_MASK_TAG) {
       state.commitProvisionalShape();
-      if (tag && tag.startsWith('pii-')) {
-        pii.recordManualMaskOnCommit(s, bounds);
-      }
+      return;
     }
+    // Manual masks join the PII layer, outside the annotation undo stack.
+    state.cancelProvisionalShape();
+    const maskId = pii.addManualMask(getBoundsForShapeMemo(provisional));
+    state.selectShape(null);
+    pii.selectMask(maskId);
   }, [
     isPointerDown,
     isDragging,
@@ -598,7 +626,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         onKeyDown={(e) => {
           if ((e.key === 'Backspace' || e.key === 'Delete') && !editingText) {
             e.preventDefault();
-            deleteSelectedShapePiiAware();
+            deleteSelection();
           }
         }}
         onContextMenu={(e) => {
@@ -607,6 +635,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
           panLast.current = { x: e.clientX, y: e.clientY };
         }}
         shapes={state.shapes}
+        piiMasks={pii.maskShapes}
         provisionalShape={state.provisionalShape as EditorShape | null}
         showOcrOverlay={
           state.activeTool === 'text-select' && ocrStatus === 'done'
@@ -614,150 +643,31 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         ocrBoxes={selectableItems.map((it) => it.bbox)}
         ocrKeyPrefix={`ocr-${textSelectLevel}`}
         renderSelectionOverlay={() => {
-          if (!state.selectedShapeId) return null;
-          const selected = state.getShapeById(state.selectedShapeId!);
+          if (!selectionTarget) return null;
+          const selected =
+            selectionTarget.kind === 'mask'
+              ? pii.maskShapes.find((m) => m.id === selectionTarget.id)
+              : state.getShapeById(selectionTarget.id);
           if (!selected) return null;
           const b = getBoundsForShapeMemo(selected);
-          const handleSize = Math.max(6, 6 + selected.strokeWidth * 0.5);
-          const pad = Math.max(4, selected.strokeWidth);
           return (
-            <g pointerEvents="none">
-              <rect
-                x={b.x - pad}
-                y={b.y - pad}
-                width={Math.max(1, b.width) + pad * 2}
-                height={Math.max(1, b.height) + pad * 2}
-                fill="none"
-                stroke="#60a5fa"
-                strokeDasharray="4 2"
-                strokeWidth={1}
-              />
-              {/* NW */}
-              <rect
-                x={b.x - handleSize}
-                y={b.y - handleSize}
-                width={handleSize}
-                height={handleSize}
-                fill="#60a5fa"
-                rx={2}
-                pointerEvents="all"
-                style={{ cursor: 'nwse-resize' }}
-                onPointerDown={(ev) => {
-                  ev.stopPropagation();
-                  if (!state.selectedShapeId) return;
-                  setIsResizing(true);
-                  setResizeHandle('nw');
-                  resizeStartRef.current = {
-                    left: b.x,
-                    top: b.y,
-                    right: b.x + b.width,
-                    bottom: b.y + b.height,
-                    shapeId: state.selectedShapeId,
-                    handle: 'nw',
-                  };
-                }}
-              />
-              {/* NE */}
-              <rect
-                x={b.x + b.width}
-                y={b.y - handleSize}
-                width={handleSize}
-                height={handleSize}
-                fill="#60a5fa"
-                rx={2}
-                pointerEvents="all"
-                style={{ cursor: 'nesw-resize' }}
-                onPointerDown={(ev) => {
-                  ev.stopPropagation();
-                  if (!state.selectedShapeId) return;
-                  setIsResizing(true);
-                  setResizeHandle('ne');
-                  resizeStartRef.current = {
-                    left: b.x,
-                    top: b.y,
-                    right: b.x + b.width,
-                    bottom: b.y + b.height,
-                    shapeId: state.selectedShapeId,
-                    handle: 'ne',
-                  };
-                }}
-              />
-              {/* SW */}
-              <rect
-                x={b.x - handleSize}
-                y={b.y + b.height}
-                width={handleSize}
-                height={handleSize}
-                fill="#60a5fa"
-                rx={2}
-                pointerEvents="all"
-                style={{ cursor: 'nesw-resize' }}
-                onPointerDown={(ev) => {
-                  ev.stopPropagation();
-                  if (!state.selectedShapeId) return;
-                  setIsResizing(true);
-                  setResizeHandle('sw');
-                  resizeStartRef.current = {
-                    left: b.x,
-                    top: b.y,
-                    right: b.x + b.width,
-                    bottom: b.y + b.height,
-                    shapeId: state.selectedShapeId,
-                    handle: 'sw',
-                  };
-                }}
-              />
-              {/* SE */}
-              <rect
-                x={b.x + b.width}
-                y={b.y + b.height}
-                width={handleSize}
-                height={handleSize}
-                fill="#60a5fa"
-                rx={2}
-                pointerEvents="all"
-                style={{ cursor: 'nwse-resize' }}
-                onPointerDown={(ev) => {
-                  ev.stopPropagation();
-                  if (!state.selectedShapeId) return;
-                  setIsResizing(true);
-                  setResizeHandle('se');
-                  resizeStartRef.current = {
-                    left: b.x,
-                    top: b.y,
-                    right: b.x + b.width,
-                    bottom: b.y + b.height,
-                    shapeId: state.selectedShapeId,
-                    handle: 'se',
-                  };
-                }}
-              />
-              {/* Inline delete button */}
-              <g
-                pointerEvents="all"
-                onPointerDown={(ev) => {
-                  ev.stopPropagation();
-                  deleteSelectedShapePiiAware();
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <rect
-                  x={b.x + b.width + pad + 8}
-                  y={b.y - pad - 28}
-                  width={28}
-                  height={28}
-                  rx={8}
-                  fill="#0f172a"
-                  stroke="#1f2937"
-                />
-                <path
-                  d={`M ${b.x + b.width + pad + 16} ${b.y - pad - 16} l 8 8 M ${b.x + b.width + pad + 24} ${b.y - pad - 16} l -8 8`}
-                  stroke="#f87171"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                />
-              </g>
-            </g>
+            <SelectionHandles
+              bounds={b}
+              strokeWidth={selected.strokeWidth}
+              onResizeStart={(handle) => {
+                setIsResizing(true);
+                setResizeHandle(handle);
+                resizeStartRef.current = {
+                  left: b.x,
+                  top: b.y,
+                  right: b.x + b.width,
+                  bottom: b.y + b.height,
+                  target: selectionTarget,
+                  handle,
+                };
+              }}
+              onDelete={deleteSelection}
+            />
           );
         }}
       />
