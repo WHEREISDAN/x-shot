@@ -199,9 +199,9 @@ test.describe('app lifecycle and security', () => {
     );
     const menu = await packaged.app.evaluate(({ Menu }) =>
       (Menu.getApplicationMenu()?.items ?? []).map((top) => ({
-        label: top.label.replace('&', ''),
+        label: top.label.replace(/&/g, ''),
         items: (top.submenu?.items ?? []).map((item) => ({
-          label: item.label.replace('&', ''),
+          label: item.label.replace(/&/g, ''),
           role: item.role?.toLowerCase() ?? null,
           accelerator: item.accelerator ?? null,
         })),
