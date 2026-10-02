@@ -34,7 +34,7 @@ const submenuOf = (item: MenuItemConstructorOptions | undefined) =>
   (item?.submenu ?? []) as MenuItemConstructorOptions[];
 
 const byLabel = (items: MenuItemConstructorOptions[], label: string) =>
-  items.find((item) => item.label?.replace('&', '') === label);
+  items.find((item) => item.label?.replace(/&/g, '') === label);
 
 const click = (item: MenuItemConstructorOptions | undefined) =>
   (item?.click as () => void)();
