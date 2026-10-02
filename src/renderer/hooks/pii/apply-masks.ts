@@ -1,77 +1,51 @@
-import type { PiiMaskRect } from './types';
 import type { RectShape } from '../use-editor-state';
+import type { MaskBox, PiiMask, PiiStyle } from './types';
 
-function applyMasksAsShapes(
-  masks: PiiMaskRect[],
-  defaultStyle: 'blur' | 'black',
-  screenshot: { width: number; height: number },
-  createRectForBox: (
-    box: { x: number; y: number; width: number; height: number },
-    options: {
-      fillColor: string;
-      strokeColor?: string;
-      strokeWidth?: number;
-      opacity?: number;
-      radius?: number;
-      tag?: string;
-    },
-  ) => RectShape,
-) {
-  if (!masks || masks.length === 0) return [] as RectShape[];
+// editor-stage renders a PII rect with this fill as a frosted blur.
+const BLUR_FILL = '#808080';
+const BLACK_FILL = '#000000';
 
-  const isBlur = defaultStyle === 'blur';
-  const fillColor = isBlur ? '#808080' : '#000000';
-  const opacity = isBlur ? 0.8 : 1;
-
-  return masks.map((m) => {
-    if (isBlur) {
-      const padding = Math.max(4, Math.min(m.width, m.height) * 0.15);
-      const expandedX = m.x - padding;
-      const expandedY = m.y - padding;
-      const expandedWidth = m.width + padding * 2;
-      const expandedHeight = m.height + padding;
-      const clampedX = Math.max(0, Math.round(expandedX));
-      const clampedY = Math.max(0, Math.round(expandedY));
-      const clampedWidth = Math.round(
-        Math.min(expandedWidth, screenshot.width - clampedX),
-      );
-      const clampedHeight = Math.round(
-        Math.min(expandedHeight, screenshot.height - clampedY),
-      );
-      return createRectForBox(
-        {
-          x: clampedX,
-          y: clampedY,
-          width: clampedWidth,
-          height: clampedHeight,
-        },
-        {
-          fillColor,
-          strokeColor: 'transparent',
-          strokeWidth: 0,
-          opacity,
-          radius: 4,
-          tag: m.tag,
-        },
-      );
-    }
-    return createRectForBox(
-      {
-        x: Math.round(m.x),
-        y: Math.round(m.y),
-        width: Math.round(m.width),
-        height: Math.round(m.height),
-      },
-      {
-        fillColor,
-        strokeColor: 'transparent',
-        strokeWidth: 0,
-        opacity,
-        radius: 2,
-        tag: m.tag,
-      },
-    );
-  });
+/** Grows a detected text box so the blur fully covers the glyphs. */
+export function styleDetectedBox(
+  box: MaskBox,
+  style: PiiStyle,
+  image: { width: number; height: number },
+): MaskBox {
+  if (style !== 'blur') {
+    return {
+      x: Math.round(box.x),
+      y: Math.round(box.y),
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+    };
+  }
+  const padding = Math.max(4, Math.min(box.width, box.height) * 0.15);
+  const x = Math.max(0, Math.round(box.x - padding));
+  const y = Math.max(0, Math.round(box.y - padding));
+  return {
+    x,
+    y,
+    width: Math.round(Math.min(box.width + padding * 2, image.width - x)),
+    height: Math.round(Math.min(box.height + padding, image.height - y)),
+  };
 }
 
-export default applyMasksAsShapes;
+export function piiShapeStyle(
+  style: PiiStyle,
+): Pick<RectShape, 'fillColor' | 'opacity' | 'radius'> {
+  return style === 'blur'
+    ? { fillColor: BLUR_FILL, opacity: 0.8, radius: 4 }
+    : { fillColor: BLACK_FILL, opacity: 1, radius: 2 };
+}
+
+export function maskToShape(mask: PiiMask, style: PiiStyle): RectShape {
+  return {
+    id: mask.id,
+    type: 'rect',
+    ...mask.rect,
+    ...piiShapeStyle(style),
+    strokeColor: 'transparent',
+    strokeWidth: 0,
+    tag: mask.tag,
+  };
+}

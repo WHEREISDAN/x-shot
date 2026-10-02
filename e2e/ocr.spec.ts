@@ -1,22 +1,22 @@
 import path from 'path';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
   editorFor,
+  hasOcrFailure,
   launchPackagedApp,
   pngDataUrl,
+  waitForPiiMasks,
   type PackagedApp,
 } from './packaged-app';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
 const FIXTURE_SIZE = { width: 1000, height: 420 };
-// Top edge (image pixels) of the blur mask over the fixture's email, phone
-// and IPv4 lines.
+// Top edge (image pixels) of the rendered blur mask over the fixture's
+// email, phone and IPv4 lines.
 const PII_MASK_TOPS = [118, 198, 278];
 const MASK_TOP_TOLERANCE = 12;
-const OCR_FAILURE = 'OCR recognition failed';
-const OCR_TIMEOUT_MS = 120_000;
 
 const DETECTORS: PiiDetectors = {
   email: true,
@@ -48,46 +48,16 @@ function fixtureCapture(sessionId: string): ScreenshotResult {
   };
 }
 
-async function waitForPiiMaskTops(
-  packaged: PackagedApp,
-  editor: Locator,
-  count: number,
-  deadline: number,
-): Promise<number[]> {
-  const output = packaged.logs.join('');
-  const failureAt = output.indexOf(OCR_FAILURE);
-  if (failureAt >= 0) {
-    throw new Error(
-      `OCR failed in the packaged build:\n${output.slice(failureAt, failureAt + 600)}`,
-    );
-  }
-
-  const tops = await editor
-    .locator('svg foreignObject')
-    .evaluateAll((nodes) =>
-      nodes.map((node) => Number(node.getAttribute('y'))),
-    );
-  if (tops.length >= count) return tops;
-  if (Date.now() > deadline) {
-    throw new Error(
-      `Timed out waiting for ${count} PII masks; found ${tops.length}`,
-    );
-  }
-
-  await packaged.window.waitForTimeout(500);
-  return waitForPiiMaskTops(packaged, editor, count, deadline);
-}
-
 async function expectFixtureMasked(
   packaged: PackagedApp,
   screenshot: ScreenshotResult,
 ): Promise<void> {
-  const maskTops = await waitForPiiMaskTops(
+  const masks = await waitForPiiMasks(
     packaged,
     editorFor(packaged.window, screenshot),
     PII_MASK_TOPS.length,
-    Date.now() + OCR_TIMEOUT_MS,
   );
+  const maskTops = masks.map((mask) => mask.y);
 
   PII_MASK_TOPS.forEach((expectedTop) => {
     expect(
@@ -95,7 +65,7 @@ async function expectFixtureMasked(
       `expected a mask near y=${expectedTop}; masks at ${maskTops.join(', ')}`,
     ).toBe(true);
   });
-  expect(packaged.logs.join('')).not.toContain(OCR_FAILURE);
+  expect(hasOcrFailure(packaged)).toBe(false);
 }
 
 test.describe('packaged OCR and PII masking', () => {

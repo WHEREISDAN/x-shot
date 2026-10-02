@@ -9,22 +9,6 @@ import { setCurrentCaptureSessionId } from '../utils/capture-session';
 
 const logger = createRendererLogger('app');
 
-type RendererIpc = Window['electron']['ipcRenderer'];
-
-async function autoCopyIfEnabled(
-  api: RendererIpc,
-  screenshot: ScreenshotResult,
-): Promise<void> {
-  try {
-    const preferences = await api.invoke('get-preferences', {});
-    if (preferences?.capture?.autoCopyToClipboard) {
-      await api.invoke('copy-image', { dataUrl: screenshot.imageDataUrl });
-    }
-  } catch (error) {
-    logger.warn('Failed to auto-copy screenshot', error);
-  }
-}
-
 export interface UseCaptureResult {
   screenshot: ScreenshotResult | null;
   failure: CaptureFailure | null;
@@ -62,7 +46,6 @@ export function useCaptureResult(): UseCaptureResult {
       });
       setFailure(null);
       setScreenshot(next);
-      autoCopyIfEnabled(api, next);
     });
   }, []);
 

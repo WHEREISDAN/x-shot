@@ -39,6 +39,8 @@ export interface UseTextDetectionResult {
   words: OcrWord[];
   lines: OcrLine[];
   paragraphs: OcrParagraph[];
+  /** The image the current results were computed from. */
+  resultFor: string | null;
   run: () => Promise<void>;
 }
 
@@ -56,6 +58,7 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
   const [words, setWords] = useState<OcrWord[]>([]);
   const [lines, setLines] = useState<OcrLine[]>([]);
   const [paragraphs, setParagraphs] = useState<OcrParagraph[]>([]);
+  const [resultFor, setResultFor] = useState<string | null>(null);
   // Incremented per run and on image change, so a late result for a previous
   // image is dropped instead of overwriting the current one.
   const runGenerationRef = useRef(0);
@@ -72,6 +75,7 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
     setWords([]);
     setLines([]);
     setParagraphs([]);
+    setResultFor(null);
 
     let canvasCleanup: (() => void) | null = null;
 
@@ -123,6 +127,7 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       setWords(nextWords);
       setLines(nextLines);
       setParagraphs(nextParagraphs);
+      setResultFor(imageDataUrl);
       setStatus('done');
     } catch (e) {
       if (!isCurrent()) return;
@@ -143,5 +148,5 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
     };
   }, [run]);
 
-  return { status, error, words, lines, paragraphs, run };
+  return { status, error, words, lines, paragraphs, resultFor, run };
 }

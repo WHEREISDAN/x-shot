@@ -9,10 +9,9 @@ import {
   triggerFailedCapture,
   type PackagedApp,
 } from './packaged-app';
+import { REDO, UNDO, drawEllipse, stageEllipses } from './editor-actions';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
-const UNDO = 'ControlOrMeta+Z';
-const REDO = 'ControlOrMeta+Shift+Z';
 
 const NO_DETECTORS: PiiDetectors = {
   email: false,
@@ -33,12 +32,6 @@ const NO_DETECTORS: PiiDetectors = {
   tokens: false,
 };
 
-function stageEllipses(page: Page, screenshot: ScreenshotResult) {
-  return editorFor(page, screenshot).locator(
-    `svg[viewBox="0 0 ${screenshot.width} ${screenshot.height}"] ellipse`,
-  );
-}
-
 async function shownImageSource(
   page: Page,
   screenshot: ScreenshotResult,
@@ -46,21 +39,6 @@ async function shownImageSource(
   return editorFor(page, screenshot)
     .getByAltText('Screenshot')
     .getAttribute('src');
-}
-
-async function drawEllipse(page: Page, screenshot: ScreenshotResult) {
-  await page.getByRole('button', { name: 'Ellipse', exact: true }).click();
-  const stage = editorFor(page, screenshot).locator(
-    `svg[viewBox="0 0 ${screenshot.width} ${screenshot.height}"]`,
-  );
-  const box = await stage.boundingBox();
-  if (!box) throw new Error('Editor stage is not visible');
-  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, {
-    steps: 8,
-  });
-  await page.mouse.up();
 }
 
 /** Builds a second, different capture by resizing the first in main. */

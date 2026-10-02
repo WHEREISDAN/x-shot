@@ -58,12 +58,7 @@ const PERMISSION_MESSAGE =
 type CaptureListener = (result: CaptureResult) => void;
 
 let captureListener: CaptureListener | null = null;
-let autoCopyToClipboard = false;
-const invoke = jest.fn(async (channel: string) =>
-  channel === 'get-preferences'
-    ? { capture: { autoCopyToClipboard } }
-    : undefined,
-);
+const invoke = jest.fn(async () => undefined);
 
 function success(sessionId: string, imageDataUrl: string): CaptureResult {
   return {
@@ -94,7 +89,6 @@ const hasUndo = () => screen.getByTestId('has-undo');
 describe('App capture lifecycle', () => {
   beforeEach(() => {
     captureListener = null;
-    autoCopyToClipboard = false;
     invoke.mockClear();
     sessionStorage.setItem('xshot:migration-checked', 'true');
     (window as unknown as { electron: unknown }).electron = {
@@ -113,6 +107,7 @@ describe('App capture lifecycle', () => {
   afterEach(() => {
     delete (window as unknown as { electron?: unknown }).electron;
     sessionStorage.clear();
+    localStorage.clear();
   });
 
   it('keeps the current edit and shows the error when a capture fails', async () => {
@@ -175,11 +170,15 @@ describe('App capture lifecycle', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('auto-copies a successful capture when the preference is on', async () => {
-    autoCopyToClipboard = true;
-    render(<App />);
-    await emit(success('session-1', IMAGE_A));
+  it('removes PII masks saved by older versions on startup', () => {
+    localStorage.setItem('pii-masks:1000x420:1a2b3c', '[]');
+    localStorage.setItem('pii-masks:640x480:4d5e6f', '[{"x":1}]');
+    localStorage.setItem('xshot:pii', '{"autoDetect":true}');
 
-    expect(invoke).toHaveBeenCalledWith('copy-image', { dataUrl: IMAGE_A });
+    render(<App />);
+
+    expect(localStorage.getItem('pii-masks:1000x420:1a2b3c')).toBeNull();
+    expect(localStorage.getItem('pii-masks:640x480:4d5e6f')).toBeNull();
+    expect(localStorage.getItem('xshot:pii')).toBe('{"autoDetect":true}');
   });
 });

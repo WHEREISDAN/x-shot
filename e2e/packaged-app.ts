@@ -5,6 +5,7 @@ import {
   _electron as electron,
   expect,
   type ElectronApplication,
+  type Locator,
   type Page,
 } from '@playwright/test';
 import webpackPaths from '../.erb/configs/webpack.paths';
@@ -15,6 +16,23 @@ import type {
 } from '../src/shared/ipc-types';
 
 const PRODUCT_NAME = 'X-Shot';
+const OCR_FAILURE = 'OCR recognition failed';
+
+/** Main merges stored preferences one level deep, so sections may be partial. */
+export interface SeedPreferences {
+  capture?: Partial<AppPreferences['capture']>;
+  editor?: Partial<AppPreferences['editor']>;
+  export?: Partial<AppPreferences['export']>;
+  system?: Partial<AppPreferences['system']>;
+  pii?: Partial<AppPreferences['pii']>;
+  presentation?: Partial<AppPreferences['presentation']>;
+}
+
+export interface RenderedMask {
+  tag: string;
+  x: number;
+  y: number;
+}
 
 export interface PackagedApp {
   app: ElectronApplication;
@@ -59,7 +77,7 @@ export function findPackagedExecutable(
  * preferences, so the user's real preferences and caches are never touched.
  */
 export async function launchPackagedApp(
-  preferences: Partial<AppPreferences>,
+  preferences: SeedPreferences,
 ): Promise<PackagedApp> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xshot-smoke-'));
   fs.writeFileSync(
@@ -165,4 +183,51 @@ export async function triggerFailedCapture({
     }
     await expect(alert).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 30_000 });
+}
+
+export async function readPiiMasks(editor: Locator): Promise<RenderedMask[]> {
+  return editor.locator('[data-pii-tag]').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const shape = node.firstElementChild;
+      return {
+        tag: node.getAttribute('data-pii-tag') ?? '',
+        x: Number(shape?.getAttribute('x')),
+        y: Number(shape?.getAttribute('y')),
+      };
+    }),
+  );
+}
+
+/**
+ * Polls until the editor shows at least `count` PII masks. Fails fast with
+ * the renderer's error if OCR fails.
+ */
+export async function waitForPiiMasks(
+  packaged: PackagedApp,
+  editor: Locator,
+  count: number,
+  deadline: number = Date.now() + 120_000,
+): Promise<RenderedMask[]> {
+  const output = packaged.logs.join('');
+  const failureAt = output.indexOf(OCR_FAILURE);
+  if (failureAt >= 0) {
+    throw new Error(
+      `OCR failed in the packaged build:\n${output.slice(failureAt, failureAt + 600)}`,
+    );
+  }
+
+  const masks = await readPiiMasks(editor);
+  if (masks.length >= count) return masks;
+  if (Date.now() > deadline) {
+    throw new Error(
+      `Timed out waiting for ${count} PII masks; found ${masks.length}`,
+    );
+  }
+
+  await packaged.window.waitForTimeout(500);
+  return waitForPiiMasks(packaged, editor, count, deadline);
+}
+
+export function hasOcrFailure(packaged: PackagedApp): boolean {
+  return packaged.logs.join('').includes(OCR_FAILURE);
 }
