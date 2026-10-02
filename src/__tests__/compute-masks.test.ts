@@ -65,6 +65,14 @@ function masksFor(detectors: Partial<PiiDetectors>, texts: string[]) {
   return computePiiMasks({ ...NONE, ...detectors }, lines, words);
 }
 
+/** OCR results without line data, which takes the word-grouping fallback. */
+function masksForWordsOnly(detectors: Partial<PiiDetectors>, texts: string[]) {
+  const { words } = ocrLines(texts);
+  return computePiiMasks({ ...NONE, ...detectors }, [], words);
+}
+
+const tags = (masks: { tag: string }[]) => masks.map((m) => m.tag);
+
 describe('computePiiMasks', () => {
   it('boxes each detected value from its first to its last character', () => {
     const text = 'Mail jane@example.com or call 555-123-4567 today';
@@ -118,6 +126,35 @@ describe('computePiiMasks', () => {
       masksFor({ creditCard: true }, ['Card 4111 1111 1111 1112']),
     ).toEqual([]);
   });
+
+  it('masks a card number followed by an expiry date', () => {
+    const text = 'Card 4111 1111 1111 1111 12/25';
+    const expected = [
+      { ...spanOf(text, '4111 1111 1111 1111'), tag: 'pii-cc' },
+    ];
+    expect(masksFor({ creditCard: true }, [text])).toEqual(expected);
+    expect(masksForWordsOnly({ creditCard: true }, [text])).toEqual(expected);
+  });
+
+  it('never joins card digits from two lines', () => {
+    const texts = ['Ref 4111 1111', '1111 1111'];
+    expect(masksFor({ creditCard: true }, texts)).toEqual([]);
+    expect(masksForWordsOnly({ creditCard: true }, texts)).toEqual([]);
+  });
+
+  it.each([
+    ['ssn', 'SSN 123-45-6789', 'Order 123-45-6789', 'pii-ssn'],
+    ['dob', 'DOB 01/02/1990', 'Invoice 01/02/1990', 'pii-dob'],
+  ] as const)(
+    'masks %s values only on labelled lines, on every path',
+    (detector, labelled, unlabelled, tag) => {
+      const enabled = { [detector]: true };
+      expect(tags(masksFor(enabled, [labelled]))).toEqual([tag]);
+      expect(tags(masksForWordsOnly(enabled, [labelled]))).toEqual([tag]);
+      expect(masksFor(enabled, [unlabelled])).toEqual([]);
+      expect(masksForWordsOnly(enabled, [unlabelled])).toEqual([]);
+    },
+  );
 
   it('reports each value once per line', () => {
     const masks = masksFor({ email: true }, [
