@@ -152,6 +152,7 @@ export const EditorStage = memo(function EditorStage({
                   <img
                     ref={imgRef}
                     src={screenshotUrl}
+                    crossOrigin="anonymous"
                     alt="Screenshot"
                     style={{
                       position: 'absolute',
@@ -208,6 +209,7 @@ export const EditorStage = memo(function EditorStage({
             <img
               ref={imgRef}
               src={screenshotUrl}
+              crossOrigin="anonymous"
               alt="Screenshot"
               style={{
                 position: 'absolute',

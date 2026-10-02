@@ -1,12 +1,14 @@
 import path from 'path';
 import { expect, test, type Page } from '@playwright/test';
 import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
+import { captureAssetUrl } from '../src/shared/capture-asset';
 import {
   deliverScreenshot,
   editorFor,
   launchPackagedApp,
   pngDataUrl,
   triggerFailedCapture,
+  type FixtureCapture,
   type PackagedApp,
 } from './packaged-app';
 import { REDO, UNDO, drawEllipse, stageEllipses } from './editor-actions';
@@ -32,22 +34,24 @@ const NO_DETECTORS: PiiDetectors = {
   tokens: false,
 };
 
-async function shownImageSource(
+/** Whether the editor shows the stored capture `screenshot` names. */
+async function showsCapture(
   page: Page,
   screenshot: ScreenshotResult,
-): Promise<string | null> {
-  return editorFor(page, screenshot)
+): Promise<boolean> {
+  const src = await editorFor(page, screenshot)
     .getByAltText('Screenshot')
     .getAttribute('src');
+  return src === captureAssetUrl(screenshot.assetId);
 }
 
 /** Builds a second, different capture by resizing the first in main. */
 async function resizedCapture(
   { app }: PackagedApp,
-  source: ScreenshotResult,
+  source: FixtureCapture,
   width: number,
   sessionId: string,
-): Promise<ScreenshotResult> {
+): Promise<FixtureCapture> {
   const resized = await app.evaluate(
     ({ nativeImage }, input) => {
       const image = nativeImage
@@ -55,10 +59,10 @@ async function resizedCapture(
         .resize({ width: input.width });
       return { dataUrl: image.toDataURL(), size: image.getSize() };
     },
-    { dataUrl: source.imageDataUrl, width },
+    { dataUrl: source.fixtureDataUrl, width },
   );
   return {
-    imageDataUrl: resized.dataUrl,
+    fixtureDataUrl: resized.dataUrl,
     width: resized.size.width,
     height: resized.size.height,
     sessionId,
@@ -85,13 +89,13 @@ test.describe('capture result and editor lifecycle', () => {
 
   test('a failed capture keeps the edit; the next capture replaces it', async () => {
     const page = packaged.window;
-    const imageA: ScreenshotResult = {
-      imageDataUrl: pngDataUrl(FIXTURE_PATH),
+    const imageA: FixtureCapture = {
+      fixtureDataUrl: pngDataUrl(FIXTURE_PATH),
       width: 1000,
       height: 420,
       sessionId: 'lifecycle-a',
     };
-    await deliverScreenshot(packaged, imageA);
+    const deliveredA = await deliverScreenshot(packaged, imageA);
 
     await drawEllipse(page, imageA);
     await expect(stageEllipses(page, imageA)).toHaveCount(1);
@@ -107,19 +111,18 @@ test.describe('capture result and editor lifecycle', () => {
     await expect(page.getByRole('alert')).toBeVisible();
     await expect(editorFor(page, imageA)).toBeVisible();
     expect(
-      (await shownImageSource(page, imageA)) === imageA.imageDataUrl,
+      await showsCapture(page, deliveredA),
       'editor still shows image A after the failed capture',
     ).toBe(true);
     await expect(stageEllipses(page, imageA)).toHaveCount(1);
 
     const imageB = await resizedCapture(packaged, imageA, 600, 'lifecycle-b');
-    await deliverScreenshot(packaged, imageB);
+    const deliveredB = await deliverScreenshot(packaged, imageB);
 
     await expect(editorFor(page, imageA)).toHaveCount(0);
-    expect(
-      (await shownImageSource(page, imageB)) === imageB.imageDataUrl,
-      'editor shows image B',
-    ).toBe(true);
+    expect(await showsCapture(page, deliveredB), 'editor shows image B').toBe(
+      true,
+    );
     await expect(stageEllipses(page, imageB)).toHaveCount(0);
     await expect(page.getByRole('alert')).toHaveCount(0);
 

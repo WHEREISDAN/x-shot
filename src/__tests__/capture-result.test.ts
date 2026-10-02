@@ -71,9 +71,10 @@ describe('toCaptureFailure', () => {
 
 describe('toCaptureSuccess', () => {
   const screenshot = {
-    imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+    assetId: '0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4',
     width: 640,
     height: 480,
+    scaleFactor: 1,
     sessionId: 'session-7',
   };
 
@@ -82,12 +83,9 @@ describe('toCaptureSuccess', () => {
   });
 
   it('refuses an empty capture so it travels the failure path instead', () => {
-    expect(() =>
-      toCaptureSuccess({
-        ...screenshot,
-        imageDataUrl: 'data:image/png;base64,',
-      }),
-    ).toThrow('The captured image is empty.');
+    expect(() => toCaptureSuccess({ ...screenshot, assetId: '' })).toThrow(
+      'The captured image is empty.',
+    );
     expect(() => toCaptureSuccess({ ...screenshot, width: -160 })).toThrow();
   });
 });

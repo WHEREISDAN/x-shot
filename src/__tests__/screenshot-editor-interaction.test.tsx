@@ -4,9 +4,10 @@ import ScreenshotEditor from '../renderer/components/editor/ScreenshotEditor';
 import type { AppPreferences, ScreenshotResult } from '../shared/ipc-types';
 
 const SHOT: ScreenshotResult = {
-  imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+  assetId: '0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4',
   width: 400,
   height: 300,
+  scaleFactor: 1,
   sessionId: 'interaction',
 };
 

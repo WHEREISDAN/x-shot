@@ -1,6 +1,5 @@
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import type { ScreenshotResult } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
   editorFor,
@@ -8,6 +7,7 @@ import {
   pngDataUrl,
   type PackagedApp,
   type SeedPreferences,
+  type FixtureCapture,
 } from './packaged-app';
 import {
   editorToolbar,
@@ -16,8 +16,8 @@ import {
   stageSvg,
 } from './editor-actions';
 
-const FIXTURE: ScreenshotResult = {
-  imageDataUrl: pngDataUrl(path.join(__dirname, 'fixtures', 'ocr-pii.png')),
+const FIXTURE: FixtureCapture = {
+  fixtureDataUrl: pngDataUrl(path.join(__dirname, 'fixtures', 'ocr-pii.png')),
   width: 1000,
   height: 420,
   sessionId: 'interaction',

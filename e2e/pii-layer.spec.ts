@@ -1,6 +1,6 @@
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
+import type { PiiDetectors } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
   editorFor,
@@ -13,6 +13,7 @@ import {
   waitForPiiMasks,
   type PackagedApp,
   type SeedPreferences,
+  type FixtureCapture,
 } from './packaged-app';
 import {
   UNDO,
@@ -55,9 +56,9 @@ const CENSOR_ON: SeedPreferences = {
   pii: { autoDetect: true, defaultStyle: 'blur', detectors: DETECTORS },
 };
 
-function fixtureCapture(file: string, sessionId: string): ScreenshotResult {
+function fixtureCapture(file: string, sessionId: string): FixtureCapture {
   return {
-    imageDataUrl: pngDataUrl(path.join(FIXTURES, file)),
+    fixtureDataUrl: pngDataUrl(path.join(FIXTURES, file)),
     width: 1000,
     height: 420,
     sessionId,
@@ -177,13 +178,13 @@ test.describe('PII mask layer', () => {
     await packaged.window.waitForTimeout(1_000);
     const copies = await recordedCopies(packaged);
     expect(copies).toHaveLength(1);
-    expect(copies[0]).not.toBe(image.imageDataUrl);
+    expect(copies[0]).not.toBe(image.fixtureDataUrl);
 
     const brightness = async (dataUrl: string, region: typeof EMAIL_REGION) =>
       meanBrightness(current, dataUrl, region, image.width);
-    const rawEmail = await brightness(image.imageDataUrl, EMAIL_REGION);
+    const rawEmail = await brightness(image.fixtureDataUrl, EMAIL_REGION);
     const copiedEmail = await brightness(copies[0], EMAIL_REGION);
-    const rawText = await brightness(image.imageDataUrl, PLAIN_TEXT_REGION);
+    const rawText = await brightness(image.fixtureDataUrl, PLAIN_TEXT_REGION);
     const copiedText = await brightness(copies[0], PLAIN_TEXT_REGION);
 
     // The raw email is dark text on white; the copy covers it in black.

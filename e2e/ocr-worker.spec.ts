@@ -1,6 +1,6 @@
 import path from 'path';
 import { expect, test, type Page } from '@playwright/test';
-import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
+import type { PiiDetectors } from '../src/shared/ipc-types';
 import {
   countLogMarker,
   deliverScreenshot,
@@ -10,6 +10,7 @@ import {
   readPiiMasks,
   waitForPiiMasks,
   type PackagedApp,
+  type FixtureCapture,
 } from './packaged-app';
 import { selectTool } from './editor-actions';
 
@@ -40,9 +41,9 @@ function fixtureCapture(
   file: string,
   size: { width: number; height: number },
   sessionId: string,
-): ScreenshotResult {
+): FixtureCapture {
   return {
-    imageDataUrl: pngDataUrl(path.join(FIXTURES, file)),
+    fixtureDataUrl: pngDataUrl(path.join(FIXTURES, file)),
     ...size,
     sessionId,
   };

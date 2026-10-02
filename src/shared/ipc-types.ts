@@ -1,4 +1,5 @@
 // Shared IPC types used across main, preload, and renderer
+import { isCaptureAssetId, type CaptureAssetRef } from './capture-asset';
 
 export type CaptureSourceType = 'window' | 'screen';
 
@@ -151,10 +152,8 @@ export interface ScreenshotSelection {
   displayId?: number;
 }
 
-export interface ScreenshotResult {
-  imageDataUrl: string;
-  width: number;
-  height: number;
+/** A delivered capture; its pixels stay in main under `assetId`. */
+export interface ScreenshotResult extends CaptureAssetRef {
   x?: number;
   y?: number;
   sourceId?: string;
@@ -272,6 +271,10 @@ export interface IpcInvokes {
     req: undefined;
     res: boolean;
   };
+  'release-capture-asset': {
+    req: { assetId: string };
+    res: boolean;
+  };
   'copy-image': {
     req: CopyImageRequest;
     res: CopyImageResponse;
@@ -358,17 +361,14 @@ export function isScreenshotScreenRequest(
   return hasSourceId && hasDisplayId;
 }
 
-/** True when a capture carries real pixels, not an empty data URL. */
+/** True when a capture names a stored image with a real size. */
 export function hasCapturedImage(screenshot: ScreenshotResult): boolean {
-  const commaAt = screenshot.imageDataUrl.indexOf(',');
+  const positive = (n: number) => Number.isFinite(n) && n > 0;
   return (
-    screenshot.imageDataUrl.startsWith('data:image/') &&
-    commaAt >= 0 &&
-    commaAt < screenshot.imageDataUrl.length - 1 &&
-    Number.isFinite(screenshot.width) &&
-    screenshot.width > 0 &&
-    Number.isFinite(screenshot.height) &&
-    screenshot.height > 0
+    isCaptureAssetId(screenshot.assetId) &&
+    positive(screenshot.width) &&
+    positive(screenshot.height) &&
+    positive(screenshot.scaleFactor)
   );
 }
 

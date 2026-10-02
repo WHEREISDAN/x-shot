@@ -13,6 +13,9 @@ import type {
   ListCaptureSourcesResponse,
   ScreenshotResult,
 } from '../../shared/ipc-types';
+import type { CaptureAssetRef } from '../../shared/capture-asset';
+import { isCaptureAssetId } from '../../shared/capture-asset';
+import { captureAssets } from '../capture-assets';
 import {
   CaptureError,
   toCaptureFailure,
@@ -285,9 +288,45 @@ export default function registerScreenshotIpcHandlers() {
     return true;
   });
 
-  const sendCaptureResult = (win: BrowserWindow, result: CaptureResult) => {
-    win.webContents.send('capture-result', result);
+  // The editor discarded its capture.
+  ipcMain.handle('release-capture-asset', async (_event, req: unknown) => {
+    const { assetId } = (req as { assetId?: unknown }) || {};
+    return isCaptureAssetId(assetId) && captureAssets.release(assetId);
+  });
+
+  /** Keeps the capture in main; the editor gets only its id and size. */
+  const storeCapture = (
+    session: CaptureSessionRef,
+    image: NativeImage,
+    scaleFactor: number,
+  ): CaptureAssetRef => {
+    const { width, height } = image.getSize();
+    const asset = captureAssets.add({
+      sessionId: session.id,
+      png: image.toPNG(),
+      width,
+      height,
+      scaleFactor,
+    });
+    return { assetId: asset.assetId, width, height, scaleFactor };
   };
+
+  // The editor shows one capture at a time, so a delivered capture releases
+  // the one it replaces.
+  const sendCaptureResult = (
+    win: BrowserWindow,
+    session: CaptureSessionRef,
+    result: CaptureResult,
+  ) => {
+    win.webContents.send('capture-result', result);
+    captureAssets.releaseAllExcept(session.id);
+  };
+
+  const scaleFactorOf = (displayId: string | number | undefined) =>
+    (
+      screen.getAllDisplays().find((d) => String(d.id) === String(displayId)) ??
+      screen.getPrimaryDisplay()
+    ).scaleFactor;
 
   const deliverWindowCapture = async (
     session: CaptureSessionRef,
@@ -310,11 +349,15 @@ export default function registerScreenshotIpcHandlers() {
       throw new CaptureError('source-unavailable', 'Window source not found');
     }
     const { thumbnail, name } = source;
-    const size = thumbnail.getSize();
+    // desktopCapturer does not report a window's display, so the primary
+    // display's scale is the best estimate.
+    const asset = storeCapture(
+      session,
+      thumbnail,
+      screen.getPrimaryDisplay().scaleFactor,
+    );
     const result = toCaptureSuccess({
-      imageDataUrl: thumbnail.toDataURL(),
-      width: size.width,
-      height: size.height,
+      ...asset,
       sourceId: source.id,
       windowTitle: name,
       isWindowCapture: true,
@@ -324,10 +367,10 @@ export default function registerScreenshotIpcHandlers() {
     markCaptureStage('editor-sent', {
       captureKind: 'window',
       sourceId: source.id,
-      outputWidth: size.width,
-      outputHeight: size.height,
+      outputWidth: asset.width,
+      outputHeight: asset.height,
     });
-    sendCaptureResult(win, result);
+    sendCaptureResult(win, session, result);
   };
 
   const deliverScreenCapture = async (
@@ -361,12 +404,13 @@ export default function registerScreenshotIpcHandlers() {
       throw new CaptureError('source-unavailable', 'Screen source not found');
     }
 
-    const { thumbnail } = source;
-    const size = thumbnail.getSize();
+    const asset = storeCapture(
+      session,
+      source.thumbnail,
+      scaleFactorOf(source.display_id || request.displayId),
+    );
     const result = toCaptureSuccess({
-      imageDataUrl: thumbnail.toDataURL(),
-      width: size.width,
-      height: size.height,
+      ...asset,
       sourceId: source.id,
       displayId: source.display_id || null,
       isDisplayCapture: true,
@@ -376,10 +420,10 @@ export default function registerScreenshotIpcHandlers() {
     markCaptureStage('editor-sent', {
       captureKind: 'screen',
       sourceId: source.id,
-      outputWidth: size.width,
-      outputHeight: size.height,
+      outputWidth: asset.width,
+      outputHeight: asset.height,
     });
-    sendCaptureResult(win, result);
+    sendCaptureResult(win, session, result);
   };
 
   const deliverSelectionCapture = async (
@@ -432,11 +476,13 @@ export default function registerScreenshotIpcHandlers() {
 
     const cropRect = computeCropRect(data, snapshot);
     if (!cropRect) throw new CaptureError('empty-selection', 'Empty selection');
-    const croppedImage = snapshot.image.crop(cropRect);
+    const asset = storeCapture(
+      session,
+      snapshot.image.crop(cropRect),
+      snapshot.scaleFactor,
+    );
     const result = toCaptureSuccess({
-      imageDataUrl: croppedImage.toDataURL(),
-      width: cropRect.width,
-      height: cropRect.height,
+      ...asset,
       x: data.x,
       y: data.y,
       sourceId: String(id),
@@ -471,10 +517,10 @@ export default function registerScreenshotIpcHandlers() {
       frameWidth: snapshot.width,
       frameHeight: snapshot.height,
       cropRect,
-      outputWidth: cropRect.width,
-      outputHeight: cropRect.height,
+      outputWidth: asset.width,
+      outputHeight: asset.height,
     });
-    sendCaptureResult(win, result);
+    sendCaptureResult(win, session, result);
     releaseDisplaySnapshots();
   };
 
@@ -496,6 +542,7 @@ export default function registerScreenshotIpcHandlers() {
     } catch (error) {
       log.error('Error capturing screenshot:', error);
       releaseDisplaySnapshots();
+      captureAssets.releaseSession(session.id);
       await sendCaptureFailure(session, error).catch((sendError) =>
         log.error('Failed to report capture failure:', sendError),
       );

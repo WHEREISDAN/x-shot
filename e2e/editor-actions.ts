@@ -1,26 +1,21 @@
 import type { Page } from '@playwright/test';
-import type { ScreenshotResult } from '../src/shared/ipc-types';
-import { editorFor } from './packaged-app';
+import { editorFor, type CaptureView } from './packaged-app';
 
 export const UNDO = 'ControlOrMeta+Z';
 export const REDO = 'ControlOrMeta+Shift+Z';
 
-export function stageSvg(page: Page, screenshot: ScreenshotResult) {
+export function stageSvg(page: Page, screenshot: CaptureView) {
   return editorFor(page, screenshot).locator(
     `svg[viewBox="0 0 ${screenshot.width} ${screenshot.height}"]`,
   );
 }
 
 /** Committed shapes of one type; a shape still being drawn is excluded. */
-export function stageShapes(
-  page: Page,
-  screenshot: ScreenshotResult,
-  type: string,
-) {
+export function stageShapes(page: Page, screenshot: CaptureView, type: string) {
   return stageSvg(page, screenshot).locator(`[data-shape-type="${type}"]`);
 }
 
-export function stageEllipses(page: Page, screenshot: ScreenshotResult) {
+export function stageEllipses(page: Page, screenshot: CaptureView) {
   return stageShapes(page, screenshot, 'ellipse');
 }
 
@@ -34,7 +29,7 @@ export async function selectTool(page: Page, name: string) {
 }
 
 /** Draws an ellipse across the middle of the stage with the Ellipse tool. */
-export async function drawEllipse(page: Page, screenshot: ScreenshotResult) {
+export async function drawEllipse(page: Page, screenshot: CaptureView) {
   await selectTool(page, 'Ellipse');
   const box = await stageSvg(page, screenshot).boundingBox();
   if (!box) throw new Error('Editor stage is not visible');

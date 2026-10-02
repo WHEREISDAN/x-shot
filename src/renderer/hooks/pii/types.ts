@@ -46,7 +46,7 @@ export interface PiiPreferencesState {
 }
 
 export interface UsePiiMaskingParams {
-  screenshot: { imageDataUrl: string; width: number; height: number };
+  screenshot: { imageUrl: string; width: number; height: number };
   preferences: PiiPreferencesState;
   ocr: {
     status: OcrStatus;

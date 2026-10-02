@@ -21,6 +21,8 @@ import {
 import { refreshApplicationMenu } from './menu';
 import registerFileIpcHandlers from './ipc/files';
 import registerScreenPermissionHandlers from './screen-permission';
+import { handleAssetProtocol, registerAssetScheme } from './asset-protocol';
+import installE2eHooks from './e2e-hooks';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
 import registerWindowIpcHandlers, {
   setupWindowStateEvents,
@@ -70,6 +72,9 @@ ipcMain.on('log', (_event, payload: LogMessage) => {
       log.info(prefix + message, meta ?? '');
   }
 });
+registerAssetScheme();
+installE2eHooks();
+
 app.on('window-all-closed', () => {
   if (!isTrayVisible()) {
     app.quit();
@@ -79,6 +84,7 @@ app.on('window-all-closed', () => {
 app
   .whenReady()
   .then(async () => {
+    handleAssetProtocol();
     // Register IPC handlers first; this also configures the coordinator.
     registerFileIpcHandlers();
     registerScreenshotIpcHandlers();

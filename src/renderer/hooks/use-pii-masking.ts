@@ -54,7 +54,7 @@ export function usePiiMasking({
 
   // OCR results only count for the image they were computed from.
   const ocrDone =
-    ocr.status === 'done' && ocr.resultFor === screenshot.imageDataUrl;
+    ocr.status === 'done' && ocr.resultFor === screenshot.imageUrl;
 
   const autoMasks = useMemo<PiiMask[]>(() => {
     if (!ocrDone || !detectors) return [];
