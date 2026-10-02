@@ -1,8 +1,9 @@
 import path from 'path';
-import { expect, test } from '@playwright/test';
-import type { PiiDetectors } from '../src/shared/ipc-types';
+import { expect, test, type Locator } from '@playwright/test';
+import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
+  editorFor,
   launchPackagedApp,
   pngDataUrl,
   type PackagedApp,
@@ -36,8 +37,20 @@ const DETECTORS: PiiDetectors = {
   tokens: false,
 };
 
+function fixtureCapture(sessionId: string): ScreenshotResult {
+  return {
+    imageDataUrl: pngDataUrl(FIXTURE_PATH),
+    ...FIXTURE_SIZE,
+    x: 0,
+    y: 0,
+    sourceId: 'smoke-fixture',
+    sessionId,
+  };
+}
+
 async function waitForPiiMaskTops(
   packaged: PackagedApp,
+  editor: Locator,
   count: number,
   deadline: number,
 ): Promise<number[]> {
@@ -49,7 +62,7 @@ async function waitForPiiMaskTops(
     );
   }
 
-  const tops = await packaged.window
+  const tops = await editor
     .locator('svg foreignObject')
     .evaluateAll((nodes) =>
       nodes.map((node) => Number(node.getAttribute('y'))),
@@ -62,7 +75,27 @@ async function waitForPiiMaskTops(
   }
 
   await packaged.window.waitForTimeout(500);
-  return waitForPiiMaskTops(packaged, count, deadline);
+  return waitForPiiMaskTops(packaged, editor, count, deadline);
+}
+
+async function expectFixtureMasked(
+  packaged: PackagedApp,
+  screenshot: ScreenshotResult,
+): Promise<void> {
+  const maskTops = await waitForPiiMaskTops(
+    packaged,
+    editorFor(packaged.window, screenshot),
+    PII_MASK_TOPS.length,
+    Date.now() + OCR_TIMEOUT_MS,
+  );
+
+  PII_MASK_TOPS.forEach((expectedTop) => {
+    expect(
+      maskTops.some((top) => Math.abs(top - expectedTop) <= MASK_TOP_TOLERANCE),
+      `expected a mask near y=${expectedTop}; masks at ${maskTops.join(', ')}`,
+    ).toBe(true);
+  });
+  expect(packaged.logs.join('')).not.toContain(OCR_FAILURE);
 }
 
 test.describe('packaged OCR and PII masking', () => {
@@ -80,29 +113,18 @@ test.describe('packaged OCR and PII masking', () => {
   });
 
   test('masks the email, phone number and IP address in a capture', async () => {
-    await deliverScreenshot(packaged, {
-      imageDataUrl: pngDataUrl(FIXTURE_PATH),
-      ...FIXTURE_SIZE,
-      x: 0,
-      y: 0,
-      sourceId: 'smoke-fixture',
-      sessionId: 'smoke-ocr',
-    });
+    const capture = fixtureCapture('smoke-ocr');
+    await deliverScreenshot(packaged, capture);
+    await expectFixtureMasked(packaged, capture);
+  });
 
-    const maskTops = await waitForPiiMaskTops(
-      packaged,
-      PII_MASK_TOPS.length,
-      Date.now() + OCR_TIMEOUT_MS,
-    );
+  test('runs OCR again for a pixel-identical capture', async () => {
+    const first = fixtureCapture('smoke-ocr-first');
+    await deliverScreenshot(packaged, first);
+    await expectFixtureMasked(packaged, first);
 
-    PII_MASK_TOPS.forEach((expectedTop) => {
-      expect(
-        maskTops.some(
-          (top) => Math.abs(top - expectedTop) <= MASK_TOP_TOLERANCE,
-        ),
-        `expected a mask near y=${expectedTop}; masks at ${maskTops.join(', ')}`,
-      ).toBe(true);
-    });
-    expect(packaged.logs.join('')).not.toContain(OCR_FAILURE);
+    const repeat = fixtureCapture('smoke-ocr-repeat');
+    await deliverScreenshot(packaged, repeat);
+    await expectFixtureMasked(packaged, repeat);
   });
 });

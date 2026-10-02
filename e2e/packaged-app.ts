@@ -8,7 +8,11 @@ import {
   type Page,
 } from '@playwright/test';
 import webpackPaths from '../.erb/configs/webpack.paths';
-import type { AppPreferences, ScreenshotResult } from '../src/shared/ipc-types';
+import type {
+  AppPreferences,
+  CaptureResult,
+  ScreenshotResult,
+} from '../src/shared/ipc-types';
 
 const PRODUCT_NAME = 'X-Shot';
 
@@ -94,26 +98,71 @@ export function pngDataUrl(filePath: string): string {
   return `data:image/png;base64,${fs.readFileSync(filePath).toString('base64')}`;
 }
 
+export function editorFor(page: Page, screenshot: ScreenshotResult) {
+  return page.locator(`[data-session-id="${screenshot.sessionId}"]`);
+}
+
+async function sendCaptureResult(
+  app: ElectronApplication,
+  result: CaptureResult,
+): Promise<void> {
+  await app.evaluate(({ BrowserWindow }, payload) => {
+    const editor = BrowserWindow.getAllWindows().find(
+      (win) => !win.webContents.getURL().includes('#/'),
+    );
+    if (!editor) throw new Error('Main window not found');
+    editor.webContents.send('capture-result', payload);
+  }, result);
+}
+
 /**
- * Sends a capture result through the same main-to-editor channel a real
- * capture uses. Retries until the editor mounts, because the renderer only
- * subscribes after its first render.
+ * Delivers a successful capture through the same main-to-editor channel a
+ * real capture uses. Retries until the editor shows this session, because the
+ * renderer only subscribes after its first render.
  */
 export async function deliverScreenshot(
-  { app, window }: PackagedApp,
-  payload: ScreenshotResult,
+  { app, window: page }: PackagedApp,
+  screenshot: ScreenshotResult,
 ): Promise<void> {
-  await window.getByText('Waiting for screenshot…').waitFor();
   await expect(async () => {
-    await app.evaluate(({ BrowserWindow }, data) => {
-      const editor = BrowserWindow.getAllWindows().find(
-        (win) => !win.webContents.getURL().includes('#/'),
-      );
-      if (!editor) throw new Error('Main window not found');
-      editor.webContents.send('screenshot-data', data);
-    }, payload);
-    await expect(window.getByText('Censor PII')).toBeVisible({
-      timeout: 2_000,
-    });
+    await sendCaptureResult(app, { ok: true, screenshot });
+    await expect(editorFor(page, screenshot)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 20_000 });
+}
+
+/**
+ * Starts a real capture and confirms a window that does not exist, so main
+ * reports a genuine failure through its capture-result path.
+ */
+export async function triggerFailedCapture({
+  app,
+  window: page,
+}: PackagedApp): Promise<void> {
+  await page.evaluate(() =>
+    window.electron.ipcRenderer.sendMessage('screenshot-capture', undefined),
+  );
+
+  const isOverlay = (candidate: Page) =>
+    candidate.url().includes('#/screenshot');
+  await expect
+    .poll(() => app.windows().some(isOverlay), { timeout: 30_000 })
+    .toBe(true);
+  const overlay = app.windows().find(isOverlay) as Page;
+  await overlay.waitForLoadState('domcontentloaded');
+
+  // The coordinator ignores a confirmation until the overlays are ready, so
+  // resend until the editor reports the failure.
+  const alert = page.getByRole('alert');
+  await expect(async () => {
+    if (!overlay.isClosed()) {
+      await overlay
+        .evaluate(() =>
+          window.electron.ipcRenderer.sendMessage('screenshot-window', {
+            sourceId: 'window:0:x-shot-missing',
+          }),
+        )
+        .catch(() => {});
+    }
+    await expect(alert).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
