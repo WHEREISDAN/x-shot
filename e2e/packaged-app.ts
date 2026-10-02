@@ -236,3 +236,52 @@ export function hasOcrFailure(packaged: PackagedApp): boolean {
 export function countLogMarker(packaged: PackagedApp, marker: string): number {
   return packaged.logs.join('').split(marker).length - 1;
 }
+
+/** Replaces main's clipboard handler so copies are recorded, not written. */
+export async function recordCopies({ app }: PackagedApp): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    const store = global as unknown as { xshotCopies: string[] };
+    store.xshotCopies = [];
+    ipcMain.removeHandler('copy-image');
+    ipcMain.handle('copy-image', (_event, request: { dataUrl: string }) => {
+      store.xshotCopies.push(request.dataUrl);
+      return { ok: true };
+    });
+  });
+}
+
+export async function recordedCopies({ app }: PackagedApp): Promise<string[]> {
+  return app.evaluate(
+    () => (global as unknown as { xshotCopies: string[] }).xshotCopies,
+  );
+}
+
+/** Mean RGB brightness (0-255) of a region given in source-image pixels. */
+export async function meanBrightness(
+  { app }: PackagedApp,
+  dataUrl: string,
+  region: { x: number; y: number; width: number; height: number },
+  sourceWidth: number,
+): Promise<number> {
+  return app.evaluate(
+    ({ nativeImage }, input) => {
+      const image = nativeImage.createFromDataURL(input.dataUrl);
+      const { width } = image.getSize();
+      const scale = width / input.sourceWidth;
+      const bitmap = image.toBitmap();
+      const x0 = Math.round(input.region.x * scale);
+      const y0 = Math.round(input.region.y * scale);
+      const x1 = Math.round((input.region.x + input.region.width) * scale);
+      const y1 = Math.round((input.region.y + input.region.height) * scale);
+      let total = 0;
+      for (let y = y0; y < y1; y += 1) {
+        for (let x = x0; x < x1; x += 1) {
+          const i = (y * width + x) * 4;
+          total += (bitmap[i] + bitmap[i + 1] + bitmap[i + 2]) / 3;
+        }
+      }
+      return total / ((x1 - x0) * (y1 - y0));
+    },
+    { dataUrl, region, sourceWidth },
+  );
+}
