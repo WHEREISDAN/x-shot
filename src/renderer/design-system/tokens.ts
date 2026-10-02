@@ -2,6 +2,7 @@
  * Design Tokens for X-Shot
  * Centralized design system values inspired by shadcn/ui
  */
+import type { CSSProperties } from 'react';
 
 // Color System
 export const colors = {
@@ -171,6 +172,17 @@ export const shadows = {
 } as const;
 
 // Z-Index Scale
+/**
+ * A solid border as separate width, style and color, so a hover, focus or
+ * active style can change just the color. Mixed with the `border`
+ * shorthand, React clears that color when the state ends.
+ */
+export const solidBorder = (color: string, width = '1px'): CSSProperties => ({
+  borderWidth: width,
+  borderStyle: 'solid',
+  borderColor: color,
+});
+
 export const zIndex = {
   hide: -1,
   auto: 'auto',

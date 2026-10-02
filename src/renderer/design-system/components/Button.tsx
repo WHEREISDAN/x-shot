@@ -1,5 +1,11 @@
 import React from 'react';
-import { colors, spacing, borderRadius, transitions } from '../tokens';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  transitions,
+  solidBorder,
+} from '../tokens';
 
 // Button variant types following shadcn/ui patterns
 export type ButtonVariant =
@@ -28,37 +34,37 @@ const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
   primary: {
     background: colors.primary.DEFAULT,
     color: colors.text.primary,
-    border: `1px solid ${colors.primary.DEFAULT}`,
+    ...solidBorder(colors.primary.DEFAULT),
   },
 
   secondary: {
     background: colors.surface.default,
     color: colors.text.primary,
-    border: `1px solid ${colors.border.emphasis}`,
+    ...solidBorder(colors.border.emphasis),
   },
 
   ghost: {
     background: 'transparent',
     color: colors.text.primary,
-    border: '1px solid transparent',
+    ...solidBorder('transparent'),
   },
 
   destructive: {
     background: colors.error,
     color: colors.text.primary,
-    border: `1px solid ${colors.error}`,
+    ...solidBorder(colors.error),
   },
 
   outline: {
     background: 'transparent',
     color: colors.text.primary,
-    border: `1px solid ${colors.border.emphasis}`,
+    ...solidBorder(colors.border.emphasis),
   },
 
   link: {
     background: 'transparent',
     color: colors.primary.DEFAULT,
-    border: 'none',
+    borderStyle: 'none',
     textDecoration: 'underline',
     padding: '0',
   },
