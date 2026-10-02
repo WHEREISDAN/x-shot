@@ -38,16 +38,27 @@ const BottomToolbar = memo(function BottomToolbar({
   textSelectLevel,
   setTextSelectLevel,
 }: BottomToolbarProps) {
+  // Centered without translateX: a fixed box at left 50% may only grow to
+  // half the window, which would wrap far too early. In narrow windows the
+  // tools wrap onto a second row instead of running off-screen.
   const containerStyles: React.CSSProperties = {
     position: 'fixed',
-    left: '50%',
+    left: 0,
+    right: 0,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    width: 'fit-content',
+    maxWidth: `calc(100vw - ${spacing[8]})`,
+    boxSizing: 'border-box',
     bottom: spacing[6],
-    transform: 'translateX(-50%)',
-    zIndex: zIndex.dropdown,
+    // Above the presentation panel, so every tool stays clickable.
+    zIndex: zIndex.fixed,
     background: colors.background.glass,
     borderRadius: borderRadius['4xl'],
     padding: `${spacing[3]} ${spacing[4]}`,
     display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     alignItems: 'center',
     gap: spacing[3],
     border: `1px solid ${colors.border.default}`,
@@ -107,7 +118,7 @@ const BottomToolbar = memo(function BottomToolbar({
   ];
 
   return (
-    <div style={containerStyles}>
+    <div role="toolbar" aria-label="Editor tools" style={containerStyles}>
       <ToolButton
         label="Select"
         active={activeTool === 'select'}
