@@ -51,6 +51,7 @@ export async function exportDomToDataUrl({
   type DomToImageOptions = {
     width?: number;
     height?: number;
+    scale?: number;
     style?: Record<string, string>;
     bgcolor?: string;
     quality?: number;
@@ -58,12 +59,16 @@ export async function exportDomToDataUrl({
     filter?: (node: Node) => boolean;
   };
 
+  // `width` and `height` resize the cloned element itself, so they stay at
+  // its layout size; `scale` enlarges only the output canvas. Scaling the
+  // clone as well laid the background out at twice the size and kept only
+  // its top-left quarter. The transform reset drops the editor's pan/zoom.
   const options: DomToImageOptions = {
-    width: element.offsetWidth * finalScale,
-    height: element.offsetHeight * finalScale,
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+    scale: finalScale,
     style: {
-      transform: `scale(${finalScale})`,
-      transformOrigin: 'top left',
+      transform: 'none',
     },
     quality: 0.92,
     cacheBust: true,
