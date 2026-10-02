@@ -121,6 +121,7 @@ test.describe('binary capture transport', () => {
       records.some((r) => r.direction === direction && r.channel === channel);
     expect(seen('reply', 'get-display-snapshot')).toBe(true);
     expect(seen('reply', 'list-capture-sources')).toBe(true);
+    expect(seen('reply', 'get-preferences')).toBe(true);
     expect(seen('send', 'screenshot-window')).toBe(true);
     expect(seen('to-renderer', 'capture-result')).toBe(true);
     expect(seen('invoke', 'copy-image')).toBe(true);
@@ -129,7 +130,9 @@ test.describe('binary capture transport', () => {
   });
 
   test('ten captures in a row keep one capture in main memory', async () => {
-    packaged = await launchPackagedApp(PREFERENCES, ['--js-flags=--expose-gc']);
+    packaged = await launchPackagedApp(PREFERENCES, {
+      args: ['--js-flags=--expose-gc'],
+    });
     const current = packaged;
     const size = { width: 1920, height: 1080 };
     await stubScreenAccess(current, 'granted');

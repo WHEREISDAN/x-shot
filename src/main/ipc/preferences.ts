@@ -2,13 +2,18 @@ import { app, ipcMain } from 'electron';
 import log from 'electron-log';
 import type {
   AppPreferences,
-  SetPreferencesRequest,
+  ImportBackgroundResponse,
+  PreferencesUpdate,
+  SetPreferencesResponse,
 } from '../../shared/ipc-types';
+import type { HotkeyFailure } from '../hotkeys';
 import {
   loadPreferences,
-  updatePreferences,
   resetPreferences,
+  saveBackgroundImage,
+  updatePreferences,
 } from '../preferences';
+import { isPlainObject, isPreferencesUpdate } from '../preferences-schema';
 import { createPreferencesWindow } from '../windows';
 
 ipcMain.on('open-preferences', async () => {
@@ -19,33 +24,26 @@ ipcMain.on('open-preferences', async () => {
   }
 });
 
-function isPreferencesRequest(value: unknown): value is SetPreferencesRequest {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { preferences?: unknown }).preferences === 'object' &&
-    (value as { preferences?: unknown }).preferences !== null &&
-    !Array.isArray((value as { preferences?: unknown }).preferences)
-  );
+/** Shortcut slots an update changes; undefined slots stay as they are. */
+export interface HotkeyChanges {
+  main?: string;
+  delay3?: string | null;
+  delay5?: string | null;
+  recapture?: string | null;
 }
 
-// Callback for delayed hotkeys changes
-let onDelayHotkeysChange:
-  | ((payload: {
-      hotkeyDelay3?: string | null;
-      hotkeyDelay5?: string | null;
-      hotkeyRecapture?: string | null;
-    }) => void)
-  | null = null;
+export interface HotkeysHandler {
+  /** Registers the changed shortcuts; returns the ones that were taken. */
+  apply: (changes: HotkeyChanges) => HotkeyFailure[];
+  /** Runs once changed shortcuts are saved, e.g. to refresh menus. */
+  saved: () => void;
+}
 
-// Callback for when hotkey changes
-let onHotkeyChange: ((newHotkey: string) => void) | null = null;
-
-// Callback for when tray visibility changes
+let hotkeysHandler: HotkeysHandler | null = null;
 let onTrayVisibilityChange: ((show: boolean) => void) | null = null;
 
-export function setHotkeyChangeCallback(callback: (newHotkey: string) => void) {
-  onHotkeyChange = callback;
+export function setHotkeysHandler(handler: HotkeysHandler) {
+  hotkeysHandler = handler;
 }
 
 export function setTrayVisibilityChangeCallback(
@@ -54,18 +52,100 @@ export function setTrayVisibilityChangeCallback(
   onTrayVisibilityChange = callback;
 }
 
-export function setDelayHotkeysChangeCallback(
-  callback: (payload: {
-    hotkeyDelay3?: string | null;
-    hotkeyDelay5?: string | null;
-    hotkeyRecapture?: string | null;
-  }) => void,
-) {
-  onDelayHotkeysChange = callback;
+const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+/** The shortcuts an update really changes, compared with the current ones. */
+function hotkeyChanges(
+  updates: PreferencesUpdate,
+  current: AppPreferences,
+): HotkeyChanges {
+  const capture = updates.capture ?? {};
+  const changed = <K extends keyof AppPreferences['capture']>(key: K) =>
+    capture[key] !== undefined && capture[key] !== current.capture[key];
+  return {
+    ...(changed('hotkey') && capture.hotkey ? { main: capture.hotkey } : {}),
+    ...(changed('hotkeyDelay3') ? { delay3: capture.hotkeyDelay3 } : {}),
+    ...(changed('hotkeyDelay5') ? { delay5: capture.hotkeyDelay5 } : {}),
+    ...(changed('hotkeyRecapture')
+      ? { recapture: capture.hotkeyRecapture }
+      : {}),
+  };
+}
+
+/** The same slots as `changes`, set back to their current values. */
+function previousHotkeys(
+  changes: HotkeyChanges,
+  current: AppPreferences,
+): HotkeyChanges {
+  const { capture } = current;
+  return {
+    ...('main' in changes ? { main: capture.hotkey } : {}),
+    ...('delay3' in changes ? { delay3: capture.hotkeyDelay3 ?? null } : {}),
+    ...('delay5' in changes ? { delay5: capture.hotkeyDelay5 ?? null } : {}),
+    ...('recapture' in changes
+      ? { recapture: capture.hotkeyRecapture ?? null }
+      : {}),
+  };
+}
+
+function conflictMessage(failures: HotkeyFailure[]): string {
+  const keys = failures.map((failure) => failure.accelerator).join(', ');
+  return `The shortcut ${keys} is already in use by another app or X-Shot shortcut. Your previous shortcut still works.`;
+}
+
+/**
+ * Applies a preferences update. Shortcuts are registered first, so one that
+ * is taken is reported and nothing is saved; the update is saved before any
+ * other system setting changes.
+ */
+export async function applyPreferencesUpdate(
+  request: unknown,
+): Promise<SetPreferencesResponse> {
+  const updates = isPlainObject(request) ? request.preferences : undefined;
+  if (!isPreferencesUpdate(updates)) {
+    return { ok: false, error: 'Invalid preferences request.' };
+  }
+  const update = updates as PreferencesUpdate;
+  const current = await loadPreferences();
+  const changes = hotkeyChanges(update, current);
+  const hasHotkeyChanges = Object.keys(changes).length > 0;
+
+  if (hasHotkeyChanges && hotkeysHandler) {
+    const failures = hotkeysHandler.apply(changes);
+    if (failures.length > 0) {
+      return { ok: false, error: conflictMessage(failures) };
+    }
+  }
+
+  let preferences: AppPreferences;
+  try {
+    preferences = await updatePreferences(update);
+  } catch (error) {
+    log.error('Failed to save preferences:', error);
+    if (hasHotkeyChanges) {
+      hotkeysHandler?.apply(previousHotkeys(changes, current));
+    }
+    return {
+      ok: false,
+      error: `Your preferences could not be saved: ${messageOf(error)}`,
+    };
+  }
+
+  if (hasHotkeyChanges) hotkeysHandler?.saved();
+  if (update.system?.launchAtStartup !== undefined) {
+    app.setLoginItemSettings({
+      openAtLogin: update.system.launchAtStartup,
+      name: 'X-Shot',
+    });
+  }
+  if (update.system?.showInTray !== undefined) {
+    onTrayVisibilityChange?.(update.system.showInTray);
+  }
+  return { ok: true, preferences };
 }
 
 export default function registerPreferencesIpcHandlers() {
-  // Get current preferences
   ipcMain.handle('get-preferences', async (): Promise<AppPreferences> => {
     try {
       return await loadPreferences();
@@ -75,60 +155,28 @@ export default function registerPreferencesIpcHandlers() {
     }
   });
 
-  // Update preferences
   ipcMain.handle(
     'set-preferences',
-    async (_event, request: SetPreferencesRequest): Promise<boolean> => {
+    (_event, request: unknown): Promise<SetPreferencesResponse> =>
+      applyPreferencesUpdate(request),
+  );
+
+  ipcMain.handle(
+    'import-background-image',
+    async (_event, request: unknown): Promise<ImportBackgroundResponse> => {
+      const bytes = isPlainObject(request) ? request.bytes : undefined;
+      if (!(bytes instanceof Uint8Array)) {
+        return { ok: false, error: 'No image was given.' };
+      }
       try {
-        if (!isPreferencesRequest(request)) {
-          throw new Error('Invalid preferences request');
-        }
-        await updatePreferences(request.preferences);
-
-        // Handle special system preferences that require immediate action
-        if (request.preferences.system?.launchAtStartup !== undefined) {
-          app.setLoginItemSettings({
-            openAtLogin: request.preferences.system.launchAtStartup,
-            name: 'X-Shot',
-          });
-        }
-
-        // Handle hotkey changes
-        if (request.preferences.capture?.hotkey && onHotkeyChange) {
-          onHotkeyChange(request.preferences.capture.hotkey);
-        }
-        if (
-          (request.preferences.capture?.hotkeyDelay3 !== undefined ||
-            request.preferences.capture?.hotkeyDelay5 !== undefined ||
-            request.preferences.capture?.hotkeyRecapture !== undefined) &&
-          onDelayHotkeysChange
-        ) {
-          onDelayHotkeysChange({
-            hotkeyDelay3: request.preferences.capture?.hotkeyDelay3 ?? null,
-            hotkeyDelay5: request.preferences.capture?.hotkeyDelay5 ?? null,
-            hotkeyRecapture:
-              request.preferences.capture?.hotkeyRecapture ?? null,
-          });
-        }
-
-        // Handle tray visibility changes
-        if (
-          request.preferences.system?.showInTray !== undefined &&
-          onTrayVisibilityChange
-        ) {
-          onTrayVisibilityChange(request.preferences.system.showInTray);
-        }
-
-        log.info('Preferences updated successfully');
-        return true;
+        return { ok: true, image: await saveBackgroundImage(bytes) };
       } catch (error) {
-        log.error('Failed to set preferences:', error);
-        return false;
+        log.warn('Failed to import a background image:', error);
+        return { ok: false, error: messageOf(error) };
       }
     },
   );
 
-  // Open preferences window
   ipcMain.handle('open-preferences-window', async (): Promise<boolean> => {
     try {
       await createPreferencesWindow();
@@ -139,7 +187,6 @@ export default function registerPreferencesIpcHandlers() {
     }
   });
 
-  // Reset preferences to defaults
   ipcMain.handle('reset-preferences', async (): Promise<AppPreferences> => {
     try {
       const defaultPrefs = await resetPreferences();

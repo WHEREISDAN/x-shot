@@ -4,6 +4,8 @@
 import { updateRegisteredHotkeys } from '../main/hotkeys';
 
 const mockRegistered = new Map<string, () => void>();
+// Shortcuts another app holds; registering them fails.
+const mockTakenElsewhere = new Set<string>();
 
 function throwIfUnparseable(accelerator: string): void {
   if (accelerator.includes('NotAKey')) {
@@ -19,6 +21,7 @@ jest.mock('electron', () => ({
     register: (accelerator: string, callback: () => void) => {
       throwIfUnparseable(accelerator);
       if (mockRegistered.has(accelerator)) return false;
+      if (mockTakenElsewhere.has(accelerator)) return false;
       mockRegistered.set(accelerator, callback);
       return true;
     },
@@ -63,6 +66,7 @@ beforeEach(() => {
     makeTriggers(),
   );
   mockRegistered.clear();
+  mockTakenElsewhere.clear();
 });
 
 describe('updateRegisteredHotkeys', () => {
@@ -98,13 +102,36 @@ describe('updateRegisteredHotkeys', () => {
     expect([...mockRegistered.keys()]).toEqual([OTHER]);
   });
 
-  it('recovers after an invalid accelerator without disturbing other slots', () => {
+  it('keeps the previous shortcut when the new one is invalid', () => {
     const triggers = makeTriggers();
     updateRegisteredHotkeys({ main: MAIN, recapture: DELAY }, triggers);
-    updateRegisteredHotkeys({ main: INVALID }, triggers);
-    expect([...mockRegistered.keys()]).toEqual([DELAY]);
+    expect(updateRegisteredHotkeys({ main: INVALID }, triggers)).toEqual([
+      { label: 'main', accelerator: INVALID },
+    ]);
+    expect([...mockRegistered.keys()].sort()).toEqual([DELAY, MAIN].sort());
     updateRegisteredHotkeys({ main: OTHER }, triggers);
     expect([...mockRegistered.keys()].sort()).toEqual([DELAY, OTHER].sort());
+  });
+
+  it('reports a shortcut another app holds and keeps the previous one', () => {
+    const triggers = makeTriggers();
+    updateRegisteredHotkeys({ main: MAIN }, triggers);
+    mockTakenElsewhere.add(OTHER);
+    expect(updateRegisteredHotkeys({ main: OTHER }, triggers)).toEqual([
+      { label: 'main', accelerator: OTHER },
+    ]);
+    expect([...mockRegistered.keys()]).toEqual([MAIN]);
+    mockRegistered.get(MAIN)?.();
+    expect(triggers.triggerMain).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports no failures when every shortcut registers', () => {
+    expect(
+      updateRegisteredHotkeys(
+        { main: MAIN, delay3: { accelerator: DELAY, delayMs: 3000 } },
+        makeTriggers(),
+      ),
+    ).toEqual([]);
   });
 
   it('passes the configured delay to delayed triggers', () => {

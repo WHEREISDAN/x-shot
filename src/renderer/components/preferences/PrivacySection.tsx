@@ -1,11 +1,12 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
+import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { Select } from '../../design-system';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
 interface PrivacySectionProps {
   preferences: AppPreferences;
-  onUpdate: (updates: Partial<AppPreferences>) => Promise<boolean>;
+  onUpdate: UpdatePreferences;
 }
 
 export default function PrivacySection({
@@ -69,39 +70,33 @@ export default function PrivacySection({
     async (autoDetect: boolean) => {
       await onUpdate({
         pii: {
-          ...preferences.pii,
           autoDetect,
         },
       });
     },
-    [preferences.pii, onUpdate],
+    [onUpdate],
   );
 
   const handleDefaultStyleChange = useCallback(
     async (defaultStyle: 'blur' | 'black') => {
       await onUpdate({
         pii: {
-          ...preferences.pii,
           defaultStyle,
         },
       });
     },
-    [preferences.pii, onUpdate],
+    [onUpdate],
   );
 
   const handleDetectorToggle = useCallback(
     async (key: keyof AppPreferences['pii']['detectors'], enabled: boolean) => {
       await onUpdate({
         pii: {
-          ...preferences.pii,
-          detectors: {
-            ...preferences.pii.detectors,
-            [key]: enabled,
-          },
+          detectors: { [key]: enabled },
         },
       });
     },
-    [preferences.pii, onUpdate],
+    [onUpdate],
   );
 
   const styleOptions = [

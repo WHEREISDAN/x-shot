@@ -6,6 +6,12 @@ export const DEFAULT_SCREENSHOT_ACCELERATOR =
 
 type HotkeyLabel = 'main' | '3s delayed' | '5s delayed' | 'recapture';
 
+/** A shortcut that could not be registered, so its slot kept the old one. */
+export interface HotkeyFailure {
+  label: HotkeyLabel;
+  accelerator: string;
+}
+
 let currentMainHotkey: string | null = null;
 let currentDelay3Hotkey: string | null = null;
 let currentDelay5Hotkey: string | null = null;
@@ -53,17 +59,26 @@ function unregisterSafely(accelerator: string | null): void {
   }
 }
 
-/** Rebinds one slot and returns the accelerator it now holds, if any. */
+/**
+ * Rebinds one slot. If the new accelerator cannot be registered, the slot
+ * keeps its previous one and the failure is reported.
+ */
 function rebind(
   current: string | null,
   next: string | null | undefined,
   callback: () => void,
   label: HotkeyLabel,
+  failures: HotkeyFailure[],
 ): string | null {
   unregisterSafely(current);
   const accelerator = next || null;
   if (!accelerator) return null;
-  return registerSafely(accelerator, callback, label) ? accelerator : null;
+  if (registerSafely(accelerator, callback, label)) return accelerator;
+  failures.push({ label, accelerator });
+  if (current && current !== accelerator) {
+    return registerSafely(current, callback, label) ? current : null;
+  }
+  return null;
 }
 
 export function unregisterAllHotkeys(): void {
@@ -87,11 +102,12 @@ export function updateRegisteredHotkeys(
     triggerDelay: (delayMs: number) => void;
     triggerRecapture: () => void;
   },
-): void {
+): HotkeyFailure[] {
   const logger = getLogger('hotkeys');
+  const failures: HotkeyFailure[] = [];
   if (!app.isReady()) {
     logger.warn('updateRegisteredHotkeys called before app ready');
-    return;
+    return failures;
   }
 
   if (hotkeys.main !== undefined) {
@@ -100,6 +116,7 @@ export function updateRegisteredHotkeys(
       hotkeys.main,
       triggers.triggerMain,
       'main',
+      failures,
     );
   }
 
@@ -110,6 +127,7 @@ export function updateRegisteredHotkeys(
       hotkeys.delay3?.accelerator,
       () => triggers.triggerDelay(delayMs),
       '3s delayed',
+      failures,
     );
   }
 
@@ -120,6 +138,7 @@ export function updateRegisteredHotkeys(
       hotkeys.delay5?.accelerator,
       () => triggers.triggerDelay(delayMs),
       '5s delayed',
+      failures,
     );
   }
 
@@ -129,6 +148,8 @@ export function updateRegisteredHotkeys(
       hotkeys.recapture,
       triggers.triggerRecapture,
       'recapture',
+      failures,
     );
   }
+  return failures;
 }

@@ -28,16 +28,20 @@ import registerWindowIpcHandlers, {
   setupWindowStateEvents,
 } from './ipc/window';
 import registerPreferencesIpcHandlers, {
-  setHotkeyChangeCallback,
+  setHotkeysHandler,
   setTrayVisibilityChangeCallback,
-  setDelayHotkeysChangeCallback,
 } from './ipc/preferences';
 import {
   DEFAULT_SCREENSHOT_ACCELERATOR,
   unregisterAllHotkeys,
   updateRegisteredHotkeys,
 } from './hotkeys';
-import { loadPreferences } from './preferences';
+import {
+  flushPreferences,
+  getBackgroundStore,
+  loadPreferences,
+} from './preferences';
+import { captureAssets } from './capture-assets';
 import {
   cancelCapture,
   scheduleCapture,
@@ -84,7 +88,10 @@ app.on('window-all-closed', () => {
 app
   .whenReady()
   .then(async () => {
-    handleAssetProtocol();
+    handleAssetProtocol({
+      captures: captureAssets,
+      backgrounds: getBackgroundStore(),
+    });
     // Register IPC handlers first; this also configures the coordinator.
     registerFileIpcHandlers();
     registerScreenshotIpcHandlers();
@@ -143,36 +150,31 @@ app
     // Set up window state events after creating the main window
     setupWindowStateEvents();
 
-    // Set up hotkey change callback
-    setHotkeyChangeCallback((newHotkey: string) => {
-      updateRegisteredHotkeys(
-        { main: newHotkey },
-        {
-          triggerMain: triggerScreenshot,
-          triggerDelay: triggerDelayedScreenshot,
-          triggerRecapture,
-        },
-      );
-      const win = getMainWindow();
-      if (win) refreshApplicationMenu(win).catch(() => {});
-    });
-
-    // Set up delay hotkeys change callback
-    setDelayHotkeysChangeCallback(
-      ({ hotkeyDelay3, hotkeyDelay5, hotkeyRecapture }) => {
+    // Changed shortcuts are registered before they are saved, so a taken
+    // one is refused and the previous one keeps working.
+    setHotkeysHandler({
+      apply: (changes) =>
         updateRegisteredHotkeys(
           {
-            delay3: { accelerator: hotkeyDelay3 || null, delayMs: 3000 },
-            delay5: { accelerator: hotkeyDelay5 || null, delayMs: 5000 },
-            recapture: hotkeyRecapture || null,
+            ...(changes.main !== undefined ? { main: changes.main } : {}),
+            ...(changes.delay3 !== undefined
+              ? { delay3: { accelerator: changes.delay3, delayMs: 3000 } }
+              : {}),
+            ...(changes.delay5 !== undefined
+              ? { delay5: { accelerator: changes.delay5, delayMs: 5000 } }
+              : {}),
+            ...(changes.recapture !== undefined
+              ? { recapture: changes.recapture }
+              : {}),
           },
           {
             triggerMain: triggerScreenshot,
             triggerDelay: triggerDelayedScreenshot,
             triggerRecapture,
           },
-        );
-        // Keep tray menu accelerators in sync with preferences
+        ),
+      saved: () => {
+        // Keep tray and menu accelerators in sync with preferences
         refreshTrayMenu(
           getMainWindow,
           triggerTrayScreenshot,
@@ -181,7 +183,7 @@ app
         const win = getMainWindow();
         if (win) refreshApplicationMenu(win).catch(() => {});
       },
-    );
+    });
 
     // Set up tray visibility change callback
     setTrayVisibilityChangeCallback((show: boolean) => {
@@ -211,10 +213,24 @@ app.on('render-process-gone', () => {
   );
 });
 
-app.on('before-quit', () => {
+let preferencesFlushed = false;
+app.on('before-quit', (event) => {
   cancelCapture('app-quit').catch((err) =>
     log.error('Failed to cancel capture on quit:', err),
   );
+  // Quit only once pending preference writes are on disk.
+  if (preferencesFlushed) return;
+  event.preventDefault();
+  preferencesFlushed = true;
+  const flushThenQuit = async () => {
+    try {
+      await flushPreferences();
+    } catch (err) {
+      log.error('Failed to flush preferences on quit:', err);
+    }
+    app.quit();
+  };
+  flushThenQuit().catch(() => {});
 });
 
 app.on('will-quit', () => {

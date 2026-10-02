@@ -246,9 +246,14 @@ export default function registerScreenshotIpcHandlers() {
     // Thumbnails are scaled to fill the requested box, so the window is
     // requested at its measured native size.
     const editor = await ensureMainWindowReady();
+    const measureStart = Date.now();
     const nativeSize = await measureWindowSource(editor.webContents, sourceId);
     if (!isSessionCurrent(session)) return;
-    markCaptureStage('window-measured', { sourceId, nativeSize });
+    markCaptureStage('window-measured', {
+      sourceId,
+      nativeSize,
+      durationMs: Date.now() - measureStart,
+    });
     const sources = await desktopCapturer.getSources({
       types: ['window'],
       thumbnailSize: nativeSize ?? {

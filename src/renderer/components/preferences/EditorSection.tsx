@@ -1,12 +1,15 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
+import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { Input } from '../../design-system';
 import { ColorSwatch } from '../editor/editor-tools';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
 interface EditorSectionProps {
   preferences: AppPreferences;
-  onUpdate: (updates: Partial<AppPreferences>) => Promise<boolean>;
+  onUpdate: UpdatePreferences;
+  /** Saves debounced changes now. */
+  onFlush: () => void;
 }
 
 const COLOR_PRESETS = [
@@ -24,6 +27,7 @@ const COLOR_PRESETS = [
 export default function EditorSection({
   preferences,
   onUpdate,
+  onFlush,
 }: EditorSectionProps) {
   const sectionStyles: React.CSSProperties = {
     display: 'flex',
@@ -77,50 +81,30 @@ export default function EditorSection({
 
   const handleStrokeColorChange = useCallback(
     async (defaultStrokeColor: string) => {
-      await onUpdate({
-        editor: {
-          ...preferences.editor,
-          defaultStrokeColor,
-        },
-      });
+      await onUpdate({ editor: { defaultStrokeColor } }, { debounce: true });
     },
-    [preferences.editor, onUpdate],
+    [onUpdate],
   );
 
   const handleFillColorChange = useCallback(
     async (defaultFillColor: string) => {
-      await onUpdate({
-        editor: {
-          ...preferences.editor,
-          defaultFillColor,
-        },
-      });
+      await onUpdate({ editor: { defaultFillColor } }, { debounce: true });
     },
-    [preferences.editor, onUpdate],
+    [onUpdate],
   );
 
   const handleStrokeWidthChange = useCallback(
     async (defaultStrokeWidth: number) => {
-      await onUpdate({
-        editor: {
-          ...preferences.editor,
-          defaultStrokeWidth,
-        },
-      });
+      await onUpdate({ editor: { defaultStrokeWidth } }, { debounce: true });
     },
-    [preferences.editor, onUpdate],
+    [onUpdate],
   );
 
   const handleTextSizeChange = useCallback(
     async (defaultTextSize: number) => {
-      await onUpdate({
-        editor: {
-          ...preferences.editor,
-          defaultTextSize,
-        },
-      });
+      await onUpdate({ editor: { defaultTextSize } }, { debounce: true });
     },
-    [preferences.editor, onUpdate],
+    [onUpdate],
   );
 
   const handleCustomStrokeColor = useCallback(
@@ -182,12 +166,14 @@ export default function EditorSection({
               type="color"
               value={preferences.editor.defaultStrokeColor}
               onChange={(e) => handleStrokeColorChange(e.target.value)}
+              onBlur={onFlush}
               style={{ width: '40px', height: '32px', padding: '0' }}
             />
             <Input
               type="text"
               value={preferences.editor.defaultStrokeColor}
               onChange={(e) => handleCustomStrokeColor(e.target.value)}
+              onBlur={onFlush}
               placeholder="#ff0000"
               variant="filled"
               size="sm"
@@ -240,12 +226,14 @@ export default function EditorSection({
                   : preferences.editor.defaultFillColor
               }
               onChange={(e) => handleFillColorChange(e.target.value)}
+              onBlur={onFlush}
               style={{ width: '40px', height: '32px', padding: '0' }}
             />
             <Input
               type="text"
               value={preferences.editor.defaultFillColor}
               onChange={(e) => handleCustomFillColor(e.target.value)}
+              onBlur={onFlush}
               placeholder="transparent or #ff0000"
               variant="filled"
               size="sm"
@@ -300,6 +288,7 @@ export default function EditorSection({
               max={20}
               value={preferences.editor.defaultStrokeWidth}
               onChange={(e) => handleStrokeWidthChange(Number(e.target.value))}
+              onBlur={onFlush}
               style={rangeStyles}
               aria-labelledby="stroke-width-label"
             />
@@ -345,6 +334,7 @@ export default function EditorSection({
               max={72}
               value={preferences.editor.defaultTextSize}
               onChange={(e) => handleTextSizeChange(Number(e.target.value))}
+              onBlur={onFlush}
               style={rangeStyles}
               aria-labelledby="text-size-label"
             />

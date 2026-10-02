@@ -192,6 +192,9 @@ export function Input({
           min={props.min}
           max={props.max}
           step={props.step}
+          readOnly={props.readOnly}
+          aria-label={props['aria-label']}
+          aria-labelledby={props['aria-labelledby']}
         />
 
         {rightIcon && <span style={rightIconStyles}>{rightIcon}</span>}

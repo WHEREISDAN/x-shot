@@ -1,17 +1,21 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
+import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { formatFilename } from '../../../shared/export-filename';
 import { Input, Select } from '../../design-system';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
 interface ExportSectionProps {
   preferences: AppPreferences;
-  onUpdate: (updates: Partial<AppPreferences>) => Promise<boolean>;
+  onUpdate: UpdatePreferences;
+  /** Saves debounced changes now. */
+  onFlush: () => void;
 }
 
 export default function ExportSection({
   preferences,
   onUpdate,
+  onFlush,
 }: ExportSectionProps) {
   const sectionStyles: React.CSSProperties = {
     display: 'flex',
@@ -60,38 +64,31 @@ export default function ExportSection({
 
   const handleFilenamePatternChange = useCallback(
     async (filenamePattern: string) => {
-      await onUpdate({
-        export: {
-          ...preferences.export,
-          filenamePattern,
-        },
-      });
+      await onUpdate({ export: { filenamePattern } }, { debounce: true });
     },
-    [preferences.export, onUpdate],
+    [onUpdate],
   );
 
   const handleAutoSaveChange = useCallback(
     async (autoSave: boolean) => {
       await onUpdate({
         export: {
-          ...preferences.export,
           autoSave,
         },
       });
     },
-    [preferences.export, onUpdate],
+    [onUpdate],
   );
 
   const handleDefaultScaleChange = useCallback(
     async (defaultScale: number) => {
       await onUpdate({
         export: {
-          ...preferences.export,
           defaultScale,
         },
       });
     },
-    [preferences.export, onUpdate],
+    [onUpdate],
   );
 
   const scaleOptions = [
@@ -123,6 +120,7 @@ export default function ExportSection({
             type="text"
             value={preferences.export.filenamePattern}
             onChange={(e) => handleFilenamePatternChange(e.target.value)}
+            onBlur={onFlush}
             placeholder="X-Shot_$TIMESTAMP"
             variant="filled"
             size="md"

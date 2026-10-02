@@ -35,16 +35,10 @@ function usePiiPreferences(): PiiPreferencesState {
     try {
       const api = window?.electron?.ipcRenderer;
       if (!api) return;
-      const currentPrefs = await api.invoke('get-preferences', {});
-      await api.invoke('set-preferences', {
-        preferences: {
-          pii: {
-            autoDetect: enabled,
-            defaultStyle: currentPrefs?.pii?.defaultStyle || 'black',
-            detectors: currentPrefs?.pii?.detectors,
-          },
-        },
+      const result = await api.invoke('set-preferences', {
+        preferences: { pii: { autoDetect: enabled } },
       });
+      if (!result.ok) logger.warn('Failed to save Censor PII', result);
     } catch (error) {
       logger.warn('Failed to save PII preferences', error);
     }

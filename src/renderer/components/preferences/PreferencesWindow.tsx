@@ -27,8 +27,15 @@ const tabs: Tab[] = [
 ];
 
 export default function PreferencesWindow() {
-  const { preferences, loading, error, updatePreferences, resetPreferences } =
-    usePreferences();
+  const {
+    preferences,
+    loading,
+    error,
+    updatePreferences,
+    flushPreferences,
+    resetPreferences,
+    dismissError,
+  } = usePreferences();
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -169,6 +176,7 @@ export default function PreferencesWindow() {
     color: colors.white,
   };
 
+  // Only before the first load; saves never swap the window's content.
   if (loading) {
     return (
       <div style={containerStyles}>
@@ -199,6 +207,7 @@ export default function PreferencesWindow() {
           <EditorSection
             preferences={preferences}
             onUpdate={updatePreferences}
+            onFlush={flushPreferences}
           />
         );
       case 'export':
@@ -206,6 +215,7 @@ export default function PreferencesWindow() {
           <ExportSection
             preferences={preferences}
             onUpdate={updatePreferences}
+            onFlush={flushPreferences}
           />
         );
       case 'privacy':
@@ -275,7 +285,18 @@ export default function PreferencesWindow() {
 
   return (
     <div style={containerStyles}>
-      {error && <div style={errorStyles}>Error: {error}</div>}
+      {error && (
+        <div style={errorStyles} role="alert">
+          {error}{' '}
+          <button
+            type="button"
+            onClick={dismissError}
+            style={{ ...buttonStyles, marginLeft: spacing[3] }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div style={contentStyles}>
         {/* Sidebar */}
