@@ -3,12 +3,11 @@ import type {
   BackgroundImageRef,
 } from '../shared/preferences-types';
 import { isBackgroundId } from '../shared/capture-asset';
+import { isBuiltinBackgroundId } from '../shared/builtin-backgrounds';
 import { isPlainObject, type PlainRecord } from '../shared/deep-merge';
 
 export { deepMerge, isPlainObject } from '../shared/deep-merge';
 
-// A bundled background, named by its file in the renderer bundle.
-const BUILTIN_BACKGROUND_FILE = /^[\w-]{1,128}\.(?:png|jpe?g|gif|webp)$/;
 const SECTIONS = [
   'capture',
   'editor',
@@ -205,12 +204,8 @@ function sanitizeBackgroundImage(
   if (value.kind === 'file' && isBackgroundId(value.id)) {
     return { kind: 'file', id: value.id };
   }
-  if (
-    value.kind === 'builtin' &&
-    typeof value.file === 'string' &&
-    BUILTIN_BACKGROUND_FILE.test(value.file)
-  ) {
-    return { kind: 'builtin', file: value.file };
+  if (value.kind === 'builtin' && isBuiltinBackgroundId(value.id)) {
+    return { kind: 'builtin', id: value.id };
   }
   return fallback;
 }

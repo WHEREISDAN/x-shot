@@ -32,7 +32,9 @@ import {
   restoreWindowsAfterCapture,
 } from '../windows';
 import { updatePreferences } from '../preferences';
-import measureWindowSource from '../window-source-size';
+import measureWindowSource, {
+  windowThumbnailSize,
+} from '../window-source-size';
 import {
   computeCropRect,
   displayForSelection,
@@ -69,9 +71,6 @@ import {
 type CropSource = Omit<DisplaySnapshot, 'assetId'>;
 
 export default function registerScreenshotIpcHandlers() {
-  // Bounds window thumbnails when a window's native size can't be measured.
-  const MAX_WINDOW_THUMBNAIL = 4096;
-
   // The editor shows the failure but keeps whatever the user is editing.
   const sendCaptureFailure = async (
     session: CaptureSessionRef,
@@ -186,11 +185,6 @@ export default function registerScreenshotIpcHandlers() {
     },
   );
 
-  ipcMain.handle('release-display-snapshots', async () => {
-    releaseDisplaySnapshots();
-    return true;
-  });
-
   // The editor discarded its capture.
   ipcMain.handle('release-capture-asset', async (_event, req: unknown) => {
     const { assetId } = (req as { assetId?: unknown }) || {};
@@ -256,10 +250,7 @@ export default function registerScreenshotIpcHandlers() {
     });
     const sources = await desktopCapturer.getSources({
       types: ['window'],
-      thumbnailSize: nativeSize ?? {
-        width: MAX_WINDOW_THUMBNAIL,
-        height: MAX_WINDOW_THUMBNAIL,
-      },
+      thumbnailSize: windowThumbnailSize(nativeSize),
     });
     const source = sources.find((s) => s.id === sourceId);
     if (!source) {

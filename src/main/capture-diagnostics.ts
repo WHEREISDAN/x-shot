@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { getLogger } from './logger';
+import { sanitizeLogValue } from './log-sanitize';
 
 export type CaptureStage =
   | 'trigger'
@@ -29,35 +30,9 @@ interface ActiveSession {
   lastMarkAt: number;
 }
 
-const MAX_META_STRING_LENGTH = 256;
-
 const logger = getLogger('capture');
 
 let activeSession: ActiveSession | null = null;
-
-function redact(value: string): string {
-  return `[redacted:len=${value.length}]`;
-}
-
-function sanitizeValue(value: unknown): unknown {
-  if (typeof value === 'string') {
-    if (value.startsWith('data:') || value.length > MAX_META_STRING_LENGTH) {
-      return redact(value);
-    }
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(sanitizeValue);
-  }
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    Object.entries(value as Record<string, unknown>).forEach(([key, inner]) => {
-      out[key] = sanitizeValue(inner);
-    });
-    return out;
-  }
-  return value;
-}
 
 /**
  * Strips anything that could contain screenshot bytes, data URLs, OCR text,
@@ -67,7 +42,7 @@ function sanitizeValue(value: unknown): unknown {
 export function sanitizeDiagnosticsMeta(
   meta: Record<string, unknown>,
 ): Record<string, unknown> {
-  return sanitizeValue(meta) as Record<string, unknown>;
+  return sanitizeLogValue(meta) as Record<string, unknown>;
 }
 
 export function getActiveCaptureSessionId(): string | null {

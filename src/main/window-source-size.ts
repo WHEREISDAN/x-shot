@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron';
 import type { Size } from '../shared/crop-geometry';
+import { CaptureError } from './capture-result';
 
 const WINDOW_SOURCE_ID = /^window:\d+:\d+$/;
 // Usually well under a second; busy machines have needed over three.
@@ -73,4 +74,18 @@ export default async function measureWindowSource(
   const size = await Promise.race([measured, timeout]);
   clearTimeout(timer);
   return size;
+}
+
+/**
+ * The thumbnail size that yields the window unscaled. Without a measured
+ * size any box would rescale the window, so the capture fails instead.
+ */
+export function windowThumbnailSize(nativeSize: Size | null): Size {
+  if (!nativeSize) {
+    throw new CaptureError(
+      'window-size-unknown',
+      "The window's native size could not be measured",
+    );
+  }
+  return nativeSize;
 }

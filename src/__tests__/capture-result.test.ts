@@ -6,6 +6,7 @@ import {
   toCaptureFailure,
   toCaptureSuccess,
 } from '../main/capture-result';
+import { windowThumbnailSize } from '../main/window-source-size';
 
 describe('toCaptureFailure', () => {
   it('reports denied screen capture as a permission problem', () => {
@@ -56,6 +57,28 @@ describe('toCaptureFailure', () => {
     );
     expect(failure.reason).toBe('source-unavailable');
     expect(failure.sessionId).toBe('session-4');
+  });
+
+  it('refuses a window capture whose native size is unknown', () => {
+    // Any other thumbnail box would rescale the window, e.g. a 640×506
+    // window came out 4096×3238.
+    expect(windowThumbnailSize({ width: 640, height: 506 })).toEqual({
+      width: 640,
+      height: 506,
+    });
+    let thrown: unknown;
+    try {
+      windowThumbnailSize(null);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(CaptureError);
+    expect(toCaptureFailure('session-9', thrown)).toEqual({
+      ok: false,
+      sessionId: 'session-9',
+      reason: 'window-size-unknown',
+      message: expect.stringContaining("couldn't read its size"),
+    });
   });
 
   it('includes the error detail for any other failure', () => {

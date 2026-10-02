@@ -212,14 +212,14 @@ export default function PresentationPanel({
           <div style={sectionTitleStyles}>Background</div>
           <div style={gridStyles}>
             {/* 8 image swatches */}
-            {BUILTIN_BACKGROUNDS.map((src) => (
+            {BUILTIN_BACKGROUNDS.map(({ id, src }) => (
               <button
                 type="button"
-                key={`img-${src}`}
+                key={`img-${id}`}
                 onClick={() => {
-                  onChange.setBackgroundImage(builtinBackgroundRef(src));
+                  onChange.setBackgroundImage(builtinBackgroundRef(id));
                 }}
-                aria-label={`Image ${src}`}
+                aria-label={`Background image ${id}`}
                 style={{
                   ...swatchButtonStyles,
                   background: `url(${src}) center/cover no-repeat`,

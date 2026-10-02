@@ -1,4 +1,5 @@
 import type { BackgroundImageRef } from '../shared/preferences-types';
+import type { BuiltinBackgroundId } from '../shared/builtin-backgrounds';
 import { isPlainObject } from './preferences-schema';
 
 type PlainRecord = Record<string, unknown>;
@@ -16,7 +17,29 @@ export type SaveBackground = (
 ) => Promise<BackgroundImageRef | null>;
 
 const DATA_URL = /^data:image\/[\w.+-]+;base64,/i;
-const BUNDLED_FILE = /^[\w-]{1,128}\.(?:png|jpe?g|gif|webp)$/i;
+
+/**
+ * Earlier builds named built-in backgrounds by their bundle file, whose name
+ * is a hash of the image (webpack's default asset name). These are the names
+ * every such build gave assets/backgrounds/<id>.png.
+ */
+const LEGACY_BUNDLE_FILES: Readonly<Record<string, BuiltinBackgroundId>> = {
+  'b795909a0f7d4afdf700.png': '1',
+  '855d3f6434f1d21de3ec.png': '2',
+  'db26ea34d8811698082e.png': '3',
+  '0d52cdb6142e117aeec9.png': '4',
+  '481342d562a673cf4ef0.png': '5',
+  '645ad88684237fb78cb7.png': '6',
+  '5c58e93ca5d2d6f67f1b.png': '7',
+  '371b72eae5aa247343e1.png': '8',
+};
+
+function builtinFromBundleFile(file: string): BackgroundImageRef | null {
+  const id = Object.hasOwn(LEGACY_BUNDLE_FILES, file)
+    ? LEGACY_BUNDLE_FILES[file]
+    : undefined;
+  return id ? { kind: 'builtin', id } : null;
+}
 
 /** presentation.exportScale became the single export.defaultScale. */
 function migrateExportScale(value: PlainRecord, changes: string[]): void {
@@ -36,11 +59,9 @@ function migrateExportScale(value: PlainRecord, changes: string[]): void {
   changes.push('presentation.exportScale removed');
 }
 
-/** The bundle file name in an old built-in background URL. */
-function bundledFileName(url: string): string | null {
-  const name = url.split(/[?#]/)[0].split('/').pop() ?? '';
-  return BUNDLED_FILE.test(name) ? name : null;
-}
+/** The bundle file name at the end of an old built-in background URL. */
+const bundledFileName = (url: string): string =>
+  url.split(/[?#]/)[0].split('/').pop() ?? '';
 
 async function legacyBackground(
   url: unknown,
@@ -58,13 +79,13 @@ async function legacyBackground(
     );
     return saved;
   }
-  const file = bundledFileName(url);
+  const builtin = builtinFromBundleFile(bundledFileName(url));
   changes.push(
-    file
-      ? `built-in background kept as ${file}`
+    builtin?.kind === 'builtin'
+      ? `built-in background kept as ${builtin.id}`
       : 'background image dropped: unsupported URL',
   );
-  return file ? { kind: 'builtin', file } : null;
+  return builtin;
 }
 
 /** presentation.backgroundImageUrl became a file or bundle reference. */
@@ -87,6 +108,25 @@ async function migrateBackgroundImage(
     changes.push('presentation.backgroundImageUrl removed');
 }
 
+/** A built-in background saved by its bundle file now uses its stable id. */
+function migrateBuiltinBackground(value: PlainRecord, changes: string[]): void {
+  const presentation = isPlainObject(value.presentation)
+    ? value.presentation
+    : null;
+  const saved = presentation?.backgroundImage;
+  if (!presentation || !isPlainObject(saved) || saved.kind !== 'builtin') {
+    return;
+  }
+  if (typeof saved.file !== 'string') return;
+  const builtin = builtinFromBundleFile(saved.file);
+  value.presentation = { ...presentation, backgroundImage: builtin };
+  changes.push(
+    builtin?.kind === 'builtin'
+      ? `built-in background ${saved.file} is now ${builtin.id}`
+      : `built-in background dropped: unknown bundle file ${saved.file}`,
+  );
+}
+
 /**
  * Brings stored preferences from older versions to the current shape. The
  * input is not modified.
@@ -100,5 +140,6 @@ export async function migrateStoredPreferences(
   migrateExportScale(value, changes);
   const backgroundChanges: string[] = [];
   await migrateBackgroundImage(value, saveBackground, backgroundChanges);
+  migrateBuiltinBackground(value, backgroundChanges);
   return { value, changes: [...changes, ...backgroundChanges] };
 }

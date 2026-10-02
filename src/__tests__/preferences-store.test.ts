@@ -15,6 +15,18 @@ import {
   type PreferencesStoreOptions,
 } from '../main/preferences-store';
 import { nodeFileOps, type AtomicFileOps } from '../main/atomic-write';
+import { BUILTIN_BACKGROUND_IDS } from '../shared/builtin-backgrounds';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const createWebpackHash = require('webpack/lib/util/createHash');
+
+/** The name webpack gives assets/backgrounds/<id>.png: its content hash. */
+function webpackAssetHash(id: string): string {
+  const bytes = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'assets', 'backgrounds', `${id}.png`),
+  );
+  return createWebpackHash('md4').update(bytes).digest('hex').slice(0, 20);
+}
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const DEFAULTS = createDefaultPreferences('/home/user/Pictures');
@@ -326,12 +338,64 @@ describe('migrations', () => {
     );
   });
 
-  it('keeps a built-in background as its bundle file', async () => {
+  it('maps an old built-in background URL to its stable id', async () => {
     writeDisk(legacy({ backgroundImageUrl: './0d52cdb6142e117aeec9.png' }));
     const prefs = await makeStore().load();
     expect(prefs.presentation.backgroundImage).toEqual({
       kind: 'builtin',
-      file: '0d52cdb6142e117aeec9.png',
+      id: '4',
+    });
+  });
+
+  // Earlier builds saved built-ins by the bundle file webpack named after
+  // the image's hash; each must still find its background.
+  it.each(BUILTIN_BACKGROUND_IDS.map((id) => [id]))(
+    'moves built-in background %s from its bundle file to its id',
+    async (id) => {
+      const file = `${webpackAssetHash(id)}.png`;
+      writeDisk({
+        ...DEFAULTS,
+        presentation: {
+          ...DEFAULTS.presentation,
+          backgroundImage: { kind: 'builtin', file },
+        },
+      });
+      const prefs = await makeStore().load();
+      const expected = { kind: 'builtin', id };
+      expect(prefs.presentation.backgroundImage).toEqual(expected);
+      expect(readDisk().presentation.backgroundImage).toEqual(expected);
+      expect(log.info).toHaveBeenCalledWith(
+        `Preferences migrated: built-in background ${file} is now ${id}`,
+      );
+    },
+  );
+
+  it('drops a built-in background whose bundle file it does not know', async () => {
+    writeDisk({
+      ...DEFAULTS,
+      presentation: {
+        ...DEFAULTS.presentation,
+        backgroundImage: { kind: 'builtin', file: 'ffffffffffffffffffff.png' },
+      },
+    });
+    const prefs = await makeStore().load();
+    expect(prefs.presentation.backgroundImage).toBeNull();
+    expect(log.info).toHaveBeenCalledWith(
+      expect.stringContaining('built-in background dropped'),
+    );
+  });
+
+  it('keeps a built-in background saved by id and refuses unknown ids', async () => {
+    const store = makeStore();
+    await store.update({
+      presentation: { backgroundImage: { kind: 'builtin', id: '3' } },
+    });
+    await store.update({
+      presentation: { backgroundImage: { kind: 'builtin', id: '99' } },
+    } as unknown as PreferencesUpdate);
+    expect(readDisk().presentation.backgroundImage).toEqual({
+      kind: 'builtin',
+      id: '3',
     });
   });
 
