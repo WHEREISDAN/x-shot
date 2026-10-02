@@ -16,7 +16,7 @@ declare module 'dom-to-image-more' {
   export function toBlob(
     element: HTMLElement,
     options?: Options,
-  ): Promise<Blob>;
+  ): Promise<Blob | null>;
   export function toSvg(
     element: HTMLElement,
     options?: Options,

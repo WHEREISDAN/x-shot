@@ -27,12 +27,13 @@ export default function installE2eHooks(): void {
       const { width, height } = nativeImage.createFromBuffer(png).getSize();
       const asset = captureAssets.add({
         sessionId,
-        png,
+        kind: 'capture',
         width,
         height,
         scaleFactor,
+        encode: () => png,
       });
-      captureAssets.releaseAllExcept(sessionId);
+      captureAssets.releaseWhere((stored) => stored.sessionId !== sessionId);
       return { assetId: asset.assetId, width, height };
     },
     assetCount: () => captureAssets.size(),

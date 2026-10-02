@@ -6,6 +6,7 @@ import SelectionOverlay from './components/SelectionOverlay';
 import QuickDock from './components/QuickDock';
 import SourcesPanel from './components/SourcesPanel';
 import type { ScreenSourceItem, WindowSourceItem } from '../shared/ipc-types';
+import { captureAssetUrl } from '../shared/capture-asset';
 import { createRendererLogger } from './utils/logger';
 
 const logger = createRendererLogger('screenshot-capture');
@@ -72,7 +73,7 @@ function ScreenshotCapture() {
         );
         if (!cancelled && res) {
           setBackground({
-            url: res.dataUrl,
+            url: captureAssetUrl(res.assetId),
             width: res.width,
             height: res.height,
           });

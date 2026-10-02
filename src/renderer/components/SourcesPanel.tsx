@@ -3,6 +3,7 @@ import type {
   ScreenSourceItem,
   WindowSourceItem,
 } from '../../shared/ipc-types';
+import { captureAssetUrl } from '../../shared/capture-asset';
 
 interface SourcesPanelProps<T extends WindowSourceItem | ScreenSourceItem> {
   title: string;
@@ -86,9 +87,9 @@ export default function SourcesPanel<
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              {src.thumbnail ? (
+              {src.thumbnailAssetId ? (
                 <img
-                  src={src.thumbnail}
+                  src={captureAssetUrl(src.thumbnailAssetId)}
                   alt={src.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
@@ -97,9 +98,9 @@ export default function SourcesPanel<
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {'appIcon' in src && src.appIcon && (
+              {src.appIconAssetId && (
                 <img
-                  src={src.appIcon}
+                  src={captureAssetUrl(src.appIconAssetId)}
                   alt="app"
                   style={{ width: 16, height: 16, borderRadius: 4 }}
                 />

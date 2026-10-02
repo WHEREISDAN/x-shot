@@ -6,6 +6,8 @@ import {
   useExportActions,
 } from '../renderer/hooks/use-export-actions';
 
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
 describe('Toast', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
@@ -65,12 +67,12 @@ describe('useExportActions', () => {
 
   it('reports a copy that worked and one that failed', async () => {
     invoke.mockResolvedValueOnce({ ok: true });
-    const copied = await run((a) => a.copy('data:image/png;base64,AA=='));
+    const copied = await run((a) => a.copy(PNG));
     expect(copied.value).toBe(true);
     expect(copied.notice).toMatchObject({ tone: 'success' });
 
     invoke.mockResolvedValueOnce({ ok: false, error: 'Clipboard busy' });
-    const failed = await run((a) => a.copy('data:image/png;base64,AA=='));
+    const failed = await run((a) => a.copy(PNG));
     expect(failed.value).toBe(false);
     expect(failed.notice).toMatchObject({
       tone: 'error',
@@ -87,7 +89,7 @@ describe('useExportActions', () => {
     [{ status: 'failed', error: 'EACCES' }, 'error', 'EACCES'],
   ])('reports the save result %j', async (response, tone, text) => {
     invoke.mockResolvedValueOnce(response);
-    const { notice } = await run((a) => a.save('data:image/png;base64,AA=='));
+    const { notice } = await run((a) => a.save(PNG));
     expect(notice).toMatchObject({
       tone,
       message: expect.stringContaining(text),
@@ -96,13 +98,13 @@ describe('useExportActions', () => {
 
   it('stays quiet when the save dialog is canceled', async () => {
     invoke.mockResolvedValueOnce({ status: 'canceled' });
-    const { notice } = await run((a) => a.save('data:image/png;base64,AA=='));
+    const { notice } = await run((a) => a.save(PNG));
     expect(notice).toBeNull();
   });
 
   it('reports IPC errors and export rendering errors', async () => {
     invoke.mockRejectedValueOnce(new Error('IPC closed'));
-    const saved = await run((a) => a.save('data:image/png;base64,AA=='));
+    const saved = await run((a) => a.save(PNG));
     expect(saved.notice?.message).toContain('IPC closed');
 
     const { result } = renderHook(() => useExportActions());

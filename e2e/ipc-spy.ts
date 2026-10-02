@@ -2,7 +2,7 @@ import type { WebContents } from 'electron';
 import type { PackagedApp } from './packaged-app';
 
 export interface IpcRecord {
-  direction: 'to-renderer' | 'send' | 'invoke';
+  direction: 'to-renderer' | 'send' | 'invoke' | 'reply';
   channel: string;
   /** True when any string in the payload contains a data: URL. */
   hasDataUrl: boolean;
@@ -58,9 +58,11 @@ export async function spyOnIpc({ app }: PackagedApp): Promise<void> {
     const setHandler = handlers.set.bind(handlers);
     const wrap =
       (channel: string, handler: Handler): Handler =>
-      (event, ...args) => {
+      async (event, ...args) => {
         record('invoke', channel, args);
-        return handler(event, ...args);
+        const reply = await handler(event, ...args);
+        record('reply', channel, reply);
+        return reply;
       };
     handlers.forEach((handler, channel) =>
       setHandler(channel, wrap(channel, handler)),

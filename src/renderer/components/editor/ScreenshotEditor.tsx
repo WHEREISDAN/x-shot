@@ -61,8 +61,8 @@ function captureStagePointer(target: Element, pointerId: number) {
 interface ScreenshotEditorProps {
   screenshot: ScreenshotResult;
   onDelete: () => void;
-  onCopy: (dataUrl: string) => Promise<boolean>;
-  onSave: (dataUrl: string) => Promise<void>;
+  onCopy: (png: Uint8Array) => Promise<boolean>;
+  onSave: (png: Uint8Array) => Promise<void>;
   /** Rendering the export failed before it reached main. */
   onExportError: (action: ExportAction, error: unknown) => void;
 }
@@ -103,7 +103,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const shotW = presentationDisabled ? natural.width : layout.shot.width;
   const shotH = presentationDisabled ? natural.height : layout.shot.height;
 
-  const { exportDataUrl } = useExportGlue({
+  const { exportPng } = useExportGlue({
     stageRef: exportStageRef as React.RefObject<HTMLElement>,
     natural: { width: natural.width, height: natural.height },
     presentation,
@@ -115,19 +115,19 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
 
   const handleCopy = useCallback(async () => {
     try {
-      await onCopy(await exportDataUrl());
+      await onCopy(await exportPng());
     } catch (error) {
       onExportError('copy', error);
     }
-  }, [exportDataUrl, onCopy, onExportError]);
+  }, [exportPng, onCopy, onExportError]);
 
   const handleSave = useCallback(async () => {
     try {
-      await onSave(await exportDataUrl());
+      await onSave(await exportPng());
     } catch (error) {
       onExportError('save', error);
     }
-  }, [exportDataUrl, onSave, onExportError]);
+  }, [exportPng, onSave, onExportError]);
 
   const toImageCoords = useCallback(
     (clientX: number, clientY: number) => {
@@ -245,7 +245,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     censorPII: pii.censorPII,
     piiPreferencesLoaded: pii.preferencesLoaded,
     piiStatus: pii.status,
-    exportRedacted: exportDataUrl,
+    exportRedacted: exportPng,
     copy: onCopy,
   });
 

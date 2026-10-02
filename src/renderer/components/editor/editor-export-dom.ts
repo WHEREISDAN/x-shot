@@ -11,16 +11,13 @@ export interface DomExportOptions {
   filter?: (node: Node) => boolean;
 }
 
-/**
- * Export a DOM element to a data URL using dom-to-image-more
- * This replaces the canvas-based export logic with direct DOM capture
- */
-export async function exportDomToDataUrl({
+/** Renders a DOM element to PNG bytes with dom-to-image-more. */
+export async function exportDomToPng({
   element,
   scale = 1,
   backgroundColor = 'transparent',
   filter,
-}: DomExportOptions): Promise<string> {
+}: DomExportOptions): Promise<Uint8Array> {
   if (!element) {
     throw new Error('Element is required for DOM export');
   }
@@ -84,13 +81,16 @@ export async function exportDomToDataUrl({
 
   try {
     const startTime = Date.now();
-    const dataUrl = await domtoimage.toPng(element, options);
+    // Same canvas and encoder as toPng, so the bytes are identical.
+    const blob = await domtoimage.toBlob(element, options);
+    if (!blob) throw new Error('The export canvas produced no image');
+    const png = new Uint8Array(await blob.arrayBuffer());
     const duration = Date.now() - startTime;
     logger.info(
       `Export completed in ${duration}ms (${Math.round(estimatedMemoryMB)}MB)`,
     );
 
-    return dataUrl;
+    return png;
   } catch (error) {
     logger.error('Failed to export DOM to image', error);
     throw new Error(
@@ -106,8 +106,8 @@ export async function exportDomToDataUrl({
 export async function exportPresentationDom(
   element: HTMLElement,
   exportScale: number = 1,
-): Promise<string> {
-  return exportDomToDataUrl({
+): Promise<Uint8Array> {
+  return exportDomToPng({
     element,
     scale: exportScale,
     backgroundColor: 'transparent',
@@ -140,8 +140,8 @@ export async function exportPresentationDom(
 export async function exportAnnotatedDom(
   element: HTMLElement,
   exportScale: number = 1,
-): Promise<string> {
-  return exportDomToDataUrl({
+): Promise<Uint8Array> {
+  return exportDomToPng({
     element,
     scale: exportScale,
     backgroundColor: 'transparent',

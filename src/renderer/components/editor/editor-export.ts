@@ -1,10 +1,10 @@
 import type { PresentationSettings } from '../../hooks/use-presentation-state';
 import { exportAnnotatedDom, exportPresentationDom } from './editor-export-dom';
 
-export async function exportAnnotatedDataUrl(
+export async function exportAnnotatedPng(
   stageElement: HTMLElement,
   natural: { width: number; height: number },
-): Promise<string> {
+): Promise<Uint8Array> {
   if (!stageElement) {
     throw new Error('Stage element is required for export');
   }
@@ -26,18 +26,18 @@ export async function exportAnnotatedDataUrl(
   return exportAnnotatedDom(stageElement, scale);
 }
 
-export async function exportPresentedDataUrl(
+export async function exportPresentedPng(
   stageElement: HTMLElement,
   natural: { width: number; height: number },
   settings: PresentationSettings,
-): Promise<string> {
+): Promise<Uint8Array> {
   if (!stageElement) {
     throw new Error('Stage element is required for export');
   }
 
   // When presentation is effectively disabled, fall back to plain export
   if (settings.padding === 0 && settings.inset === 0) {
-    return exportAnnotatedDataUrl(stageElement, natural);
+    return exportAnnotatedPng(stageElement, natural);
   }
 
   // Use the export scale from presentation settings

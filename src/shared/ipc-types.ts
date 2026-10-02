@@ -126,11 +126,12 @@ export interface ListCaptureSourcesRequest {
   type?: CaptureSourceType;
 }
 
+/** A capturable source; images are ids in main's asset store. */
 export interface BaseSourceItem {
   id: string;
   name: string;
-  appIcon: string | null;
-  thumbnail: string | null;
+  appIconAssetId: string | null;
+  thumbnailAssetId: string | null;
 }
 
 export interface WindowSourceItem extends BaseSourceItem {}
@@ -199,12 +200,13 @@ export interface ScreenshotScreenRequest {
   displayId?: string | number;
 }
 
+/** PNG bytes; images never cross IPC as data URLs. */
 export interface CopyImageRequest {
-  dataUrl: string;
+  png: Uint8Array;
 }
 
 export interface SaveImageRequest {
-  dataUrl: string;
+  png: Uint8Array;
   defaultPath?: string;
 }
 
@@ -221,7 +223,8 @@ export interface GetDisplaySnapshotRequest {
 }
 
 export interface GetDisplaySnapshotResponse {
-  dataUrl: string;
+  /** The snapshot in main's asset store; see capture-asset.ts. */
+  assetId: string;
   width: number;
   height: number;
 }
