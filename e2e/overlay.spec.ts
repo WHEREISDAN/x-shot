@@ -62,7 +62,8 @@ test.describe('capture overlays', () => {
         expect(overlay.getByRole('button', { name: 'Cancel' })).toBeVisible(),
       ),
     );
-    await overlays[0].keyboard.press('Escape');
+    // Only keydown: the overlay can close before a keyup would arrive.
+    await overlays[0].keyboard.down('Escape');
 
     await expect.poll(() => overlayPages(current).length).toBe(0);
   });
