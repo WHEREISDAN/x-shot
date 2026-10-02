@@ -37,6 +37,7 @@
     "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "package:dir": "ts-node ./.erb/scripts/package-dir.ts",
+    "check:package": "ts-node ./.erb/scripts/check-package.ts",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.main.dev.ts",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
@@ -105,7 +106,6 @@
     }
   },
   "dependencies": {
-    "@electron/notarize": "^3.0.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "dom-to-image-more": "^3.6.3",
     "electron-log": "^5.3.2",
@@ -116,6 +116,7 @@
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
+    "@electron/asar": "^3.4.1",
     "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.63.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.15",
@@ -185,15 +186,14 @@
     "productName": "X-Shot",
     "appId": "com.whereisdan.x-shot",
     "asar": true,
-    "afterSign": ".erb/scripts/notarize.js",
     "asarUnpack": "**\\*.{node,dll}",
     "files": [
-      "dist",
-      "node_modules",
+      "dist/**/*",
+      "!**/*.map",
+      "!node_modules{,/**/*}",
       "package.json"
     ],
     "mac": {
-      "notarize": false,
       "target": {
         "target": "default",
         "arch": [

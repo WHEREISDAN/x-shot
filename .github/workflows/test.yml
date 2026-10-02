@@ -1,6 +1,10 @@
 name: Test
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # The publish workflow runs this before building a release.
+  workflow_call:
 
 jobs:
   test:
@@ -32,6 +36,9 @@ jobs:
 
       - name: package app for smoke test
         run: npm run package:dir
+
+      - name: check the packaged app
+        run: npm run check:package
 
       - name: packaged smoke test
         if: runner.os != 'Linux'
