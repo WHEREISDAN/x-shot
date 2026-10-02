@@ -7,6 +7,7 @@ import {
   openOverlays,
   recordCopies,
   recordedCopies,
+  report,
   storedAssetCount,
   stubScreenAccess,
   type PackagedApp,
@@ -181,10 +182,7 @@ test.describe('binary capture transport', () => {
     );
     const after = await mainMemory();
 
-    test.info().annotations.push({
-      type: 'main-memory',
-      description: JSON.stringify({ captureBytes, before, after }),
-    });
+    report('main-memory', { captureBytes, before, after });
     expect(await storedAssetCount(current)).toBe(1);
     // Ten leaked captures would add ten times captureBytes.
     expect(after - before).toBeLessThan(captureBytes + 4 * 1024 * 1024);
@@ -239,13 +237,10 @@ test.describe('binary capture transport', () => {
     );
     const scale = await primaryScale(current);
     const shown = await shownCaptureSize(current.window, sessionId);
-    test.info().annotations.push({
-      type: 'window-capture',
-      description: JSON.stringify({
-        target,
-        shown,
-        msToEditor: Date.now() - startedAt,
-      }),
+    report('window-capture', {
+      target,
+      shown,
+      msToEditor: Date.now() - startedAt,
     });
     // The frame width is the content width; the height adds the title bar.
     expect(shown.width).toBe(Math.round(target.content.width * scale));

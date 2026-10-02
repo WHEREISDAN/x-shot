@@ -4,6 +4,7 @@ import path from 'path';
 import {
   _electron as electron,
   expect,
+  test,
   type ElectronApplication,
   type Locator,
   type Page,
@@ -381,4 +382,11 @@ export async function meanBrightness(
     },
     { dataUrl, region, sourceWidth },
   );
+}
+
+/** Attaches a measurement to the test and prints it into the CI log. */
+export function report(type: string, data: unknown): void {
+  const description = JSON.stringify(data);
+  test.info().annotations.push({ type, description });
+  process.stdout.write(`${type} ${description}\n`);
 }
