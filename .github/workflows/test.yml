@@ -29,3 +29,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run ci
+
+      - name: package app for smoke test
+        run: npm run package:dir
+
+      - name: packaged smoke test
+        if: runner.os != 'Linux'
+        run: npm run test:smoke
+
+      - name: packaged smoke test (Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run test:smoke

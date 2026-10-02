@@ -22,6 +22,7 @@ const distMainPath = path.join(distPath, 'main');
 const distRendererPath = path.join(distPath, 'renderer');
 
 const buildPath = path.join(releasePath, 'build');
+const smokeBuildPath = path.join(buildPath, 'smoke');
 
 export default {
   rootPath,
@@ -39,4 +40,5 @@ export default {
   distMainPath,
   distRendererPath,
   buildPath,
+  smokeBuildPath,
 };

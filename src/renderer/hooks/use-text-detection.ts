@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { recognize } from 'tesseract.js';
-import workerUrl from 'tesseract.js/dist/worker.min.js';
-import coreUrl from 'tesseract.js-core/tesseract-core.wasm.js';
-import engDataUrl from '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz';
 import { createRendererLogger } from '../utils/logger';
+import { resolveOcrAssetPaths } from './ocr-assets';
 
 const logger = createRendererLogger('text-detection');
 
@@ -123,17 +121,8 @@ export function useTextDetection(imageDataUrl: string): UseTextDetectionResult {
       const { canvas, scale, cleanup } = scaleImageToCanvas(img, 1200);
       canvasCleanup = cleanup;
 
-      // Bundled asset URLs are relative (dev: '/ocr/...', prod: './ocr/...'),
-      // so they must be resolved against the document before taking their
-      // directory; `new URL('./', relativePath)` throws.
-      const langPath = new URL(
-        '.',
-        new URL(engDataUrl, window.location.href),
-      ).toString();
       const localOcrOptions = {
-        workerPath: workerUrl,
-        corePath: coreUrl,
-        langPath,
+        ...resolveOcrAssetPaths(window.location.href),
         workerBlobURL: false,
         logger: () => {},
       } as const;
