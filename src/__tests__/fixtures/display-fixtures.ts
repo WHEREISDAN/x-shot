@@ -67,15 +67,14 @@ export const secondaryAbovePrimary: DisplayFixture = {
 };
 
 /**
- * A 5K display is 5120x2880 physical pixels, but desktopCapturer thumbnails
- * are clamped to MAX_SNAPSHOT_DIMENSION (4096), so the stored snapshot is
- * 4096x2304 and the effective scale is 1.6x rather than the display's 2x.
+ * A 5K display is 5120x2880 physical pixels. Snapshots are requested at each
+ * display's physical size, so the stored snapshot is native resolution.
  */
 export const fiveK: DisplayFixture = {
-  name: '5K display at 2x (snapshot clamped to 4096)',
+  name: '5K display at 2x',
   displays: [{ id: 1, bounds: dip(0, 0, 2560, 1440), scaleFactor: 2 }],
   snapshots: {
-    1: { width: 4096, height: 2304, bounds: dip(0, 0, 2560, 1440) },
+    1: { width: 5120, height: 2880, bounds: dip(0, 0, 2560, 1440) },
   },
 };
 

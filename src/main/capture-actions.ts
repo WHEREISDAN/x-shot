@@ -14,6 +14,7 @@ export async function recaptureLastSelection(): Promise<boolean> {
     y: last.y,
     width: last.width,
     height: last.height,
+    displayId: last.displayId,
   });
 }
 

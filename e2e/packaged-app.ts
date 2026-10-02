@@ -152,21 +152,53 @@ export async function deliverScreenshot(
  * Starts a real capture and confirms a window that does not exist, so main
  * reports a genuine failure through its capture-result path.
  */
-export async function triggerFailedCapture({
-  app,
-  window: page,
-}: PackagedApp): Promise<void> {
-  await page.evaluate(() =>
+/**
+ * Makes main read the given macOS Screen Recording status. Test machines
+ * and CI runners have no granted permission, and the real status cannot be
+ * changed from a test.
+ */
+export async function stubScreenAccess(
+  { app }: PackagedApp,
+  status: 'granted' | 'denied',
+): Promise<void> {
+  await app.evaluate(({ systemPreferences }, value) => {
+    Object.assign(systemPreferences, { getMediaAccessStatus: () => value });
+  }, status);
+}
+
+export const isOverlayPage = (candidate: Page) =>
+  candidate.url().includes('#/screenshot');
+
+export function overlayPages({ app }: PackagedApp): Page[] {
+  return app.windows().filter(isOverlayPage);
+}
+
+export async function displayCount({ app }: PackagedApp): Promise<number> {
+  return app.evaluate(({ screen }) => screen.getAllDisplays().length);
+}
+
+/** Starts a capture the way a hotkey does and waits for every overlay. */
+export async function openOverlays(packaged: PackagedApp): Promise<Page[]> {
+  await packaged.window.evaluate(() =>
     window.electron.ipcRenderer.sendMessage('screenshot-capture', undefined),
   );
-
-  const isOverlay = (candidate: Page) =>
-    candidate.url().includes('#/screenshot');
+  const expected = await displayCount(packaged);
   await expect
-    .poll(() => app.windows().some(isOverlay), { timeout: 30_000 })
-    .toBe(true);
-  const overlay = app.windows().find(isOverlay) as Page;
-  await overlay.waitForLoadState('domcontentloaded');
+    .poll(() => overlayPages(packaged).length, { timeout: 30_000 })
+    .toBe(expected);
+  const pages = overlayPages(packaged);
+  await Promise.all(
+    pages.map((page) => page.waitForLoadState('domcontentloaded')),
+  );
+  return pages;
+}
+
+export async function triggerFailedCapture(
+  packaged: PackagedApp,
+): Promise<void> {
+  const { window: page } = packaged;
+  await stubScreenAccess(packaged, 'granted');
+  const [overlay] = await openOverlays(packaged);
 
   // The coordinator ignores a confirmation until the overlays are ready, so
   // resend until the editor reports the failure.

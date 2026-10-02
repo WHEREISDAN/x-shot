@@ -20,6 +20,7 @@ import {
 } from './tray';
 import { refreshApplicationMenu } from './menu';
 import registerFileIpcHandlers from './ipc/files';
+import registerScreenPermissionHandlers from './screen-permission';
 import registerScreenshotIpcHandlers from './ipc/screenshot';
 import registerWindowIpcHandlers, {
   setupWindowStateEvents,
@@ -83,6 +84,7 @@ app
     registerScreenshotIpcHandlers();
     registerWindowIpcHandlers();
     registerPreferencesIpcHandlers();
+    registerScreenPermissionHandlers();
 
     const runDetached = (work: Promise<unknown>) => {
       work.catch((err) => log.error('Capture coordinator error:', err));

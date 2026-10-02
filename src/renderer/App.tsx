@@ -8,13 +8,26 @@ import { useEffect, type ReactNode } from 'react';
 import ScreenshotCapture from './ScreenshotCapture';
 import './App.css';
 import ScreenshotEditor from './components/editor/ScreenshotEditor';
-import Toast from './components/Toast';
+import Toast, { type ToastAction } from './components/Toast';
+import type { CaptureFailure } from '../shared/ipc-types';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
 import { useCaptureResult } from './hooks/use-capture-result';
 import { SUCCESS_TOAST_MS, useExportActions } from './hooks/use-export-actions';
 import removeLegacyPiiMaskKeys from './hooks/pii/legacy-mask-storage';
+
+function failureAction(failure: CaptureFailure): ToastAction | undefined {
+  if (failure.action !== 'open-screen-recording-settings') return undefined;
+  return {
+    label: 'Open System Settings',
+    onClick: () => {
+      window.electron?.ipcRenderer
+        ?.invoke('open-screen-recording-settings', undefined)
+        .catch(() => {});
+    },
+  };
+}
 
 function Hello() {
   const { screenshot, failure, dismissFailure, clearScreenshot } =
@@ -51,6 +64,7 @@ function Hello() {
           tone="error"
           message={failure.message}
           onDismiss={dismissFailure}
+          action={failureAction(failure)}
           dismissLabel="Dismiss capture error"
         />
       )}

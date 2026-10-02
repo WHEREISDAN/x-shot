@@ -20,6 +20,17 @@ class AppUpdater {
 let mainWindow: BrowserWindow | null = null;
 let preferencesWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
+// Set while a capture has hidden the Preferences window.
+let preferencesHiddenForCapture = false;
+
+// Time for the compositor to drop a hidden or closed window from screen.
+const COMPOSITOR_FRAME_MS = 60;
+const WINDOW_EVENT_TIMEOUT_MS = 1000;
+
+const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, COMPOSITOR_FRAME_MS);
+  });
 
 function openAllowedExternalUrl(rawUrl: string): void {
   try {
@@ -108,21 +119,13 @@ export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
   return win;
 };
 
-/**
- * Hides the main window and waits for the compositor to acknowledge the
- * hidden state, so a capture taken immediately afterwards cannot include
- * the X-Shot editor in its pixels.
- */
-export const hideMainWindowAndWait = async (): Promise<void> => {
-  const win = mainWindow;
-  if (!win || win.isDestroyed() || !win.isVisible()) return;
-
-  await new Promise<void>((resolve) => {
+/** Hides a window and resolves once the compositor has dropped it. */
+const hideAndWait = (win: BrowserWindow): Promise<void> =>
+  new Promise<void>((resolve) => {
     const timeout = setTimeout(resolve, 300 /* ms safety timeout */);
     win.once('hide', () => {
       clearTimeout(timeout);
-      // Give the compositor one frame to drop the window from the screen.
-      setTimeout(resolve, 60);
+      setTimeout(resolve, COMPOSITOR_FRAME_MS);
     });
     try {
       win.hide();
@@ -131,6 +134,31 @@ export const hideMainWindowAndWait = async (): Promise<void> => {
       resolve();
     }
   });
+
+const isShown = (win: BrowserWindow | null): win is BrowserWindow =>
+  !!win && !win.isDestroyed() && win.isVisible();
+
+/**
+ * Hides every X-Shot window that could appear in a capture: the editor and,
+ * if open, Preferences. Resolves once neither can be in the pixels.
+ */
+export const hideWindowsForCapture = async (): Promise<void> => {
+  const hiding: Promise<void>[] = [];
+  if (isShown(mainWindow)) hiding.push(hideAndWait(mainWindow));
+  if (isShown(preferencesWindow)) {
+    preferencesHiddenForCapture = true;
+    hiding.push(hideAndWait(preferencesWindow));
+  }
+  await Promise.all(hiding);
+};
+
+/** Shows the Preferences window again if a capture hid it. */
+export const restoreWindowsAfterCapture = (): void => {
+  if (!preferencesHiddenForCapture) return;
+  preferencesHiddenForCapture = false;
+  if (preferencesWindow && !preferencesWindow.isDestroyed()) {
+    preferencesWindow.showInactive();
+  }
 };
 
 export const enableScreenSaverMode = (): void => {
@@ -169,11 +197,20 @@ export const closeScreenshotOverlays = async (): Promise<void> => {
           } catch {
             // noop
           }
+          if (w.isDestroyed()) {
+            resolve();
+            return;
+          }
+          const timeout = setTimeout(resolve, WINDOW_EVENT_TIMEOUT_MS);
+          w.once('closed', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
           w.close();
         } catch (error) {
           logger.warn('Failed to close screenshot window', error);
+          resolve();
         }
-        resolve();
       };
 
       // If we're in simple fullscreen on macOS, exit cleanly first
@@ -194,7 +231,10 @@ export const closeScreenshotOverlays = async (): Promise<void> => {
     });
 
   try {
+    // Every overlay must be gone, not just asked to close, before anything
+    // reads screen pixels.
     await Promise.all(windowsToClose.map((w) => gracefulClose(w)));
+    await nextFrame();
   } catch (err) {
     logger.warn('Error while closing screenshot overlays', err);
   } finally {

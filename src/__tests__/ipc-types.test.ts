@@ -12,6 +12,22 @@ describe('shared/ipc-types validators', () => {
       true,
     );
     expect(isScreenshotSelection({})).toBe(false);
+    // Empty selections are well formed; the capture reports them as failed.
+    expect(
+      isScreenshotSelection({ x: 5, y: 5, width: 0, height: 0, displayId: 2 }),
+    ).toBe(true);
+    expect(isScreenshotSelection({ x: 5, y: 5, width: -1, height: 10 })).toBe(
+      false,
+    );
+    expect(
+      isScreenshotSelection({
+        x: 5,
+        y: 5,
+        width: 1,
+        height: 1,
+        displayId: 'a',
+      }),
+    ).toBe(false);
     expect(isScreenshotSelection({ x: 0, y: 0, width: 'a', height: 1 })).toBe(
       false,
     );

@@ -10,10 +10,16 @@ import {
 
 export type ToastTone = 'success' | 'error';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastProps {
   tone: ToastTone;
   message: string;
   onDismiss: () => void;
+  action?: ToastAction;
   dismissLabel?: string;
   /** Hides the toast after this many milliseconds; omit to keep it. */
   autoDismissMs?: number;
@@ -25,6 +31,7 @@ export default function Toast({
   onDismiss,
   dismissLabel = 'Dismiss',
   autoDismissMs,
+  action,
 }: ToastProps) {
   useEffect(() => {
     if (autoDismissMs === undefined) return () => {};
@@ -59,6 +66,24 @@ export default function Toast({
       }}
     >
       <span style={{ flex: 1 }}>{message}</span>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          style={{
+            background: colors.surface.default,
+            border: `1px solid ${colors.border.emphasis}`,
+            borderRadius: borderRadius.lg,
+            color: colors.text.primary,
+            cursor: 'pointer',
+            fontSize: typography.fontSize.sm,
+            padding: `${spacing[1]} ${spacing[2]}`,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {action.label}
+        </button>
+      )}
       <button
         type="button"
         aria-label={dismissLabel}
