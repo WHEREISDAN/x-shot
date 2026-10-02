@@ -147,6 +147,8 @@ export interface ScreenshotSelection {
   y: number;
   width: number;
   height: number;
+  /** The display whose overlay the selection was drawn on. */
+  displayId?: number;
 }
 
 export interface ScreenshotResult {
@@ -167,6 +169,7 @@ export interface ScreenshotResult {
 export type CaptureFailureReason =
   | 'screen-permission'
   | 'source-unavailable'
+  | 'empty-selection'
   | 'capture-error';
 
 export interface CaptureSuccess {
@@ -174,12 +177,16 @@ export interface CaptureSuccess {
   screenshot: ScreenshotResult;
 }
 
+/** Something the editor can offer next to a failure message. */
+export type CaptureFailureAction = 'open-screen-recording-settings';
+
 export interface CaptureFailure {
   ok: false;
   sessionId: string;
   reason: CaptureFailureReason;
   /** User-facing explanation shown in the editor. */
   message: string;
+  action?: CaptureFailureAction;
 }
 
 export type CaptureResult = CaptureSuccess | CaptureFailure;
@@ -297,6 +304,10 @@ export interface IpcInvokes {
     req: undefined;
     res: AppPreferences;
   };
+  'open-screen-recording-settings': {
+    req: undefined;
+    res: boolean;
+  };
   'select-folder': {
     req: { defaultPath?: string };
     res: { filePath: string | null; canceled: boolean };
@@ -304,22 +315,24 @@ export interface IpcInvokes {
 }
 
 // Runtime validators (shared so they can be unit-tested without electron)
+/**
+ * A well-formed selection. An empty (zero-size) one is still well formed:
+ * the capture reports it as a failure instead of silently ignoring it.
+ */
 export function isScreenshotSelection(
   value: unknown,
 ): value is ScreenshotSelection {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
+  const finite = (n: unknown) => typeof n === 'number' && Number.isFinite(n);
   return (
-    typeof v.x === 'number' &&
-    Number.isFinite(v.x) &&
-    typeof v.y === 'number' &&
-    Number.isFinite(v.y) &&
-    typeof v.width === 'number' &&
-    Number.isFinite(v.width) &&
-    v.width > 0 &&
-    typeof v.height === 'number' &&
-    Number.isFinite(v.height) &&
-    v.height > 0
+    finite(v.x) &&
+    finite(v.y) &&
+    finite(v.width) &&
+    (v.width as number) >= 0 &&
+    finite(v.height) &&
+    (v.height as number) >= 0 &&
+    (v.displayId === undefined || finite(v.displayId))
   );
 }
 

@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import {
-  CaptureSourceUnavailableError,
+  CaptureError,
   toCaptureFailure,
   toCaptureSuccess,
 } from '../main/capture-result';
@@ -19,17 +19,40 @@ describe('toCaptureFailure', () => {
       sessionId: 'session-3',
       reason: 'screen-permission',
       message: expect.stringContaining('Screen Recording'),
+      action: 'open-screen-recording-settings',
     });
 
     const linux = toCaptureFailure('session-3', error, 'linux');
     expect(linux.reason).toBe('screen-permission');
     expect(linux.message).not.toContain('System Settings');
+    expect(linux).not.toHaveProperty('action');
+  });
+
+  it('reports a permission refusal found before capturing', () => {
+    const failure = toCaptureFailure(
+      'session-8',
+      new CaptureError('screen-permission', 'denied'),
+      'darwin',
+    );
+    expect(failure).toMatchObject({
+      reason: 'screen-permission',
+      action: 'open-screen-recording-settings',
+    });
+  });
+
+  it('explains an empty selection instead of ignoring it', () => {
+    const failure = toCaptureFailure(
+      'session-9',
+      new CaptureError('empty-selection', 'Empty selection'),
+    );
+    expect(failure.reason).toBe('empty-selection');
+    expect(failure.message).toContain('selected area is empty');
   });
 
   it('reports a vanished window or screen as unavailable', () => {
     const failure = toCaptureFailure(
       'session-4',
-      new CaptureSourceUnavailableError('Window source not found'),
+      new CaptureError('source-unavailable', 'Window source not found'),
     );
     expect(failure.reason).toBe('source-unavailable');
     expect(failure.sessionId).toBe('session-4');

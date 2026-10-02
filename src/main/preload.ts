@@ -43,6 +43,7 @@ const invokeChannels = new Set<keyof IpcInvokes>([
   'get-preferences',
   'set-preferences',
   'open-preferences-window',
+  'open-screen-recording-settings',
   'reset-preferences',
   'select-folder',
 ]);

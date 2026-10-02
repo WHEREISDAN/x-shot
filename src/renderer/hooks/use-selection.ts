@@ -6,12 +6,15 @@ import React, {
   useState,
 } from 'react';
 import type { ScreenshotSelection } from '../../shared/ipc-types';
+import { clampToViewport, keepInViewport } from '../../shared/crop-geometry';
 
 export interface SelectionArea extends ScreenshotSelection {}
 
 export interface UseSelectionOptions {
   offsetX: number;
   offsetY: number;
+  /** The display this overlay covers; sent with the selection. */
+  displayId?: number;
 }
 
 export interface UseSelectionResult {
@@ -29,7 +32,6 @@ export interface UseSelectionResult {
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseMove: (e: React.MouseEvent) => void;
   onMouseUp: () => void;
-  onKeyDown: (e: React.KeyboardEvent) => void;
   confirm: () => void;
 }
 
@@ -75,9 +77,16 @@ function getHandleAtPoint(
   return hit ? hit.name : null;
 }
 
+// The overlay covers exactly one display, so its viewport is that display.
+const overlayViewport = () => ({
+  width: window.innerWidth,
+  height: window.innerHeight,
+});
+
 export function useSelection({
   offsetX,
   offsetY,
+  displayId,
 }: UseSelectionOptions): UseSelectionResult {
   const [selection, setSelection] = useState<SelectionArea | null>(null);
   const [isDragging, setDragging] = useState(false);
@@ -188,23 +197,32 @@ export function useSelection({
           default:
             break;
         }
-        x = snap(x);
-        y = snap(y);
-        width = Math.max(10, snap(width));
-        height = Math.max(10, snap(height));
-        setSelection({ x, y, width, height });
+        setSelection(
+          clampToViewport(
+            {
+              x: snap(x),
+              y: snap(y),
+              width: Math.max(10, snap(width)),
+              height: Math.max(10, snap(height)),
+            },
+            overlayViewport(),
+          ),
+        );
         startRef.current = { x: currentX, y: currentY };
         return;
       }
 
       if (isDragging && selection) {
-        const newX = snap(currentX - moveOffsetRef.current.x);
-        const newY = snap(currentY - moveOffsetRef.current.y);
-        setSelection({
-          ...selection,
-          x: Math.max(0, newX),
-          y: Math.max(0, newY),
-        });
+        setSelection(
+          keepInViewport(
+            {
+              ...selection,
+              x: snap(currentX - moveOffsetRef.current.x),
+              y: snap(currentY - moveOffsetRef.current.y),
+            },
+            overlayViewport(),
+          ),
+        );
         return;
       }
 
@@ -214,12 +232,17 @@ export function useSelection({
         const top = Math.min(start.y, currentY);
         const width = Math.abs(currentX - start.x);
         const height = Math.abs(currentY - start.y);
-        setSelection({
-          x: snap(left),
-          y: snap(top),
-          width: snap(width),
-          height: snap(height),
-        });
+        setSelection(
+          clampToViewport(
+            {
+              x: snap(left),
+              y: snap(top),
+              width: snap(width),
+              height: snap(height),
+            },
+            overlayViewport(),
+          ),
+        );
       }
     },
     [isDragging, isResizing, isSelecting, selection, resizeHandle],
@@ -230,17 +253,6 @@ export function useSelection({
     setResizing(false);
     setSelecting(false);
     setResizeHandle(null);
-  }, []);
-
-  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      try {
-        window.electron.ipcRenderer.sendMessage('screenshot-cancel', undefined);
-      } catch {
-        // noop
-      }
-      window.close();
-    }
   }, []);
 
   const clear = useCallback(() => {
@@ -292,9 +304,10 @@ export function useSelection({
       y: selection.y + offsetY,
       width: selection.width,
       height: selection.height,
+      displayId,
     };
     window.electron.ipcRenderer.sendMessage('screenshot-data', payload);
-  }, [offsetX, offsetY, selection]);
+  }, [offsetX, offsetY, displayId, selection]);
 
   // Manage body classes for transparency
   useEffect(() => {
@@ -320,7 +333,6 @@ export function useSelection({
     onMouseDown,
     onMouseMove,
     onMouseUp,
-    onKeyDown,
     confirm,
   };
 }

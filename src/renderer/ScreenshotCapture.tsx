@@ -11,7 +11,7 @@ import { createRendererLogger } from './utils/logger';
 const logger = createRendererLogger('screenshot-capture');
 
 function ScreenshotCapture() {
-  const { offsetX, offsetY, isPrimary } = useMemo(() => {
+  const { offsetX, offsetY, displayId } = useMemo(() => {
     const { hash } = window.location;
     const queryIndex = hash.indexOf('?');
     const params = new URLSearchParams(
@@ -19,18 +19,37 @@ function ScreenshotCapture() {
     );
     const x = Number(params.get('offsetX') || '0');
     const y = Number(params.get('offsetY') || '0');
-    const primary = params.get('primary') === '1';
+    const id = Number(params.get('displayId'));
     return {
       offsetX: Number.isFinite(x) ? x : 0,
       offsetY: Number.isFinite(y) ? y : 0,
-      isPrimary: primary,
+      displayId:
+        params.get('displayId') && Number.isFinite(id) ? id : undefined,
     };
   }, []);
 
-  const selection = useSelection({ offsetX, offsetY });
+  const selection = useSelection({ offsetX, offsetY, displayId });
   const { clear: clearSelection } = selection;
 
-  const [isPrimaryDisplay] = useState<boolean>(isPrimary);
+  // Main closes the overlays on every display.
+  const cancelCapture = useCallback(() => {
+    try {
+      window.electron.ipcRenderer.sendMessage('screenshot-cancel', undefined);
+    } catch (error) {
+      logger.warn('Failed to cancel the capture', error);
+    }
+  }, []);
+
+  // Escape works wherever focus is, not only on a focused element.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      cancelCapture();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [cancelCapture]);
   const [showWindowsPanel, setShowWindowsPanel] = useState(false);
   const [showDisplaysPanel, setShowDisplaysPanel] = useState(false);
   const [windowSources, setWindowSources] = useState<WindowSourceItem[]>([]);
@@ -44,16 +63,9 @@ function ScreenshotCapture() {
 
   useEffect(() => {
     let cancelled = false;
-    const { hash } = window.location;
-    const queryIndex = hash.indexOf('?');
-    const params = new URLSearchParams(
-      queryIndex >= 0 ? hash.substring(queryIndex + 1) : '',
-    );
-    const displayIdParam = params.get('displayId');
-    const displayId = displayIdParam ? Number(displayIdParam) : undefined;
     const run = async () => {
       try {
-        if (displayId === undefined || Number.isNaN(displayId)) return;
+        if (displayId === undefined) return;
         const res = await window.electron.ipcRenderer.invoke(
           'get-display-snapshot',
           { displayId },
@@ -73,7 +85,7 @@ function ScreenshotCapture() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [displayId]);
 
   const toggleWindowsPanel = useCallback(async () => {
     const next = !showWindowsPanel;
@@ -133,15 +145,17 @@ function ScreenshotCapture() {
   const captureScreen = useCallback(
     (sourceId: string) => {
       clearSelection();
+      const source = screenSources.find((s) => s.id === sourceId);
       try {
         window.electron.ipcRenderer.sendMessage('screenshot-screen', {
           sourceId,
+          displayId: source?.displayId ?? undefined,
         });
       } catch {
         // noop
       }
     },
-    [clearSelection],
+    [clearSelection, screenSources],
   );
 
   return (
@@ -198,7 +212,6 @@ function ScreenshotCapture() {
         selection.onMouseMove(e);
       }}
       onMouseUp={selection.onMouseUp}
-      onKeyDown={selection.onKeyDown}
       role="application"
       tabIndex={0}
     >
@@ -340,23 +353,11 @@ function ScreenshotCapture() {
         ✓ Capture
       </button>
 
-      {isPrimaryDisplay && (
-        <QuickDock
-          onToggleWindows={toggleWindowsPanel}
-          onToggleDisplays={toggleDisplaysPanel}
-          onCancel={() => {
-            try {
-              window.electron.ipcRenderer.sendMessage(
-                'screenshot-cancel',
-                undefined,
-              );
-            } catch {
-              // noop
-            }
-            window.close();
-          }}
-        />
-      )}
+      <QuickDock
+        onToggleWindows={toggleWindowsPanel}
+        onToggleDisplays={toggleDisplaysPanel}
+        onCancel={cancelCapture}
+      />
 
       {showWindowsPanel && (
         <SourcesPanel

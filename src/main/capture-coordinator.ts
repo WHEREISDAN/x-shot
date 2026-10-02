@@ -43,6 +43,8 @@ export interface CaptureRect {
   y: number;
   width: number;
   height: number;
+  /** The display the area was selected on, when known. */
+  displayId?: number;
 }
 
 export interface CaptureSessionRef {
@@ -272,6 +274,7 @@ export async function confirmSelection(
         y: selection.y,
         width: selection.width,
         height: selection.height,
+        displayId: selection.displayId,
       },
     },
     selection.sessionId,

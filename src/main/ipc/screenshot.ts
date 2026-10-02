@@ -1,5 +1,11 @@
 import { desktopCapturer, ipcMain, screen } from 'electron';
-import type { BrowserWindow, NativeImage, Rectangle } from 'electron';
+import type {
+  BrowserWindow,
+  DesktopCapturerSource,
+  Display,
+  NativeImage,
+  Rectangle,
+} from 'electron';
 import log from 'electron-log';
 import type {
   CaptureResult,
@@ -8,10 +14,11 @@ import type {
   ScreenshotResult,
 } from '../../shared/ipc-types';
 import {
-  CaptureSourceUnavailableError,
+  CaptureError,
   toCaptureFailure,
   toCaptureSuccess,
 } from '../capture-result';
+import { isScreenCaptureDenied } from '../screen-permission';
 import {
   isScreenshotScreenRequest,
   isScreenshotSelection,
@@ -24,10 +31,16 @@ import {
   ensureMainWindowReady,
   getMainWindow,
   enableScreenSaverMode,
-  hideMainWindowAndWait,
+  hideWindowsForCapture,
+  restoreWindowsAfterCapture,
 } from '../windows';
 import { updatePreferences } from '../preferences';
-import { computeCropRect } from '../../shared/crop-geometry';
+import {
+  computeCropRect,
+  displayForSelection,
+  groupByPhysicalSize,
+  physicalSize,
+} from '../../shared/crop-geometry';
 import {
   beginCaptureSession,
   endCaptureSession,
@@ -54,149 +67,80 @@ export default function registerScreenshotIpcHandlers() {
     height: number;
     bounds: Rectangle;
     scaleFactor: number;
-    timestamp: number;
     sourceId?: string;
   };
+  // Snapshots live exactly as long as one capture session: taken when the
+  // overlays open, released by the session observer when it ends.
   const displaySnapshots = new Map<number, DisplaySnapshot>();
 
-  // Memory management constants
-  const MAX_SNAPSHOT_AGE_MS = 30000;
-  const MAX_SNAPSHOT_DIMENSION = 4096;
-  let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+  // Window sizes are unknown before capture; this bounds their thumbnails.
+  const MAX_WINDOW_THUMBNAIL = 4096;
 
   const releaseDisplaySnapshots = () => {
+    if (displaySnapshots.size === 0) return;
     log.info(
       `Releasing ${displaySnapshots.size} display snapshots from memory`,
     );
     displaySnapshots.clear();
-    if (cleanupTimer) {
-      clearTimeout(cleanupTimer);
-      cleanupTimer = null;
-    }
   };
 
-  const cleanupExpiredSnapshots = () => {
-    const now = Date.now();
-    let cleanedCount = 0;
-    const expiredKeys: number[] = [];
-
-    displaySnapshots.forEach((snapshot, key) => {
-      if (now - snapshot.timestamp > MAX_SNAPSHOT_AGE_MS) {
-        expiredKeys.push(key);
-      }
-    });
-
-    expiredKeys.forEach((key) => {
-      displaySnapshots.delete(key);
-      cleanedCount += 1;
-    });
-
-    if (cleanedCount > 0) {
-      log.info(`Cleaned up ${cleanedCount} expired display snapshots`);
-    }
+  /** The screen source of a display: by id, else the closest aspect ratio. */
+  const pickSourceForDisplay = (
+    sources: DesktopCapturerSource[],
+    display: Display,
+  ): DesktopCapturerSource | undefined => {
+    const direct = sources.find((s) => s.display_id === String(display.id));
+    if (direct || sources.length <= 1) return direct ?? sources[0];
+    const target = physicalSize(display);
+    const targetRatio = target.width / target.height;
+    const ratioDelta = (s: DesktopCapturerSource) => {
+      const size = s.thumbnail.getSize();
+      return size.width > 0 && size.height > 0
+        ? Math.abs(size.width / size.height - targetRatio)
+        : Number.POSITIVE_INFINITY;
+    };
+    return sources.reduce((best, s) =>
+      ratioDelta(s) < ratioDelta(best) ? s : best,
+    );
   };
 
-  const scheduleCleanup = () => {
-    if (cleanupTimer) clearTimeout(cleanupTimer);
-    cleanupTimer = setTimeout(() => {
-      cleanupExpiredSnapshots();
-      if (displaySnapshots.size > 0) {
-        scheduleCleanup();
-      }
-    }, MAX_SNAPSHOT_AGE_MS);
-  };
-
+  /** Captures every display once, each at its native physical size. */
   const prepareDisplaySnapshots = async () => {
     releaseDisplaySnapshots();
     const displays = screen.getAllDisplays();
-    const timestamp = Date.now();
-
     try {
-      // Capture all screens with reduced max resolution for memory efficiency
-      const sources = await desktopCapturer.getSources({
-        types: ['screen'],
-        thumbnailSize: {
-          width: MAX_SNAPSHOT_DIMENSION,
-          height: MAX_SNAPSHOT_DIMENSION,
-        },
-      });
-
-      log.info(
-        `Pre-capture: found ${displays.length} displays and ${sources.length} screen sources`,
-      );
-
-      let totalMemoryMB = 0;
-      const pickBestSourceForDisplay = (
-        display: (typeof displays)[number],
-        index: number,
-      ) => {
-        const direct = sources.find(
-          (s) =>
-            (s as unknown as { display_id?: string }).display_id ===
-            String(display.id),
-        );
-        if (direct) return direct;
-        if (sources.length === 1) return sources[0];
-        const deviceScale = display.scaleFactor || 1;
-        const targetW = Math.max(
-          1,
-          Math.floor(display.bounds.width * deviceScale),
-        );
-        const targetH = Math.max(
-          1,
-          Math.floor(display.bounds.height * deviceScale),
-        );
-        const targetRatio = targetW / targetH;
-        let best = sources[0];
-        let bestDelta = Number.POSITIVE_INFINITY;
-        for (let idx = 0; idx < sources.length; idx += 1) {
-          const candidate = sources[idx];
-          const sz = candidate.thumbnail.getSize();
-          if (sz.width > 0 && sz.height > 0) {
-            const r = sz.width / sz.height;
-            const delta = Math.abs(r - targetRatio);
-            if (delta < bestDelta) {
-              best = candidate;
-              bestDelta = delta;
-            }
-          }
-        }
-        return best ?? sources[Math.min(index, sources.length - 1)];
-      };
-
-      displays.forEach((d, i) => {
-        const { bounds, scaleFactor, id } = d;
-        const source = pickBestSourceForDisplay(d, i);
-        if (!source) {
-          log.warn(
-            `Pre-capture: no source matched for display ${id} (index ${i})`,
-          );
-          return;
-        }
-
-        const img = source.thumbnail;
-        const size = img.getSize();
-        const memoryUsageMB = (size.width * size.height * 4) / (1024 * 1024);
-        totalMemoryMB += memoryUsageMB;
-
-        displaySnapshots.set(id, {
-          image: img,
-          dataUrl: img.toDataURL(),
-          width: size.width,
-          height: size.height,
-          bounds,
-          scaleFactor: scaleFactor || 1,
-          timestamp,
-          sourceId: source.id,
+      // getSources scales every screen to one size per call, so displays
+      // are captured in groups that share a physical size.
+      await groupByPhysicalSize(displays).reduce(async (previous, group) => {
+        await previous;
+        const sources = await desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: group.size,
         });
-        log.info(
-          `Pre-capture: stored snapshot for display ${id} -> ${size.width}x${size.height}`,
-        );
-      });
+        group.displayIds.forEach((id) => {
+          const display = displays.find((d) => d.id === id);
+          const source = display && pickSourceForDisplay(sources, display);
+          if (!display || !source) {
+            log.warn(`Pre-capture: no screen source for display ${id}`);
+            return;
+          }
+          const image = source.thumbnail;
+          const size = image.getSize();
+          displaySnapshots.set(id, {
+            image,
+            dataUrl: image.toDataURL(),
+            width: size.width,
+            height: size.height,
+            bounds: display.bounds,
+            scaleFactor: display.scaleFactor || 1,
+            sourceId: source.id,
+          });
+          log.info(
+            `Pre-capture: stored snapshot for display ${id} -> ${size.width}x${size.height}`,
+          );
+        });
+      }, Promise.resolve());
 
-      log.info(
-        `Prepared ${displaySnapshots.size} display snapshots (${Math.round(totalMemoryMB)}MB total)`,
-      );
       markCaptureStage('snapshot-ready', {
         displays: Array.from(displaySnapshots.entries()).map(
           ([displayId, snap]) => ({
@@ -209,19 +153,36 @@ export default function registerScreenshotIpcHandlers() {
           }),
         ),
       });
-      scheduleCleanup();
     } catch (err) {
       log.error('Failed to prepare display snapshots:', err);
       releaseDisplaySnapshots();
     }
   };
 
+  // The editor shows the failure but keeps whatever the user is editing.
+  const sendCaptureFailure = async (
+    session: CaptureSessionRef,
+    error: unknown,
+  ) => {
+    const win = await ensureMainWindowReady();
+    win.webContents.send('capture-result', toCaptureFailure(session.id, error));
+  };
+
+  const screenPermissionError = () =>
+    new CaptureError('screen-permission', 'Screen Recording is denied.');
+
   const prepareSession = async (session: CaptureSessionRef) => {
     markCaptureStage('trigger', {
       platform: process.platform,
       source: session.source,
     });
-    await hideMainWindowAndWait();
+    // With Screen Recording refused, overlays would only show a blank frozen
+    // screen and the capture would fail; explain the problem at once.
+    if (isScreenCaptureDenied()) {
+      await sendCaptureFailure(session, screenPermissionError());
+      throw screenPermissionError();
+    }
+    await hideWindowsForCapture();
     if (!isSessionCurrent(session)) return;
     await prepareDisplaySnapshots();
     if (!isSessionCurrent(session)) return;
@@ -334,19 +295,19 @@ export default function registerScreenshotIpcHandlers() {
   ) => {
     await closeScreenshotOverlays();
     releaseDisplaySnapshots();
-    await hideMainWindowAndWait();
+    await hideWindowsForCapture();
     if (!isSessionCurrent(session)) return;
 
     const sources = await desktopCapturer.getSources({
       types: ['window'],
       thumbnailSize: {
-        width: MAX_SNAPSHOT_DIMENSION,
-        height: MAX_SNAPSHOT_DIMENSION,
+        width: MAX_WINDOW_THUMBNAIL,
+        height: MAX_WINDOW_THUMBNAIL,
       },
     });
     const source = sources.find((s) => s.id === sourceId);
     if (!source) {
-      throw new CaptureSourceUnavailableError('Window source not found');
+      throw new CaptureError('source-unavailable', 'Window source not found');
     }
     const { thumbnail, name } = source;
     const size = thumbnail.getSize();
@@ -375,27 +336,29 @@ export default function registerScreenshotIpcHandlers() {
   ) => {
     await closeScreenshotOverlays();
     releaseDisplaySnapshots();
-    await hideMainWindowAndWait();
+    await hideWindowsForCapture();
     if (!isSessionCurrent(session)) return;
 
+    // Request the chosen display at its native size; without a known display
+    // use the largest one so no screen is downscaled.
+    const displays = screen.getAllDisplays();
+    const chosen = displays.find(
+      (d) => String(d.id) === String(request.displayId),
+    );
+    const sizes = (chosen ? [chosen] : displays).map(physicalSize);
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: {
-        width: MAX_SNAPSHOT_DIMENSION,
-        height: MAX_SNAPSHOT_DIMENSION,
+        width: Math.max(...sizes.map((size) => size.width)),
+        height: Math.max(...sizes.map((size) => size.height)),
       },
     });
-    let source = sources.find((s) => s.id === request.sourceId);
-    if (!source && request.displayId !== undefined) {
-      source = sources.find(
-        (s) =>
-          (s as unknown as { display_id?: string }).display_id ===
-          String(request.displayId),
-      );
-    }
-    if (!source) [source] = sources;
+    const source =
+      sources.find((s) => s.id === request.sourceId) ??
+      sources.find((s) => s.display_id === String(request.displayId)) ??
+      sources[0];
     if (!source) {
-      throw new CaptureSourceUnavailableError('Screen source not found');
+      throw new CaptureError('source-unavailable', 'Screen source not found');
     }
 
     const { thumbnail } = source;
@@ -405,8 +368,7 @@ export default function registerScreenshotIpcHandlers() {
       width: size.width,
       height: size.height,
       sourceId: source.id,
-      displayId:
-        (source as unknown as { display_id?: string }).display_id ?? null,
+      displayId: source.display_id || null,
       isDisplayCapture: true,
       sessionId: session.id,
     } satisfies ScreenshotResult);
@@ -430,33 +392,31 @@ export default function registerScreenshotIpcHandlers() {
     await closeScreenshotOverlays();
     if (!isSessionCurrent(session)) return;
 
-    const selectionRect = {
-      x: Math.round(data.x),
-      y: Math.round(data.y),
-      width: Math.round(data.width),
-      height: Math.round(data.height),
-    };
-    const targetDisplay = screen.getDisplayMatching(selectionRect);
+    // Capture from the display the selection was drawn on.
+    const targetDisplay = displayForSelection(screen.getAllDisplays(), data);
+    if (!targetDisplay) {
+      throw new CaptureError('source-unavailable', 'No display found');
+    }
     const { bounds, scaleFactor, id } = targetDisplay;
-    const deviceScale = scaleFactor || 1;
+    // Refuse an empty area before touching any pixels.
+    const displayGeometry = { ...physicalSize(targetDisplay), bounds };
+    if (!computeCropRect(data, displayGeometry)) {
+      throw new CaptureError('empty-selection', 'Empty selection');
+    }
 
-    // Prefer pre-captured snapshot for the matched display
+    // The frozen snapshot the user selected on; re-capture has none and
+    // acquires the display live, once X-Shot's windows are hidden.
     let snapshot = displaySnapshots.get(id);
     if (!snapshot) {
-      // Fallback (recapture and expired-snapshot paths): acquire live, but
-      // only after the editor window is confirmed hidden.
-      await hideMainWindowAndWait();
+      await hideWindowsForCapture();
       if (!isSessionCurrent(session)) return;
-      const fallbackSources = await desktopCapturer.getSources({
+      const liveSources = await desktopCapturer.getSources({
         types: ['screen'],
-        thumbnailSize: {
-          width: Math.max(1, Math.floor(bounds.width * deviceScale)),
-          height: Math.max(1, Math.floor(bounds.height * deviceScale)),
-        },
+        thumbnailSize: physicalSize(targetDisplay),
       });
-      const match = fallbackSources.find((s) => s.display_id === String(id));
+      const match = pickSourceForDisplay(liveSources, targetDisplay);
       if (!match) {
-        throw new CaptureSourceUnavailableError('No screen source found');
+        throw new CaptureError('source-unavailable', 'No screen source found');
       }
       const img = match.thumbnail;
       snapshot = {
@@ -465,17 +425,13 @@ export default function registerScreenshotIpcHandlers() {
         width: img.getSize().width,
         height: img.getSize().height,
         bounds,
-        scaleFactor: deviceScale,
-        timestamp: Date.now(),
+        scaleFactor: scaleFactor || 1,
         sourceId: match.id,
       };
     }
 
-    const cropRect = computeCropRect(data, bounds, {
-      width: snapshot.width,
-      height: snapshot.height,
-      bounds: snapshot.bounds,
-    });
+    const cropRect = computeCropRect(data, snapshot);
+    if (!cropRect) throw new CaptureError('empty-selection', 'Empty selection');
     const croppedImage = snapshot.image.crop(cropRect);
     const result = toCaptureSuccess({
       imageDataUrl: croppedImage.toDataURL(),
@@ -522,20 +478,12 @@ export default function registerScreenshotIpcHandlers() {
     releaseDisplaySnapshots();
   };
 
-  // The editor shows the failure but keeps whatever the user is editing.
-  const sendCaptureFailure = async (
-    session: CaptureSessionRef,
-    error: unknown,
-  ) => {
-    const win = await ensureMainWindowReady();
-    sendCaptureResult(win, toCaptureFailure(session.id, error));
-  };
-
   const commitSession: CaptureCoordinatorHooks['commit'] = async (
     session,
     payload,
   ) => {
     try {
+      if (isScreenCaptureDenied()) throw screenPermissionError();
       if (payload.kind === 'window') {
         await deliverWindowCapture(session, payload.sourceId);
         return;
@@ -594,7 +542,11 @@ export default function registerScreenshotIpcHandlers() {
     observer: {
       onSessionStart: (session) =>
         beginCaptureSession(session.source, session.id),
-      onSessionEnd: (_session, outcome) => endCaptureSession(outcome),
+      onSessionEnd: (_session, outcome) => {
+        releaseDisplaySnapshots();
+        restoreWindowsAfterCapture();
+        endCaptureSession(outcome);
+      },
     },
   });
 }
