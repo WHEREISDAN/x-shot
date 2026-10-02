@@ -11,7 +11,13 @@ import {
   type PackagedApp,
   type SeedPreferences,
 } from './packaged-app';
-import { UNDO, drawEllipse, stageEllipses, stageSvg } from './editor-actions';
+import {
+  UNDO,
+  drawEllipse,
+  selectTool,
+  stageEllipses,
+  stageSvg,
+} from './editor-actions';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 // ocr-pii.png holds an email, a phone number and an IPv4 address.
@@ -162,7 +168,7 @@ test.describe('PII mask layer', () => {
 
     // With Censor PII on, the Rect tool draws a manual mask. Stay left of
     // the presentation panel, which overlaps the right edge of the stage.
-    await page.getByRole('button', { name: 'Rect', exact: true }).click();
+    await selectTool(page, 'Rect');
     const stage = await stageSvg(page, image).boundingBox();
     if (!stage) throw new Error('Editor stage is not visible');
     await page.mouse.move(
@@ -178,7 +184,7 @@ test.describe('PII mask layer', () => {
     await page.mouse.up();
     await expect(editor.locator('[data-pii-tag="pii-manual"]')).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Select', exact: true }).click();
+    await selectTool(page, 'Select');
     const email = await editor
       .locator('[data-pii-tag="pii-email"]')
       .boundingBox();
