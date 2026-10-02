@@ -14,6 +14,7 @@ import type {
   CaptureResult,
   ScreenshotResult,
 } from '../src/shared/ipc-types';
+import type { E2eHooks } from '../src/main/e2e-hooks';
 
 const PRODUCT_NAME = 'X-Shot';
 const OCR_FAILURE = 'OCR recognition failed';
@@ -27,6 +28,21 @@ export interface SeedPreferences {
   pii?: Partial<AppPreferences['pii']>;
   presentation?: Partial<AppPreferences['presentation']>;
 }
+
+/** A capture made from a fixture PNG. */
+export interface FixtureCapture {
+  /** The fixture as a data URL; it is read by the test, never sent over IPC. */
+  fixtureDataUrl: string;
+  width: number;
+  height: number;
+  sessionId: string;
+}
+
+/** What the editor helpers need to find a capture's editor and stage. */
+export type CaptureView = Pick<
+  ScreenshotResult,
+  'sessionId' | 'width' | 'height'
+>;
 
 export interface RenderedMask {
   tag: string;
@@ -92,6 +108,8 @@ export async function launchPackagedApp(
   const app = await electron.launch({
     executablePath: findPackagedExecutable(),
     args,
+    // Installs the hook that lets tests put fixture bytes into main's store.
+    env: { ...process.env, XSHOT_E2E: '1' },
   });
   const logs: string[] = [];
   const collect = (chunk: Buffer) => logs.push(chunk.toString());
@@ -116,7 +134,10 @@ export function pngDataUrl(filePath: string): string {
   return `data:image/png;base64,${fs.readFileSync(filePath).toString('base64')}`;
 }
 
-export function editorFor(page: Page, screenshot: ScreenshotResult) {
+export function editorFor(
+  page: Page,
+  screenshot: Pick<CaptureView, 'sessionId'>,
+) {
   return page.locator(`[data-session-id="${screenshot.sessionId}"]`);
 }
 
@@ -134,18 +155,59 @@ async function sendCaptureResult(
 }
 
 /**
+ * Puts the fixture's bytes into main's capture store the way a delivery
+ * does, releasing the capture it replaces.
+ */
+export async function storeFixture(
+  { app }: PackagedApp,
+  capture: FixtureCapture,
+  scaleFactor = 1,
+): Promise<ScreenshotResult> {
+  const { fixtureDataUrl, sessionId } = capture;
+  const stored = await app.evaluate(
+    (_electron, input) => {
+      const hooks = (global as unknown as { xshotE2E?: E2eHooks }).xshotE2E;
+      if (!hooks) throw new Error('The app was launched without XSHOT_E2E=1');
+      return hooks.addCapture(input);
+    },
+    {
+      sessionId,
+      pngBase64: fixtureDataUrl.slice(fixtureDataUrl.indexOf(',') + 1),
+      scaleFactor,
+    },
+  );
+  expect({ width: stored.width, height: stored.height }).toEqual({
+    width: capture.width,
+    height: capture.height,
+  });
+  return { ...stored, scaleFactor, sessionId };
+}
+
+/**
  * Delivers a successful capture through the same main-to-editor channel a
  * real capture uses. Retries until the editor shows this session, because the
  * renderer only subscribes after its first render.
  */
 export async function deliverScreenshot(
-  { app, window: page }: PackagedApp,
-  screenshot: ScreenshotResult,
-): Promise<void> {
+  packaged: PackagedApp,
+  capture: FixtureCapture,
+): Promise<ScreenshotResult> {
+  const { app, window: page } = packaged;
+  const screenshot = await storeFixture(packaged, capture);
   await expect(async () => {
     await sendCaptureResult(app, { ok: true, screenshot });
     await expect(editorFor(page, screenshot)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 20_000 });
+  return screenshot;
+}
+
+/** How many captures main's store holds. */
+export async function storedAssetCount({ app }: PackagedApp): Promise<number> {
+  return app.evaluate(() => {
+    const hooks = (global as unknown as { xshotE2E?: E2eHooks }).xshotE2E;
+    if (!hooks) throw new Error('The app was launched without XSHOT_E2E=1');
+    return hooks.assetCount();
+  });
 }
 
 /**

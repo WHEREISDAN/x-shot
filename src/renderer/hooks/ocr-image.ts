@@ -5,12 +5,15 @@ export interface OcrCanvas {
   cleanup: () => void;
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Capture assets come from another origin; a CORS load keeps the canvas
+    // readable for OCR.
+    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
-    img.src = dataUrl;
+    img.onerror = () => reject(new Error(`Couldn't load the capture: ${url}`));
+    img.src = url;
   });
 }
 
@@ -48,9 +51,9 @@ function scaleImageToCanvas(img: HTMLImageElement, maxDim: number): OcrCanvas {
 
 /** Decodes a capture and draws it onto a canvas no larger than maxDim. */
 export async function prepareOcrCanvas(
-  dataUrl: string,
+  imageUrl: string,
   maxDim: number,
 ): Promise<OcrCanvas> {
-  const img = await loadImage(dataUrl);
+  const img = await loadImage(imageUrl);
   return scaleImageToCanvas(img, maxDim);
 }

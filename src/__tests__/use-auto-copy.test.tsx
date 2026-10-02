@@ -3,7 +3,15 @@ import {
   useAutoCopy,
   type UseAutoCopyParams,
 } from '../renderer/hooks/use-auto-copy';
+import imageUrlToDataUrl from '../renderer/utils/image-url';
 
+// Reading the capture asset needs main's protocol; the test serves RAW.
+jest.mock('../renderer/utils/image-url', () => ({
+  __esModule: true,
+  default: jest.fn(async () => 'data:image/png;base64,UkFX'),
+}));
+
+const RAW_URL = 'xshot-asset://capture/0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4';
 const RAW = 'data:image/png;base64,UkFX';
 const REDACTED = 'data:image/png;base64,UkVEQUNURUQ=';
 
@@ -12,7 +20,7 @@ const log = jest.fn();
 
 function params(overrides: Partial<UseAutoCopyParams>): UseAutoCopyParams {
   return {
-    rawDataUrl: RAW,
+    rawImageUrl: RAW_URL,
     censorPII: false,
     piiPreferencesLoaded: true,
     piiStatus: 'ready',
@@ -51,6 +59,7 @@ describe('useAutoCopy', () => {
     renderHook(() => useAutoCopy(props));
 
     await waitFor(() => expect(props.copy).toHaveBeenCalledWith(RAW));
+    expect(imageUrlToDataUrl).toHaveBeenCalledWith(RAW_URL);
     expect(props.exportRedacted).not.toHaveBeenCalled();
   });
 

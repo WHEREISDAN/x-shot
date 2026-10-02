@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from '../renderer/App';
 import type { CaptureResult, ScreenshotResult } from '../shared/ipc-types';
+import { captureAssetUrl } from '../shared/capture-asset';
 
 // Stand-in editor built on the real editor state hook, so the test can see
 // whether shapes and undo history survive across capture results.
@@ -10,7 +11,14 @@ jest.mock('../renderer/components/editor/ScreenshotEditor', () => {
   const { useEditorState } = jest.requireActual(
     '../renderer/hooks/use-editor-state',
   );
-  function EditorStandIn({ screenshot }: { screenshot: ScreenshotResult }) {
+  const assets = jest.requireActual('../shared/capture-asset');
+  function EditorStandIn({
+    screenshot,
+    onDelete,
+  }: {
+    screenshot: ScreenshotResult;
+    onDelete: () => void;
+  }) {
     const state = useEditorState();
     const addEllipse = () =>
       state.addShape({
@@ -28,7 +36,7 @@ jest.mock('../renderer/components/editor/ScreenshotEditor', () => {
       null,
       React.createElement('img', {
         alt: 'Screenshot',
-        src: screenshot.imageDataUrl,
+        src: assets.captureAssetUrl(screenshot.assetId),
       }),
       React.createElement(
         'span',
@@ -45,13 +53,18 @@ jest.mock('../renderer/components/editor/ScreenshotEditor', () => {
         { type: 'button', onClick: addEllipse },
         'Add ellipse',
       ),
+      React.createElement(
+        'button',
+        { type: 'button', onClick: onDelete },
+        'Delete',
+      ),
     );
   }
   return { __esModule: true, default: EditorStandIn };
 });
 
-const IMAGE_A = 'data:image/png;base64,QUFBQQ==';
-const IMAGE_B = 'data:image/png;base64,QkJCQg==';
+const IMAGE_A = '0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4';
+const IMAGE_B = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f2a3b4c5d';
 const PERMISSION_MESSAGE =
   'X-Shot needs Screen Recording permission. Turn it on in System Settings.';
 
@@ -60,10 +73,10 @@ type CaptureListener = (result: CaptureResult) => void;
 let captureListener: CaptureListener | null = null;
 const invoke = jest.fn(async () => undefined);
 
-function success(sessionId: string, imageDataUrl: string): CaptureResult {
+function success(sessionId: string, assetId: string): CaptureResult {
   return {
     ok: true,
-    screenshot: { imageDataUrl, width: 4, height: 3, sessionId },
+    screenshot: { assetId, width: 4, height: 3, scaleFactor: 1, sessionId },
   };
 }
 
@@ -119,7 +132,7 @@ describe('App capture lifecycle', () => {
     await emit(failure('session-2'));
 
     expect(screen.getByRole('alert')).toHaveTextContent(PERMISSION_MESSAGE);
-    expect(shownImage()).toHaveAttribute('src', IMAGE_A);
+    expect(shownImage()).toHaveAttribute('src', captureAssetUrl(IMAGE_A));
     expect(shapeCount()).toHaveTextContent('1');
     expect(hasUndo()).toHaveTextContent('true');
   });
@@ -141,7 +154,7 @@ describe('App capture lifecycle', () => {
 
     await emit(success('session-2', IMAGE_B));
 
-    expect(shownImage()).toHaveAttribute('src', IMAGE_B);
+    expect(shownImage()).toHaveAttribute('src', captureAssetUrl(IMAGE_B));
     expect(shapeCount()).toHaveTextContent('0');
     expect(hasUndo()).toHaveTextContent('false');
   });
@@ -155,6 +168,18 @@ describe('App capture lifecycle', () => {
 
     expect(shapeCount()).toHaveTextContent('0');
     expect(hasUndo()).toHaveTextContent('false');
+  });
+
+  it('frees the capture in main when the editor discards it', async () => {
+    render(<App />);
+    await emit(success('session-1', IMAGE_A));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(invoke).toHaveBeenCalledWith('release-capture-asset', {
+      assetId: IMAGE_A,
+    });
+    expect(screen.getByText('Waiting for screenshot…')).toBeInTheDocument();
   });
 
   it('clears the error on the next successful capture or on dismiss', async () => {

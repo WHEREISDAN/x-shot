@@ -45,12 +45,12 @@ function useLayer(params: LayerParams) {
 }
 
 const IMAGE_A = {
-  imageDataUrl: 'data:image/png;base64,QUFBQQ==',
+  imageUrl: 'xshot-asset://capture/0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4',
   width: 1000,
   height: 420,
 };
 const IMAGE_B = {
-  imageDataUrl: 'data:image/png;base64,QkJCQg==',
+  imageUrl: 'xshot-asset://capture/9a8b7c6d-5e4f-4a3b-9c2d-1e0f2a3b4c5d',
   width: 1000,
   height: 420,
 };
@@ -109,18 +109,18 @@ describe('usePiiMasking', () => {
       {
         initialProps: {
           screenshot: IMAGE_A,
-          ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
+          ocr: ocrFor(OCR_A, IMAGE_A.imageUrl),
         },
       },
     );
     expect(maskRects(result.current.masks)).toEqual(['pii-email@100,20']);
 
     // Image B is shown while the hook still holds image A's OCR result.
-    rerender({ screenshot: IMAGE_B, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
+    rerender({ screenshot: IMAGE_B, ocr: ocrFor(OCR_A, IMAGE_A.imageUrl) });
     expect(result.current.masks).toEqual([]);
     expect(result.current.status).toBe('pending');
 
-    rerender({ screenshot: IMAGE_B, ocr: ocrFor(OCR_B, IMAGE_B.imageDataUrl) });
+    rerender({ screenshot: IMAGE_B, ocr: ocrFor(OCR_B, IMAGE_B.imageUrl) });
     expect(maskRects(result.current.masks)).toEqual(['pii-email@490,300']);
     expect(result.current.status).toBe('ready');
   });
@@ -130,7 +130,7 @@ describe('usePiiMasking', () => {
       editor: useEditorState(),
       pii: useLayer({
         screenshot: IMAGE_A,
-        ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
+        ocr: ocrFor(OCR_A, IMAGE_A.imageUrl),
       }),
     }));
     expect(result.current.pii.masks).toHaveLength(1);
@@ -166,7 +166,7 @@ describe('usePiiMasking', () => {
     });
     expect(maskRects(result.current.masks)).toEqual(['pii-manual@600,300']);
 
-    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
+    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageUrl) });
     expect(maskRects(result.current.masks)).toEqual([
       'pii-email@100,20',
       'pii-manual@600,300',
@@ -179,7 +179,7 @@ describe('usePiiMasking', () => {
       {
         initialProps: {
           screenshot: IMAGE_A,
-          ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
+          ocr: ocrFor(OCR_A, IMAGE_A.imageUrl),
         },
       },
     );
@@ -194,15 +194,15 @@ describe('usePiiMasking', () => {
       screenshot: IMAGE_A,
       ocr: ocrFor(
         emailLine('Contact:', 'jane@example.com', 10, 20),
-        IMAGE_A.imageDataUrl,
+        IMAGE_A.imageUrl,
       ),
     });
     expect(result.current.masks).toEqual([]);
 
     preferences = { ...preferences, censorPII: false };
-    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
+    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageUrl) });
     preferences = { ...preferences, censorPII: true };
-    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
+    rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageUrl) });
     expect(result.current.masks).toEqual([]);
   });
 
@@ -210,7 +210,7 @@ describe('usePiiMasking', () => {
     const { result } = renderHook(() =>
       useLayer({
         screenshot: IMAGE_A,
-        ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
+        ocr: ocrFor(OCR_A, IMAGE_A.imageUrl),
       }),
     );
     const [autoMask] = result.current.masks;

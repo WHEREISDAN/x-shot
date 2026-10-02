@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PiiLayerStatus } from './pii/types';
 import { createRendererLogger } from '../utils/logger';
+import imageUrlToDataUrl from '../utils/image-url';
 
 const logger = createRendererLogger('auto-copy');
 
 export interface UseAutoCopyParams {
-  rawDataUrl: string;
+  /** The capture as loaded by the editor. */
+  rawImageUrl: string;
   censorPII: boolean;
   piiPreferencesLoaded: boolean;
   piiStatus: PiiLayerStatus;
@@ -19,7 +21,7 @@ export interface UseAutoCopyParams {
  * the raw capture is never copied in that case.
  */
 export function useAutoCopy({
-  rawDataUrl,
+  rawImageUrl,
   censorPII,
   piiPreferencesLoaded,
   piiStatus,
@@ -57,9 +59,9 @@ export function useAutoCopy({
 
     if (!censorPII) {
       copiedRef.current = true;
-      copy(rawDataUrl).catch((error) =>
-        logger.warn('Failed to auto-copy screenshot', error),
-      );
+      imageUrlToDataUrl(rawImageUrl)
+        .then(copy)
+        .catch((error) => logger.warn('Failed to auto-copy screenshot', error));
       return;
     }
     if (piiStatus === 'pending') return;
@@ -78,7 +80,7 @@ export function useAutoCopy({
     piiPreferencesLoaded,
     censorPII,
     piiStatus,
-    rawDataUrl,
+    rawImageUrl,
     exportRedacted,
     copy,
   ]);

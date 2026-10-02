@@ -7,6 +7,7 @@ import React, {
   memo,
 } from 'react';
 import type { ScreenshotResult } from '../../../shared/ipc-types';
+import { captureAssetUrl } from '../../../shared/capture-asset';
 import {
   useEditorState,
   createNewShapeFromTool,
@@ -86,6 +87,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     () => ({ width: screenshot.width, height: screenshot.height }),
     [screenshot.width, screenshot.height],
   );
+  const imageUrl = captureAssetUrl(screenshot.assetId);
 
   const [presentation, presActions] = usePresentationState();
   const layout = useMemo(
@@ -224,18 +226,22 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     lines,
     paragraphs,
     resultFor,
-  } = useTextDetection(screenshot.imageDataUrl, ocrWanted);
+  } = useTextDetection(imageUrl, ocrWanted);
   const [textSelectLevel, setTextSelectLevel] = useState<
     'word' | 'line' | 'paragraph'
   >('word');
   const pii = usePiiMasking({
-    screenshot,
+    screenshot: {
+      imageUrl,
+      width: screenshot.width,
+      height: screenshot.height,
+    },
     ocr: { status: ocrStatus, words, lines, resultFor },
     preferences: piiPreferences,
   });
 
   useAutoCopy({
-    rawDataUrl: screenshot.imageDataUrl,
+    rawImageUrl: imageUrl,
     censorPII: pii.censorPII,
     piiPreferencesLoaded: pii.preferencesLoaded,
     piiStatus: pii.status,
@@ -635,7 +641,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         pan={pan}
         viewScale={viewScale}
         presentation={presentation}
-        screenshotUrl={screenshot.imageDataUrl}
+        screenshotUrl={imageUrl}
         containerRef={containerRef}
         imgRef={imgRef}
         exportStageRef={exportStageRef as React.RefObject<HTMLDivElement>}

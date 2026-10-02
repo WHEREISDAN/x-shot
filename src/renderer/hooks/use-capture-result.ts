@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CaptureFailure,
   CaptureResult,
@@ -23,6 +23,8 @@ export interface UseCaptureResult {
 export function useCaptureResult(): UseCaptureResult {
   const [screenshot, setScreenshot] = useState<ScreenshotResult | null>(null);
   const [failure, setFailure] = useState<CaptureFailure | null>(null);
+  const screenshotRef = useRef<ScreenshotResult | null>(null);
+  screenshotRef.current = screenshot;
 
   useEffect(() => {
     const api = window?.electron?.ipcRenderer;
@@ -50,7 +52,15 @@ export function useCaptureResult(): UseCaptureResult {
   }, []);
 
   const dismissFailure = useCallback(() => setFailure(null), []);
-  const clearScreenshot = useCallback(() => setScreenshot(null), []);
+  // Main holds the pixels; a discarded capture frees them there too.
+  const clearScreenshot = useCallback(() => {
+    const { current } = screenshotRef;
+    setScreenshot(null);
+    if (!current) return;
+    window?.electron?.ipcRenderer
+      ?.invoke('release-capture-asset', { assetId: current.assetId })
+      .catch((error) => logger.warn('Failed to release the capture', error));
+  }, []);
 
   return { screenshot, failure, dismissFailure, clearScreenshot };
 }

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { expect, test, type Page } from '@playwright/test';
-import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
+import type { PiiDetectors } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
   editorFor,
@@ -13,11 +13,12 @@ import {
   waitForPiiMasks,
   type PackagedApp,
   type SeedPreferences,
+  type FixtureCapture,
 } from './packaged-app';
 import { editorToolbar } from './editor-actions';
 
-const FIXTURE: ScreenshotResult = {
-  imageDataUrl: pngDataUrl(path.join(__dirname, 'fixtures', 'ocr-pii.png')),
+const FIXTURE: FixtureCapture = {
+  fixtureDataUrl: pngDataUrl(path.join(__dirname, 'fixtures', 'ocr-pii.png')),
   width: 1000,
   height: 420,
   sessionId: 'export',
@@ -203,7 +204,7 @@ test.describe('export', () => {
     const brightness = (dataUrl: string) =>
       meanBrightness(packaged as PackagedApp, dataUrl, EMAIL_REGION, 1000);
 
-    expect(await brightness(FIXTURE.imageDataUrl)).toBeGreaterThan(120);
+    expect(await brightness(FIXTURE.fixtureDataUrl)).toBeGreaterThan(120);
     expect(await brightness(saved)).toBeLessThan(40);
   });
 

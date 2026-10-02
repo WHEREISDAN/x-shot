@@ -36,6 +36,7 @@ const invokeChannels = new Set<keyof IpcInvokes>([
   'list-capture-sources',
   'get-display-snapshot',
   'release-display-snapshots',
+  'release-capture-asset',
   'copy-image',
   'save-image',
   'window-control',

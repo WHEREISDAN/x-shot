@@ -55,20 +55,24 @@ describe('shared/ipc-types validators', () => {
     expect(sanitizeCaptureType({ type: 'screen' })).toBe('screen');
   });
 
-  it('accepts only captures that carry real pixels', () => {
+  it('accepts only captures that name a stored image with a real size', () => {
     const capture = {
-      imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      assetId: '0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4',
       width: 10,
       height: 10,
+      scaleFactor: 2,
       sessionId: 'session-1',
     };
     expect(hasCapturedImage(capture)).toBe(true);
-    // NativeImage.toDataURL() of an empty image.
+    expect(hasCapturedImage({ ...capture, assetId: '' })).toBe(false);
     expect(
-      hasCapturedImage({ ...capture, imageDataUrl: 'data:image/png;base64,' }),
+      hasCapturedImage({ ...capture, assetId: 'data:image/png;base64,AAAA' }),
     ).toBe(false);
-    expect(hasCapturedImage({ ...capture, imageDataUrl: '' })).toBe(false);
+    expect(hasCapturedImage({ ...capture, assetId: '../../etc/passwd' })).toBe(
+      false,
+    );
     expect(hasCapturedImage({ ...capture, width: 0 })).toBe(false);
     expect(hasCapturedImage({ ...capture, height: -160 })).toBe(false);
+    expect(hasCapturedImage({ ...capture, scaleFactor: 0 })).toBe(false);
   });
 });

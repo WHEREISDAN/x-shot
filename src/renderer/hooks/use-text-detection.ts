@@ -59,7 +59,7 @@ function canRunOcr(): boolean {
  * text-select tool in use), at most once per image.
  */
 export function useTextDetection(
-  imageDataUrl: string,
+  imageUrl: string,
   enabled: boolean,
 ): UseTextDetectionResult {
   const [status, setStatus] = useState<OcrStatus>('idle');
@@ -74,7 +74,7 @@ export function useTextDetection(
   const requestedForRef = useRef<string | null>(null);
 
   const run = useCallback(async () => {
-    if (!imageDataUrl) return;
+    if (!imageUrl) return;
 
     runGenerationRef.current += 1;
     const generation = runGenerationRef.current;
@@ -92,7 +92,7 @@ export function useTextDetection(
 
     try {
       const { canvas, scale, cleanup } = await prepareOcrCanvas(
-        imageDataUrl,
+        imageUrl,
         OCR_MAX_DIMENSION,
       );
       canvasCleanup = cleanup;
@@ -132,7 +132,7 @@ export function useTextDetection(
       setWords(nextWords);
       setLines(nextLines);
       setParagraphs(nextParagraphs);
-      setResultFor(imageDataUrl);
+      setResultFor(imageUrl);
       setStatus('done');
       logger.info('ocr-complete', {
         durationMs: Math.round(performance.now() - startedAt),
@@ -151,22 +151,22 @@ export function useTextDetection(
     } finally {
       canvasCleanup?.();
     }
-  }, [imageDataUrl]);
+  }, [imageUrl]);
 
   // A new image or unmount invalidates any run still in flight.
   useEffect(
     () => () => {
       runGenerationRef.current += 1;
     },
-    [imageDataUrl],
+    [imageUrl],
   );
 
   useEffect(() => {
     if (!enabled || !canRunOcr()) return;
-    if (requestedForRef.current === imageDataUrl) return;
-    requestedForRef.current = imageDataUrl;
+    if (requestedForRef.current === imageUrl) return;
+    requestedForRef.current = imageUrl;
     run().catch(() => {});
-  }, [enabled, imageDataUrl, run]);
+  }, [enabled, imageUrl, run]);
 
   return { status, error, words, lines, paragraphs, resultFor, run };
 }

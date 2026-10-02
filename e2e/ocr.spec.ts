@@ -1,6 +1,6 @@
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
+import type { PiiDetectors } from '../src/shared/ipc-types';
 import {
   deliverScreenshot,
   editorFor,
@@ -9,6 +9,7 @@ import {
   pngDataUrl,
   waitForPiiMasks,
   type PackagedApp,
+  type FixtureCapture,
 } from './packaged-app';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
@@ -46,20 +47,17 @@ const DETECTORS: PiiDetectors = {
   tokens: false,
 };
 
-function fixtureCapture(sessionId: string): ScreenshotResult {
+function fixtureCapture(sessionId: string): FixtureCapture {
   return {
-    imageDataUrl: pngDataUrl(FIXTURE_PATH),
+    fixtureDataUrl: pngDataUrl(FIXTURE_PATH),
     ...FIXTURE_SIZE,
-    x: 0,
-    y: 0,
-    sourceId: 'smoke-fixture',
     sessionId,
   };
 }
 
 async function expectFixtureMasked(
   packaged: PackagedApp,
-  screenshot: ScreenshotResult,
+  screenshot: FixtureCapture,
 ): Promise<void> {
   const masks = await waitForPiiMasks(
     packaged,
@@ -98,8 +96,8 @@ test.describe('packaged OCR and PII masking', () => {
   });
 
   test('masks small UI text in a full-resolution 1920x1080 capture', async () => {
-    const capture: ScreenshotResult = {
-      imageDataUrl: pngDataUrl(SCREEN_FIXTURE_PATH),
+    const capture: FixtureCapture = {
+      fixtureDataUrl: pngDataUrl(SCREEN_FIXTURE_PATH),
       width: 1920,
       height: 1080,
       sessionId: 'smoke-ocr-screen',
