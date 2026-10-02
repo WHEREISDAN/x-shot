@@ -27,7 +27,7 @@ import { usePresentationState } from '../../hooks/use-presentation-state';
 import { computeLayout } from './compute-presentation-layout';
 import { useEditorShortcuts } from '../../hooks/use-editor-shortcuts';
 import { useExportGlue } from '../../hooks/use-export-glue';
-import TextEditOverlay from './TextEditOverlay';
+import TextEditOverlay, { type TextEditState } from './TextEditOverlay';
 import { useTextDetection } from '../../hooks/use-text-detection';
 import { usePiiMasking } from '../../hooks/use-pii-masking';
 import usePiiPreferences from '../../hooks/pii/preferences';
@@ -41,6 +41,20 @@ import {
 
 // What the select tool acts on: an annotation or a PII mask.
 type SelectionTarget = { kind: 'shape' | 'mask'; id: string };
+
+/**
+ * Keeps pointer events on the stage until the button is released, so a drag
+ * that ends over the side panel or outside the window still finishes.
+ */
+function captureStagePointer(target: Element, pointerId: number) {
+  const stage =
+    target instanceof SVGElement && target.ownerSVGElement
+      ? target.ownerSVGElement
+      : target;
+  if (typeof stage.setPointerCapture === 'function') {
+    stage.setPointerCapture(pointerId);
+  }
+}
 
 interface ScreenshotEditorProps {
   screenshot: ScreenshotResult;
@@ -165,10 +179,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const resizeStartRef = useRef<ResizeStartData | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const panLast = useRef<{ x: number; y: number } | null>(null);
-  const [editingText, setEditingText] = useState<null | {
-    id: string;
-    value: string;
-  }>(null);
+  const [editingText, setEditingText] = useState<TextEditState | null>(null);
 
   // Rectangle factory used by tools and PII masking
   const createRectForBox = useCallback(
@@ -255,6 +266,21 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     pii.selectMask(null);
   }, [state, pii]);
 
+  // Empty text is removed, and canceling a new text removes it too.
+  const finishTextEdit = useCallback(
+    (edit: TextEditState, text: string | null) => {
+      const removed = text === null ? edit.isNew : text.trim() === '';
+      const current = state.getShapeById(edit.id) as TextShape | undefined;
+      if (removed) state.deleteShapeById(edit.id);
+      else if (text !== null && text !== current?.text) {
+        state.updateTextShape(edit.id, text);
+      }
+      state.endGesture();
+      setEditingText(null);
+    },
+    [state],
+  );
+
   // Centralized keyboard shortcuts
   const { isSpacePressed } = useEditorShortcuts({
     editingActive: !!editingText,
@@ -316,11 +342,16 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       }
       // Middle button or spacebar to pan
       if (e.button === 1 || isSpacePressed) {
+        captureStagePointer(e.currentTarget, e.pointerId);
         setIsPanning(true);
         panLast.current = { x: e.clientX, y: e.clientY };
         return;
       }
+      // The right button opens the pan gesture via onContextMenu; it never
+      // selects or draws.
+      if (e.button !== 0) return;
       const { x, y } = toImageCoords(e.clientX, e.clientY);
+      captureStagePointer(e.currentTarget, e.pointerId);
       if (state.activeTool === 'select') {
         // Masks sit above annotations, so they win the hit test.
         const maskHit = pii.hitTestMask(x, y);
@@ -331,17 +362,18 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         if (maskHit) target = { kind: 'mask', id: maskHit };
         else if (shapeHit) target = { kind: 'shape', id: shapeHit };
         if (target) {
+          if (target.kind === 'shape') state.beginGesture();
           setIsDragging(true);
           dragLastPos.current = { x, y };
           dragTargetRef.current = target;
-        } else if (e.button === 0) {
+        } else {
           // Empty space: start panning with left button
           setIsPanning(true);
           panLast.current = { x: e.clientX, y: e.clientY };
         }
         return;
       }
-      if (state.activeTool === 'text' && e.button === 0) {
+      if (state.activeTool === 'text') {
         e.preventDefault();
         e.stopPropagation();
         const shape = createNewShapeFromTool('text', {
@@ -351,11 +383,13 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
           strokeWidth: state.strokeWidth,
           textSize: state.textSize,
         }) as TextShape;
-        state.startProvisionalShape(shape);
-        state.commitProvisionalShape();
-        // Defer opening the input until after commit renders
+        // Placing and typing the text is one undo entry; an empty one is none.
+        state.beginGesture();
+        state.addShape(shape);
+        state.selectShape(shape.id);
+        // Defer opening the input until after the shape renders
         requestAnimationFrame(() => {
-          setEditingText({ id: shape.id, value: '' });
+          setEditingText({ id: shape.id, value: '', isNew: true });
           state.setActiveTool('select');
         });
         return;
@@ -501,12 +535,14 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       setResizeHandle(null);
       resizeStartRef.current = null;
       setIsPointerDown(false);
+      state.endGesture();
       return;
     }
     if (isDragging) {
       setIsDragging(false);
       dragTargetRef.current = null;
       dragLastPos.current = null;
+      state.endGesture();
       return;
     }
     if (!isPointerDown) return;
@@ -626,7 +662,12 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
           if (!hit) return;
           const shape = state.getShapeById(hit);
           if (shape && shape.type === 'text') {
-            setEditingText({ id: shape.id, value: (shape as TextShape).text });
+            state.beginGesture();
+            setEditingText({
+              id: shape.id,
+              value: (shape as TextShape).text,
+              isNew: false,
+            });
           }
         }}
         onKeyDown={(e) => {
@@ -660,7 +701,9 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
             <SelectionHandles
               bounds={b}
               strokeWidth={selected.strokeWidth}
-              onResizeStart={(handle) => {
+              onResizeStart={(handle, event) => {
+                captureStagePointer(event.currentTarget, event.pointerId);
+                if (selectionTarget.kind === 'shape') state.beginGesture();
                 setIsResizing(true);
                 setResizeHandle(handle);
                 resizeStartRef.current = {
@@ -682,7 +725,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         editingText={editingText}
         setEditingText={setEditingText}
         getShapeById={(id) => state.getShapeById(id) as TextShape | undefined}
-        updateTextShape={state.updateTextShape}
+        onFinish={finishTextEdit}
         containerRef={containerRef as RefObject<HTMLDivElement>}
         canvasW={canvasW}
         canvasH={canvasH}

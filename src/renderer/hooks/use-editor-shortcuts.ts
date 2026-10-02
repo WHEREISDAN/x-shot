@@ -1,5 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 
+// Input types that take typed text; checkboxes, buttons and the like do not.
+const TEXT_INPUT_TYPES = new Set([
+  '',
+  'text',
+  'search',
+  'email',
+  'url',
+  'tel',
+  'password',
+  'number',
+]);
+
+/**
+ * True while the user is typing: shortcuts must not steal those keys. A
+ * focused toolbar button or checkbox is not typing, so shortcuts still work.
+ */
+export function isTextEntryElement(element: Element | null): boolean {
+  if (!element) return false;
+  const editable = element.getAttribute('contenteditable');
+  if (
+    (element as HTMLElement).isContentEditable ||
+    (editable !== null && editable !== 'false')
+  ) {
+    return true;
+  }
+  const tag = element.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag !== 'INPUT') return false;
+  const type = (element.getAttribute('type') ?? '').toLowerCase();
+  return TEXT_INPUT_TYPES.has(type);
+}
+
 export interface UseEditorShortcutsOptions {
   editingActive: boolean;
   suppressWhenInputFocused?: boolean;
@@ -32,13 +64,7 @@ export function useEditorShortcuts({
   const shouldSuppress = useCallback(() => {
     if (editingActive) return true;
     if (!suppressWhenInputFocused) return false;
-    const tag = (document.activeElement as HTMLElement | null)?.tagName;
-    return (
-      tag === 'INPUT' ||
-      tag === 'TEXTAREA' ||
-      tag === 'SELECT' ||
-      tag === 'BUTTON'
-    );
+    return isTextEntryElement(document.activeElement);
   }, [editingActive, suppressWhenInputFocused]);
 
   useEffect(() => {

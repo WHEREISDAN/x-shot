@@ -246,7 +246,7 @@ export function StageLayers({
   return (
     <>
       {shapes.map((shape) => (
-        <g key={shape.id}>
+        <g key={shape.id} data-shape-type={shape.type}>
           <ShapeSvg shape={shape} forcePiiRedaction={isExporting} />
         </g>
       ))}

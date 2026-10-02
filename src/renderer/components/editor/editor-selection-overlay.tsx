@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { MaskBox } from '../../hooks/pii/types';
 
 export type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
@@ -5,7 +6,10 @@ export type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 interface SelectionHandlesProps {
   bounds: MaskBox;
   strokeWidth: number;
-  onResizeStart: (handle: ResizeHandle) => void;
+  onResizeStart: (
+    handle: ResizeHandle,
+    event: React.PointerEvent<SVGRectElement>,
+  ) => void;
   onDelete: () => void;
 }
 
@@ -75,7 +79,7 @@ export function SelectionHandles({
           style={{ cursor }}
           onPointerDown={(ev) => {
             ev.stopPropagation();
-            onResizeStart(handle);
+            onResizeStart(handle, ev);
           }}
         />
       ))}

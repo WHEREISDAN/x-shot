@@ -4,13 +4,16 @@ import type { TextShape } from '../../hooks/use-editor-state';
 export interface TextEditState {
   id: string;
   value: string;
+  /** True for a shape the text tool just placed. */
+  isNew: boolean;
 }
 
 export interface TextEditOverlayProps {
   editingText: TextEditState | null;
   setEditingText: (next: TextEditState | null) => void;
   getShapeById: (id: string) => TextShape | undefined;
-  updateTextShape: (id: string, text: string) => void;
+  /** Called once per edit: with the text on commit, or null on cancel. */
+  onFinish: (edit: TextEditState, text: string | null) => void;
   containerRef: React.RefObject<HTMLDivElement>;
   // Stage geometry
   canvasW: number;
@@ -28,7 +31,7 @@ export default function TextEditOverlay({
   editingText,
   setEditingText,
   getShapeById,
-  updateTextShape,
+  onFinish,
   containerRef,
   canvasW,
   canvasH,
@@ -41,13 +44,17 @@ export default function TextEditOverlay({
   viewScale,
 }: TextEditOverlayProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Enter or Escape unmounts the input, which can also fire blur.
+  const finishedRef = useRef(false);
+  const editingId = editingText?.id;
 
   useEffect(() => {
-    if (editingText && inputRef.current) {
+    finishedRef.current = false;
+    if (editingId && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [editingText]);
+  }, [editingId]);
 
   const positioning = useMemo(() => {
     if (!editingText) return null;
@@ -89,10 +96,17 @@ export default function TextEditOverlay({
 
   if (!editingText || !positioning) return null;
 
+  const finish = (text: string | null) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    onFinish(editingText, text);
+  };
+
   return (
     <input
       ref={inputRef}
       type="text"
+      aria-label="Edit text"
       value={editingText.value}
       onChange={(e) =>
         setEditingText({ ...editingText, value: e.target.value })
@@ -100,17 +114,13 @@ export default function TextEditOverlay({
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          updateTextShape(editingText.id, editingText.value || '');
-          setEditingText(null);
+          finish(editingText.value);
         } else if (e.key === 'Escape') {
           e.preventDefault();
-          setEditingText(null);
+          finish(null);
         }
       }}
-      onBlur={() => {
-        updateTextShape(editingText.id, editingText.value || '');
-        setEditingText(null);
-      }}
+      onBlur={() => finish(editingText.value)}
       style={{
         position: 'absolute',
         left: positioning.left,
