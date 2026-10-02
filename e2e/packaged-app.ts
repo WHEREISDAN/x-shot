@@ -108,7 +108,9 @@ export async function launchPackagedApp(
 ): Promise<PackagedApp> {
   const userDataDir =
     existingUserDataDir ??
-    fs.mkdtempSync(path.join(os.tmpdir(), 'xshot-smoke-'));
+    fs.mkdtempSync(
+      path.join(process.env.XSHOT_E2E_TMP ?? os.tmpdir(), 'xshot-smoke-'),
+    );
   if (preferences) {
     fs.writeFileSync(
       path.join(userDataDir, 'preferences.json'),
@@ -120,18 +122,38 @@ export async function launchPackagedApp(
   // Unpacked Linux builds lack a SUID sandbox helper on CI runners.
   if (process.platform === 'linux') args.push('--no-sandbox');
 
-  const app = await electron.launch({
-    executablePath: findPackagedExecutable(),
-    args,
-    // Installs the hook that lets tests put fixture bytes into main's store.
-    env: { ...process.env, XSHOT_E2E: '1' },
-  });
+  const removeProfile = () => {
+    if (!existingUserDataDir) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+  };
+
+  let app: ElectronApplication;
+  try {
+    app = await electron.launch({
+      executablePath: findPackagedExecutable(),
+      args,
+      // Installs the hook that lets tests put fixture bytes into main's store.
+      env: { ...process.env, XSHOT_E2E: '1' },
+    });
+  } catch (error) {
+    // A failed launch must not leave its throwaway profile behind.
+    removeProfile();
+    throw error;
+  }
   const logs: string[] = [];
   const collect = (chunk: Buffer) => logs.push(chunk.toString());
   app.process().stdout?.on('data', collect);
   app.process().stderr?.on('data', collect);
 
-  const window = await app.firstWindow();
+  let window: Page;
+  try {
+    window = await app.firstWindow();
+  } catch (error) {
+    await app.close().catch(() => undefined);
+    removeProfile();
+    throw error;
+  }
   window.on('console', (message) => logs.push(message.text()));
 
   return {
@@ -140,9 +162,7 @@ export async function launchPackagedApp(
     logs,
     close: async () => {
       await app.close();
-      if (!existingUserDataDir) {
-        fs.rmSync(userDataDir, { recursive: true, force: true });
-      }
+      removeProfile();
     },
   };
 }

@@ -5,6 +5,7 @@ import webpackPaths from '../.erb/configs/webpack.paths';
 export default defineConfig({
   testDir: __dirname,
   testMatch: '*.spec.ts',
+  globalSetup: path.join(__dirname, 'global-setup.ts'),
   timeout: 180_000,
   workers: 1,
   forbidOnly: !!process.env.CI,
