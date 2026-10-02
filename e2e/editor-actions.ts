@@ -11,16 +11,26 @@ export function stageSvg(page: Page, screenshot: ScreenshotResult) {
   );
 }
 
-export function stageEllipses(page: Page, screenshot: ScreenshotResult) {
-  return stageSvg(page, screenshot).locator('ellipse');
+/** Committed shapes of one type; a shape still being drawn is excluded. */
+export function stageShapes(
+  page: Page,
+  screenshot: ScreenshotResult,
+  type: string,
+) {
+  return stageSvg(page, screenshot).locator(`[data-shape-type="${type}"]`);
 }
 
-/**
- * Picks a toolbar tool. Uses a DOM click because on narrow windows the
- * centered toolbar overflows and its outer buttons sit off-screen.
- */
+export function stageEllipses(page: Page, screenshot: ScreenshotResult) {
+  return stageShapes(page, screenshot, 'ellipse');
+}
+
+export function editorToolbar(page: Page) {
+  return page.getByRole('toolbar', { name: 'Editor tools' });
+}
+
+/** Picks a tool with a real click on the bottom toolbar. */
 export async function selectTool(page: Page, name: string) {
-  await page.getByRole('button', { name, exact: true }).dispatchEvent('click');
+  await editorToolbar(page).getByRole('button', { name, exact: true }).click();
 }
 
 /** Draws an ellipse across the middle of the stage with the Ellipse tool. */
