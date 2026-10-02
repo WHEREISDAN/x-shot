@@ -286,8 +286,14 @@ export async function openOverlays(packaged: PackagedApp): Promise<Page[]> {
     .poll(() => overlayPages(packaged).length, { timeout: 30_000 })
     .toBe(expected);
   const pages = overlayPages(packaged);
+  // React renders after the page loads; every overlay shows Cancel once it
+  // can take input.
   await Promise.all(
-    pages.map((page) => page.waitForLoadState('domcontentloaded')),
+    pages.map((page) =>
+      expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible({
+        timeout: 30_000,
+      }),
+    ),
   );
   return pages;
 }
