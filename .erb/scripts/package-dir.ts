@@ -14,7 +14,6 @@ build({
   config: {
     directories: { output: webpackPaths.smokeBuildPath },
     mac: { identity: null },
-    afterSign: null,
   },
 }).catch((error: unknown) => {
   process.exitCode = 1;
