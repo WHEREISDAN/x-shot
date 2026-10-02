@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
+import { formatFilename } from '../../../shared/export-filename';
 import { Input, Select } from '../../design-system';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
@@ -100,21 +101,8 @@ export default function ExportSection({
     { value: 4, label: '4x (Maximum)' },
   ];
 
-  const generateExampleFilename = () => {
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, '-')
-      .replace('T', '_')
-      .slice(0, 19);
-
-    return preferences.export.filenamePattern
-      .replace('$TIMESTAMP', timestamp)
-      .replace('$DATE', new Date().toISOString().slice(0, 10))
-      .replace(
-        '$TIME',
-        new Date().toTimeString().slice(0, 8).replace(/:/g, '-'),
-      );
-  };
+  const generateExampleFilename = () =>
+    formatFilename(preferences.export.filenamePattern, new Date());
 
   return (
     <div style={sectionStyles}>
