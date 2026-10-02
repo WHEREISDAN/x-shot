@@ -84,6 +84,7 @@ export const EditorStage = memo(function EditorStage({
   return (
     <div
       ref={containerRef}
+      data-stage-mode={presentationDisabled ? 'plain' : 'presentation'}
       onWheel={onWheel}
       style={{
         position: 'relative',
@@ -173,6 +174,7 @@ export const EditorStage = memo(function EditorStage({
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerUp}
                     onDoubleClick={onDoubleClick}
                     onKeyDown={onKeyDown}
                     onContextMenu={onContextMenu}
@@ -224,6 +226,10 @@ export const EditorStage = memo(function EditorStage({
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onDoubleClick={onDoubleClick}
+              onKeyDown={onKeyDown}
+              onContextMenu={onContextMenu}
             >
               <StageLayers
                 shapes={shapes}

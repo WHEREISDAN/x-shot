@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { createRendererLogger } from '../utils/logger';
 
 const logger = createRendererLogger('use-editor-state');
@@ -105,12 +105,23 @@ export interface UseEditorStateResult extends EditorState {
   deleteShapesByIds: (ids: string[]) => void;
   deleteShapeById: (id: string) => void;
   clearAllShapes: () => void;
+  /** Starts a drag, resize or text edit: changes skip the undo stack. */
+  beginGesture: () => void;
+  /** Ends the gesture with one undo entry, if anything changed. */
+  endGesture: () => void;
   undo: () => void;
   redo: () => void;
   hasUndo: boolean;
   hasRedo: boolean;
   getShapeById: (id: string) => EditorShape | undefined;
   provisionalShape: EditorShape | null;
+}
+
+const MAX_UNDO_STACK_SIZE = 50;
+const MAX_REDO_STACK_SIZE = 50;
+
+function sameShapes(a: EditorShape[], b: EditorShape[]): boolean {
+  return a.length === b.length && a.every((shape, i) => shape === b[i]);
 }
 
 function generateId(): string {
@@ -210,10 +221,12 @@ export function useEditorState(): UseEditorStateResult {
   );
   const [undoStack, setUndoStack] = useState<EditorShape[][]>([]);
   const [redoStack, setRedoStack] = useState<EditorShape[][]>([]);
-
-  // Memory management constants
-  const MAX_UNDO_STACK_SIZE = 50;
-  const MAX_REDO_STACK_SIZE = 50;
+  // The newest shapes, including an update React has not rendered yet, so
+  // several changes in one event build on each other.
+  const latestShapesRef = useRef(shapes);
+  latestShapesRef.current = shapes;
+  // Shapes from before the open gesture, or null when none is open.
+  const gestureBaseRef = useRef<EditorShape[] | null>(null);
 
   // Load editor preferences on initialization
   useEffect(() => {
@@ -237,21 +250,30 @@ export function useEditorState(): UseEditorStateResult {
     loadPreferences();
   }, []);
 
+  const pushUndo = useCallback((entry: EditorShape[]) => {
+    setUndoStack((prev) => [...prev, entry].slice(-MAX_UNDO_STACK_SIZE));
+    setRedoStack([]);
+  }, []);
+
   const snapshot = useCallback(
     (next: EditorShape[]) => {
-      setUndoStack((prev) => {
-        const newStack = [...prev, shapes];
-        // Limit stack size to prevent memory bloat
-        if (newStack.length > MAX_UNDO_STACK_SIZE) {
-          return newStack.slice(-MAX_UNDO_STACK_SIZE);
-        }
-        return newStack;
-      });
-      setRedoStack([]);
+      if (!gestureBaseRef.current) pushUndo(latestShapesRef.current);
+      latestShapesRef.current = next;
       setShapes(next);
     },
-    [shapes, MAX_UNDO_STACK_SIZE],
+    [pushUndo],
   );
+
+  const beginGesture = useCallback(() => {
+    if (gestureBaseRef.current) return;
+    gestureBaseRef.current = latestShapesRef.current;
+  }, []);
+
+  const endGesture = useCallback(() => {
+    const base = gestureBaseRef.current;
+    gestureBaseRef.current = null;
+    if (base && !sameShapes(base, latestShapesRef.current)) pushUndo(base);
+  }, [pushUndo]);
 
   const startProvisionalShape = useCallback((shape: EditorShape) => {
     setProvisionalShape(shape);
@@ -265,14 +287,11 @@ export function useEditorState(): UseEditorStateResult {
   );
 
   const commitProvisionalShape = useCallback(() => {
-    setProvisionalShape((current) => {
-      if (!current) return null;
-      const next = [...shapes, current];
-      snapshot(next);
-      setSelectedShapeId(current.id);
-      return null;
-    });
-  }, [shapes, snapshot]);
+    if (!provisionalShape) return;
+    snapshot([...latestShapesRef.current, provisionalShape]);
+    setSelectedShapeId(provisionalShape.id);
+    setProvisionalShape(null);
+  }, [provisionalShape, snapshot]);
 
   const cancelProvisionalShape = useCallback(() => {
     setProvisionalShape(null);
@@ -373,38 +392,26 @@ export function useEditorState(): UseEditorStateResult {
   );
 
   const undo = useCallback(() => {
-    setUndoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const last = prev[prev.length - 1];
-      setRedoStack((r) => {
-        const newStack = [shapes, ...r];
-        // Limit redo stack size
-        if (newStack.length > MAX_REDO_STACK_SIZE) {
-          return newStack.slice(0, MAX_REDO_STACK_SIZE);
-        }
-        return newStack;
-      });
-      setShapes(last);
-      return prev.slice(0, -1);
-    });
-  }, [shapes, MAX_REDO_STACK_SIZE]);
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack(undoStack.slice(0, -1));
+    setRedoStack(
+      [latestShapesRef.current, ...redoStack].slice(0, MAX_REDO_STACK_SIZE),
+    );
+    latestShapesRef.current = previous;
+    setShapes(previous);
+  }, [undoStack, redoStack]);
 
   const redo = useCallback(() => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const [first, ...rest] = prev;
-      setUndoStack((u) => {
-        const newStack = [...u, shapes];
-        // Limit undo stack size
-        if (newStack.length > MAX_UNDO_STACK_SIZE) {
-          return newStack.slice(-MAX_UNDO_STACK_SIZE);
-        }
-        return newStack;
-      });
-      setShapes(first);
-      return rest;
-    });
-  }, [shapes, MAX_UNDO_STACK_SIZE]);
+    if (redoStack.length === 0) return;
+    const [next, ...rest] = redoStack;
+    setRedoStack(rest);
+    setUndoStack(
+      [...undoStack, latestShapesRef.current].slice(-MAX_UNDO_STACK_SIZE),
+    );
+    latestShapesRef.current = next;
+    setShapes(next);
+  }, [undoStack, redoStack]);
 
   const hasUndo = useMemo(() => undoStack.length > 0, [undoStack.length]);
   const hasRedo = useMemo(() => redoStack.length > 0, [redoStack.length]);
@@ -460,6 +467,8 @@ export function useEditorState(): UseEditorStateResult {
     deleteShapesByIds,
     deleteShapeById,
     clearAllShapes,
+    beginGesture,
+    endGesture,
     undo,
     redo,
     hasUndo,

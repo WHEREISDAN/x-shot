@@ -112,11 +112,15 @@ export default function PresentationPanel({
     { value: 4, label: '4x' },
   ];
 
+  // Scrolls instead of running down under the bottom toolbar, which needs
+  // up to two rows (about 150 px) in narrow windows.
   const containerStyles: React.CSSProperties = {
     position: 'absolute',
     right: spacing[4],
     top: '150px',
     width: '280px',
+    maxHeight: 'calc(100vh - 300px)',
+    overflowY: 'auto',
     zIndex: 20,
   };
 
