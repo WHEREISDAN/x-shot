@@ -10,13 +10,26 @@ import {
 const SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
 
-async function preferencesVisible({ app }: PackagedApp): Promise<boolean> {
-  return app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().some(
-      (win) =>
-        win.webContents.getURL().includes('#/preferences') && win.isVisible(),
-    ),
-  );
+// Playwright sometimes loses an evaluate's result in main ("Resulting
+// promise was garbage collected"); the probe has no side effects, so retry.
+const PLAYWRIGHT_LOST_RESULT = 'Resulting promise was garbage collected';
+
+async function preferencesVisible(
+  packaged: PackagedApp,
+  attempt = 1,
+): Promise<boolean> {
+  try {
+    return await packaged.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().some(
+        (win) =>
+          win.webContents.getURL().includes('#/preferences') && win.isVisible(),
+      ),
+    );
+  } catch (error) {
+    const lost = String(error).includes(PLAYWRIGHT_LOST_RESULT);
+    if (!lost || attempt >= 3) throw error;
+    return preferencesVisible(packaged, attempt + 1);
+  }
 }
 
 async function recordOpenedUrls({ app }: PackagedApp): Promise<void> {

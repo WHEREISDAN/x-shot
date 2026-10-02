@@ -2,7 +2,8 @@ import type { WebContents } from 'electron';
 import type { Size } from '../shared/crop-geometry';
 
 const WINDOW_SOURCE_ID = /^window:\d+:\d+$/;
-const MEASURE_TIMEOUT_MS = 3000;
+// Usually well under a second; busy machines have needed over three.
+const MEASURE_TIMEOUT_MS = 5000;
 // Frames above this are scaled down by the capturer.
 const MAX_FRAME = 8192;
 
