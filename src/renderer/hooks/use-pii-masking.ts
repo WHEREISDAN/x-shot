@@ -6,7 +6,6 @@ import type {
   UsePiiMaskingParams,
   UsePiiMaskingResult,
 } from './pii/types';
-import usePiiPreferences from './pii/preferences';
 import computePiiMasks from './pii/compute-masks';
 import { maskToShape, styleDetectedBox } from './pii/apply-masks';
 import {
@@ -42,9 +41,10 @@ function layerStatus(
 export function usePiiMasking({
   screenshot,
   ocr,
+  preferences,
 }: UsePiiMaskingParams): UsePiiMaskingResult {
   const { censorPII, setCensorPII, defaultStyle, detectors, loaded } =
-    usePiiPreferences();
+    preferences;
   const [overrides, setOverrides] = useState<Record<string, AutoMaskOverride>>(
     {},
   );

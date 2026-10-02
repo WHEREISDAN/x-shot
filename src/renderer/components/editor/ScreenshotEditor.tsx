@@ -30,6 +30,7 @@ import { useExportGlue } from '../../hooks/use-export-glue';
 import TextEditOverlay from './TextEditOverlay';
 import { useTextDetection } from '../../hooks/use-text-detection';
 import { usePiiMasking } from '../../hooks/use-pii-masking';
+import usePiiPreferences from '../../hooks/pii/preferences';
 import { useAutoCopy } from '../../hooks/use-auto-copy';
 import { MANUAL_MASK_TAG } from '../../hooks/pii/mask-layer';
 import { piiShapeStyle } from '../../hooks/pii/apply-masks';
@@ -198,19 +199,24 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     },
     [],
   );
+  const piiPreferences = usePiiPreferences();
+  // OCR is only worth its cost for PII masking or the text-select tool.
+  const ocrWanted =
+    piiPreferences.censorPII || state.activeTool === 'text-select';
   const {
     status: ocrStatus,
     words,
     lines,
     paragraphs,
     resultFor,
-  } = useTextDetection(screenshot.imageDataUrl);
+  } = useTextDetection(screenshot.imageDataUrl, ocrWanted);
   const [textSelectLevel, setTextSelectLevel] = useState<
     'word' | 'line' | 'paragraph'
   >('word');
   const pii = usePiiMasking({
     screenshot,
     ocr: { status: ocrStatus, words, lines, resultFor },
+    preferences: piiPreferences,
   });
 
   useAutoCopy({

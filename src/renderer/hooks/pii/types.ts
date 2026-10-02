@@ -36,8 +36,18 @@ export interface PiiMask {
  */
 export type PiiLayerStatus = 'pending' | 'ready' | 'ocr-failed';
 
+export interface PiiPreferencesState {
+  censorPII: boolean;
+  setCensorPII: (enabled: boolean) => void;
+  defaultStyle: PiiStyle;
+  detectors: PiiDetectors | null;
+  /** Censor PII reads as off until loaded; callers must not act on it before. */
+  loaded: boolean;
+}
+
 export interface UsePiiMaskingParams {
   screenshot: { imageDataUrl: string; width: number; height: number };
+  preferences: PiiPreferencesState;
   ocr: {
     status: OcrStatus;
     words: OcrWord[];

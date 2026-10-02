@@ -231,3 +231,8 @@ export async function waitForPiiMasks(
 export function hasOcrFailure(packaged: PackagedApp): boolean {
   return packaged.logs.join('').includes(OCR_FAILURE);
 }
+
+/** How many times the app logged `marker` so far. */
+export function countLogMarker(packaged: PackagedApp, marker: string): number {
+  return packaged.logs.join('').split(marker).length - 1;
+}

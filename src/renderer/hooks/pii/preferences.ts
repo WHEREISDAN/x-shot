@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { PiiDetectors } from './types';
+import type { PiiDetectors, PiiPreferencesState } from './types';
 import { createRendererLogger } from '../../utils/logger';
 
 const logger = createRendererLogger('pii/preferences');
 
-function usePiiPreferences() {
+function usePiiPreferences(): PiiPreferencesState {
   const [censorPII, setCensorPIIState] = useState<boolean>(false);
   const [defaultStyle, setDefaultStyle] = useState<'blur' | 'black'>('black');
   const [detectors, setDetectors] = useState<PiiDetectors | null>(null);
-  // Censor PII reads as off until loaded; callers must not act on it before.
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -51,7 +50,7 @@ function usePiiPreferences() {
     }
   }, []);
 
-  return { censorPII, setCensorPII, defaultStyle, detectors, loaded } as const;
+  return { censorPII, setCensorPII, defaultStyle, detectors, loaded };
 }
 
 export default usePiiPreferences;

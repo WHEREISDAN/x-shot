@@ -1,16 +1,22 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { recognize } from 'tesseract.js';
+import type { RecognizeResult } from 'tesseract.js';
 import { prepareOcrCanvas } from '../renderer/hooks/ocr-image';
-import { useTextDetection } from '../renderer/hooks/use-text-detection';
+import { recognizeWithSharedWorker } from '../renderer/hooks/ocr-worker';
+import {
+  OCR_MAX_DIMENSION,
+  useTextDetection,
+} from '../renderer/hooks/use-text-detection';
 
-jest.mock('tesseract.js', () => ({ recognize: jest.fn() }));
+jest.mock('../renderer/hooks/ocr-worker', () => ({
+  recognizeWithSharedWorker: jest.fn(),
+}));
 jest.mock('../renderer/hooks/ocr-image', () => ({
   prepareOcrCanvas: jest.fn(),
 }));
 
-type RecognizeResult = Awaited<ReturnType<typeof recognize>>;
-
-const mockedRecognize = recognize as jest.MockedFunction<typeof recognize>;
+const mockedRecognize = recognizeWithSharedWorker as jest.MockedFunction<
+  typeof recognizeWithSharedWorker
+>;
 const mockedPrepareOcrCanvas = prepareOcrCanvas as jest.MockedFunction<
   typeof prepareOcrCanvas
 >;
@@ -39,6 +45,8 @@ function deferred<T>() {
 
 const wordTexts = (words: { text: string }[]) => words.map((w) => w.text);
 
+type HookProps = { url: string; enabled: boolean };
+
 describe('useTextDetection', () => {
   beforeAll(() => {
     // jsdom has no Worker; the hook only runs OCR where workers exist.
@@ -63,40 +71,80 @@ describe('useTextDetection', () => {
     });
   });
 
+  it('does nothing until OCR is wanted, then runs once per image', async () => {
+    mockedRecognize.mockResolvedValue(ocrResult('jane@example.com'));
+    const { result, rerender } = renderHook(
+      ({ url, enabled }: HookProps) => useTextDetection(url, enabled),
+      { initialProps: { url: IMAGE_A, enabled: false } },
+    );
+    await act(async () => {});
+    expect(result.current.status).toBe('idle');
+    expect(mockedRecognize).not.toHaveBeenCalled();
+
+    rerender({ url: IMAGE_A, enabled: true });
+    await waitFor(() => expect(result.current.status).toBe('done'));
+    expect(result.current.resultFor).toBe(IMAGE_A);
+
+    // Turning OCR off and on again reuses the result for the same image.
+    rerender({ url: IMAGE_A, enabled: false });
+    rerender({ url: IMAGE_A, enabled: true });
+    await act(async () => {});
+    expect(mockedRecognize).toHaveBeenCalledTimes(1);
+    expect(wordTexts(result.current.words)).toEqual(['jane@example.com']);
+  });
+
+  it('keeps full resolution up to the 4096 px long-edge limit', async () => {
+    mockedRecognize.mockResolvedValue(ocrResult('x'));
+    renderHook(() => useTextDetection(IMAGE_A, true));
+    await waitFor(() => expect(mockedRecognize).toHaveBeenCalled());
+
+    expect(OCR_MAX_DIMENSION).toBe(4096);
+    expect(mockedPrepareOcrCanvas).toHaveBeenCalledWith(IMAGE_A, 4096);
+  });
+
   it('runs OCR again for a pixel-identical capture in a new editor', async () => {
     mockedRecognize.mockResolvedValue(ocrResult('jane@example.com'));
 
-    const first = renderHook(() => useTextDetection(IMAGE_A));
+    const first = renderHook(() => useTextDetection(IMAGE_A, true));
     await waitFor(() => expect(first.result.current.status).toBe('done'));
     first.unmount();
 
-    const second = renderHook(() => useTextDetection(IMAGE_A));
+    const second = renderHook(() => useTextDetection(IMAGE_A, true));
     await waitFor(() => expect(second.result.current.status).toBe('done'));
 
     expect(mockedRecognize).toHaveBeenCalledTimes(2);
-    expect(wordTexts(second.result.current.words)).toEqual([
-      'jane@example.com',
-    ]);
+  });
+
+  it('retries after a failure when OCR is requested again', async () => {
+    mockedRecognize
+      .mockRejectedValueOnce(new Error('OCR worker crashed'))
+      .mockResolvedValueOnce(ocrResult('second try'));
+    const { result, rerender } = renderHook(
+      ({ url, enabled }: HookProps) => useTextDetection(url, enabled),
+      { initialProps: { url: IMAGE_A, enabled: true } },
+    );
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    rerender({ url: IMAGE_A, enabled: false });
+    rerender({ url: IMAGE_A, enabled: true });
+    await waitFor(() => expect(result.current.status).toBe('done'));
+    expect(wordTexts(result.current.words)).toEqual(['second try']);
   });
 
   it('clears results per image and drops a late result for the old image', async () => {
     const runA = deferred<RecognizeResult>();
     const runB = deferred<RecognizeResult>();
     mockedRecognize
-      .mockImplementationOnce(
-        () => runA.promise as ReturnType<typeof recognize>,
-      )
-      .mockImplementationOnce(
-        () => runB.promise as ReturnType<typeof recognize>,
-      );
+      .mockImplementationOnce(() => runA.promise)
+      .mockImplementationOnce(() => runB.promise);
 
     const { result, rerender } = renderHook(
-      ({ url }) => useTextDetection(url),
-      { initialProps: { url: IMAGE_A } },
+      ({ url, enabled }: HookProps) => useTextDetection(url, enabled),
+      { initialProps: { url: IMAGE_A, enabled: true } },
     );
     await waitFor(() => expect(mockedRecognize).toHaveBeenCalledTimes(1));
 
-    rerender({ url: IMAGE_B });
+    rerender({ url: IMAGE_B, enabled: true });
     await waitFor(() => expect(mockedRecognize).toHaveBeenCalledTimes(2));
     expect(result.current.status).toBe('running');
     expect(result.current.words).toEqual([]);
@@ -107,6 +155,7 @@ describe('useTextDetection', () => {
 
     await act(async () => runB.resolve(ocrResult('from-image-b')));
     expect(result.current.status).toBe('done');
+    expect(result.current.resultFor).toBe(IMAGE_B);
     expect(wordTexts(result.current.words)).toEqual(['from-image-b']);
   });
 });
