@@ -83,11 +83,14 @@ const storedPattern = (dir: string): string | undefined => {
 /** Which X-Shot windows are open, by route. */
 async function openRoutes({ app }: PackagedApp) {
   return app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().map((win) =>
-      win.webContents.getURL().includes('#/preferences')
-        ? 'preferences'
-        : 'editor',
-    ),
+    // A closing window can still be listed after its page is destroyed.
+    BrowserWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed() && !win.webContents.isDestroyed())
+      .map((win) =>
+        win.webContents.getURL().includes('#/preferences')
+          ? 'preferences'
+          : 'editor',
+      ),
   );
 }
 
@@ -134,7 +137,10 @@ test.describe('app lifecycle and security', () => {
     const editorVisible = () =>
       current.app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().some(
-          (win) => !win.webContents.getURL().includes('#/') && win.isVisible(),
+          (win) =>
+            !win.webContents.isDestroyed() &&
+            !win.webContents.getURL().includes('#/') &&
+            win.isVisible(),
         ),
       );
     await expect.poll(editorVisible).toBe(true);

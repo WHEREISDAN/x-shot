@@ -5,6 +5,7 @@ import {
   borderRadius,
   transitions,
   typography,
+  solidBorder,
 } from '../tokens';
 
 export type InputSize = 'sm' | 'md' | 'lg';
@@ -43,16 +44,15 @@ const sizeStyles: Record<InputSize, React.CSSProperties> = {
 const variantStyles: Record<InputVariant, React.CSSProperties> = {
   default: {
     background: colors.surface.default,
-    border: `1px solid ${colors.border.emphasis}`,
+    ...solidBorder(colors.border.emphasis),
   },
   filled: {
     background: colors.surface.muted,
-    border: `1px solid transparent`,
+    ...solidBorder('transparent'),
   },
   minimal: {
     background: 'transparent',
-    border: 'none',
-    borderBottom: `1px solid ${colors.border.default}`,
+    ...solidBorder(colors.border.default, '0 0 1px'),
     borderRadius: '0',
   },
 };

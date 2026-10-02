@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, spacing, borderRadius, shadows } from '../tokens';
+import { colors, spacing, borderRadius, shadows, solidBorder } from '../tokens';
 
 export type CardVariant = 'default' | 'elevated' | 'outlined' | 'minimal';
 
@@ -22,25 +22,25 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 const variantStyles: Record<CardVariant, React.CSSProperties> = {
   default: {
     background: colors.surface.default,
-    border: `1px solid ${colors.border.default}`,
+    ...solidBorder(colors.border.default),
     boxShadow: shadows.sm,
   },
 
   elevated: {
     background: colors.surface.default,
-    border: 'none',
+    borderStyle: 'none',
     boxShadow: shadows.lg,
   },
 
   outlined: {
     background: 'transparent',
-    border: `1px solid ${colors.border.emphasis}`,
+    ...solidBorder(colors.border.emphasis),
     boxShadow: 'none',
   },
 
   minimal: {
     background: 'transparent',
-    border: 'none',
+    borderStyle: 'none',
     boxShadow: 'none',
   },
 };

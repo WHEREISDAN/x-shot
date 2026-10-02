@@ -12,8 +12,11 @@ X-Shot is a screenshot capture and editing application built with Electron and R
 npm start              # Start app in development mode with HMR
 npm run build          # Build both main and renderer for production
 npm run package        # Package app for distribution (output in release/build/)
-npm test              # Run Jest tests with ts-jest
-npm run lint          # Run ESLint checks
+npm test              # Run Jest tests with ts-jest (no build needed)
+npm run lint          # Run ESLint checks (fails on any warning)
+npm run package:dir   # Unpacked build in release/build/smoke (after npm run build)
+npm run test:smoke    # Playwright smoke tests against that build
+npm run check:package # Fail if app.asar ships source maps or node_modules
 npm run lint:fix      # Run ESLint and auto-fix issues
 npm run start:main    # Watch/rebuild main process with auto-restart
 ```
@@ -32,7 +35,7 @@ The application follows Electron's two-process architecture with strict security
 1. **Main Process** (`src/main/`)
    - Manages app lifecycle, system tray, and window creation
    - Handles native OS operations (screenshots, file saving, clipboard)
-   - Global hotkey registration (default: Cmd+Shift+4 on macOS)
+   - Global hotkey registration (default: CommandOrControl+Shift+1)
    - IPC handlers for secure communication with renderer
 
 2. **Renderer Process** (`src/renderer/`)
@@ -86,5 +89,6 @@ The application follows Electron's two-process architecture with strict security
 ## Testing Strategy
 - **Framework**: Jest with ts-jest for TypeScript support
 - **Environment**: jsdom for React component testing
-- **Location**: Tests in `src/__tests__/`
+- **Location**: Tests in `src/__tests__/`; packaged-app smoke tests in `e2e/`
+- **Console**: a test that logs `console.error` or `console.warn` fails
 - **Coverage**: Focus on IPC types, React components, and critical business logic

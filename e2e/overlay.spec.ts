@@ -23,7 +23,9 @@ async function preferencesVisible(
     return await packaged.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().some(
         (win) =>
-          win.webContents.getURL().includes('#/preferences') && win.isVisible(),
+          !win.webContents.isDestroyed() &&
+          win.webContents.getURL().includes('#/preferences') &&
+          win.isVisible(),
       ),
     );
   } catch (error) {

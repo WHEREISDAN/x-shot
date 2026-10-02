@@ -5,6 +5,7 @@ import {
   borderRadius,
   typography,
   transitions,
+  solidBorder,
 } from '../../design-system/tokens';
 
 export interface ToolButtonProps {
@@ -45,7 +46,7 @@ export function ToolButton({
     appearance: 'none',
     background: active ? colors.surface.active : colors.surface.default,
     color: colors.text.primary,
-    border: `1px solid ${colors.border.emphasis}`,
+    ...solidBorder(colors.border.emphasis),
     borderRadius: borderRadius.xl,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontWeight: typography.fontWeight.semibold,
