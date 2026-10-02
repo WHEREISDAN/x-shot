@@ -38,6 +38,42 @@ async function filenamePatternField(preferences: Page) {
   return preferences.getByRole('textbox', { name: 'Filename Pattern' });
 }
 
+/**
+ * Types into Filename Pattern and, in the same main-process step, closes
+ * Preferences or quits, the way a user does when they close right after
+ * typing. Returns the most time that passed between the two, in ms.
+ */
+async function typeThen(
+  { app }: PackagedApp,
+  value: string,
+  then: 'close' | 'quit',
+): Promise<number> {
+  return app.evaluate(
+    async ({ app: electronApp, BrowserWindow }, input) => {
+      const win = BrowserWindow.getAllWindows().find((candidate) =>
+        candidate.webContents.getURL().includes('#/preferences'),
+      );
+      if (!win) throw new Error('Preferences window not found');
+      const startedAt = Date.now();
+      await win.webContents.executeJavaScript(`(() => {
+        const field = document.querySelector(
+          '[aria-labelledby="filename-pattern-label"]',
+        );
+        const setValue = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        ).set;
+        setValue.call(field, ${JSON.stringify(input.value)});
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      if (input.then === 'close') win.close();
+      else setTimeout(() => electronApp.quit(), 0);
+      return Date.now() - startedAt;
+    },
+    { value, then },
+  );
+}
+
 const storedPattern = (dir: string): string | undefined => {
   const file = path.join(dir, 'preferences.json');
   if (!fs.existsSync(file)) return undefined;
@@ -215,18 +251,13 @@ test.describe('app lifecycle and security', () => {
   test('a change typed just before Preferences closes is saved', async () => {
     packaged = await launchPackagedApp(SEED, { userDataDir: dir });
     const current = packaged;
-    const preferences = await openPreferences(current);
-    const field = await filenamePatternField(preferences);
+    await expect(
+      await filenamePatternField(await openPreferences(current)),
+    ).toBeVisible();
 
-    const typedAt = Date.now();
-    await field.fill('saved-on-close');
-    await current.app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()
-        .find((win) => win.webContents.getURL().includes('#/preferences'))
-        ?.close();
-    });
-    // The window closed before the change could save on its own.
-    expect(Date.now() - typedAt).toBeLessThan(DEBOUNCE_MS);
+    const gapMs = await typeThen(current, 'saved-on-close', 'close');
+    // Preferences closed before the change could save on its own.
+    expect(gapMs).toBeLessThan(DEBOUNCE_MS);
 
     await expect.poll(() => openRoutes(current)).toEqual(['editor']);
     await expect
@@ -237,16 +268,13 @@ test.describe('app lifecycle and security', () => {
   test('a change typed just before quitting is saved', async () => {
     packaged = await launchPackagedApp(SEED, { userDataDir: dir });
     const current = packaged;
-    const preferences = await openPreferences(current);
-    const field = await filenamePatternField(preferences);
+    await expect(
+      await filenamePatternField(await openPreferences(current)),
+    ).toBeVisible();
 
     const closed = current.app.waitForEvent('close', { timeout: 30_000 });
-    const typedAt = Date.now();
-    await field.fill('saved-on-quit');
-    await current.app.evaluate(({ app }) => {
-      setTimeout(() => app.quit(), 0);
-    });
-    expect(Date.now() - typedAt).toBeLessThan(DEBOUNCE_MS);
+    const gapMs = await typeThen(current, 'saved-on-quit', 'quit');
+    expect(gapMs).toBeLessThan(DEBOUNCE_MS);
     await closed;
     packaged = undefined;
 
