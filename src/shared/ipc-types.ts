@@ -160,9 +160,29 @@ export interface ScreenshotResult {
   windowTitle?: string;
   isWindowCapture?: boolean;
   isDisplayCapture?: boolean;
-  /** Capture diagnostics correlation id; never contains image data. */
-  sessionId?: string;
+  /** Capture session id; the editor resets whenever it changes. */
+  sessionId: string;
 }
+
+export type CaptureFailureReason =
+  | 'screen-permission'
+  | 'source-unavailable'
+  | 'capture-error';
+
+export interface CaptureSuccess {
+  ok: true;
+  screenshot: ScreenshotResult;
+}
+
+export interface CaptureFailure {
+  ok: false;
+  sessionId: string;
+  reason: CaptureFailureReason;
+  /** User-facing explanation shown in the editor. */
+  message: string;
+}
+
+export type CaptureResult = CaptureSuccess | CaptureFailure;
 
 export interface ScreenshotWindowRequest {
   sourceId: string;
@@ -226,7 +246,7 @@ export type RendererToMainPayloads = {
 
 export type MainToRendererEvents = {
   'ipc-example': string;
-  'screenshot-data': ScreenshotResult;
+  'capture-result': CaptureResult;
   'window-state': WindowState;
 };
 
@@ -321,6 +341,20 @@ export function isScreenshotScreenRequest(
     typeof v.displayId === 'string' ||
     typeof v.displayId === 'number';
   return hasSourceId && hasDisplayId;
+}
+
+/** True when a capture carries real pixels, not an empty data URL. */
+export function hasCapturedImage(screenshot: ScreenshotResult): boolean {
+  const commaAt = screenshot.imageDataUrl.indexOf(',');
+  return (
+    screenshot.imageDataUrl.startsWith('data:image/') &&
+    commaAt >= 0 &&
+    commaAt < screenshot.imageDataUrl.length - 1 &&
+    Number.isFinite(screenshot.width) &&
+    screenshot.width > 0 &&
+    Number.isFinite(screenshot.height) &&
+    screenshot.height > 0
+  );
 }
 
 export function sanitizeCaptureType(
