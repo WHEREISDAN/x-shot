@@ -4,6 +4,7 @@ import path from 'path';
 import {
   _electron as electron,
   expect,
+  test,
   type ElectronApplication,
   type Locator,
   type Page,
@@ -94,6 +95,7 @@ export function findPackagedExecutable(
  */
 export async function launchPackagedApp(
   preferences: SeedPreferences,
+  extraArgs: string[] = [],
 ): Promise<PackagedApp> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xshot-smoke-'));
   fs.writeFileSync(
@@ -101,7 +103,7 @@ export async function launchPackagedApp(
     JSON.stringify(preferences),
   );
 
-  const args = [`--user-data-dir=${userDataDir}`];
+  const args = [`--user-data-dir=${userDataDir}`, ...extraArgs];
   // Unpacked Linux builds lack a SUID sandbox helper on CI runners.
   if (process.platform === 'linux') args.push('--no-sandbox');
 
@@ -337,8 +339,10 @@ export async function recordCopies({ app }: PackagedApp): Promise<void> {
     const store = global as unknown as { xshotCopies: string[] };
     store.xshotCopies = [];
     ipcMain.removeHandler('copy-image');
-    ipcMain.handle('copy-image', (_event, request: { dataUrl: string }) => {
-      store.xshotCopies.push(request.dataUrl);
+    // Kept as data URLs only on the test side, for the pixel checks.
+    ipcMain.handle('copy-image', (_event, request: { png: Uint8Array }) => {
+      const base64 = Buffer.from(request.png).toString('base64');
+      store.xshotCopies.push(`data:image/png;base64,${base64}`);
       return { ok: true };
     });
   });
@@ -378,4 +382,11 @@ export async function meanBrightness(
     },
     { dataUrl, region, sourceWidth },
   );
+}
+
+/** Attaches a measurement to the test and prints it into the CI log. */
+export function report(type: string, data: unknown): void {
+  const description = JSON.stringify(data);
+  test.info().annotations.push({ type, description });
+  process.stdout.write(`${type} ${description}\n`);
 }

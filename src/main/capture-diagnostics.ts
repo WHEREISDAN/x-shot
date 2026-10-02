@@ -6,6 +6,7 @@ export type CaptureStage =
   | 'snapshot-ready'
   | 'overlay-visible'
   | 'selection-confirmed'
+  | 'window-measured'
   | 'editor-sent'
   | 'export-copy'
   | 'export-save';

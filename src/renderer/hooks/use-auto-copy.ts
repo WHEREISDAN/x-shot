@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PiiLayerStatus } from './pii/types';
 import { createRendererLogger } from '../utils/logger';
-import imageUrlToDataUrl from '../utils/image-url';
+import fetchImageBytes from '../utils/image-url';
 
 const logger = createRendererLogger('auto-copy');
 
@@ -11,8 +11,8 @@ export interface UseAutoCopyParams {
   censorPII: boolean;
   piiPreferencesLoaded: boolean;
   piiStatus: PiiLayerStatus;
-  exportRedacted: () => Promise<string>;
-  copy: (dataUrl: string) => Promise<boolean>;
+  exportRedacted: () => Promise<Uint8Array>;
+  copy: (png: Uint8Array) => Promise<boolean>;
 }
 
 /**
@@ -59,7 +59,7 @@ export function useAutoCopy({
 
     if (!censorPII) {
       copiedRef.current = true;
-      imageUrlToDataUrl(rawImageUrl)
+      fetchImageBytes(rawImageUrl)
         .then(copy)
         .catch((error) => logger.warn('Failed to auto-copy screenshot', error));
       return;

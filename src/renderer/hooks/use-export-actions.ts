@@ -31,11 +31,11 @@ export function useExportActions() {
   const dismissNotice = useCallback(() => setNotice(null), []);
 
   const copy = useCallback(
-    async (dataUrl: string): Promise<boolean> => {
+    async (png: Uint8Array): Promise<boolean> => {
       const api = window?.electron?.ipcRenderer;
       if (!api) return false;
       try {
-        const result = await api.invoke('copy-image', { dataUrl });
+        const result = await api.invoke('copy-image', { png });
         if (result.ok) {
           show('success', 'Copied to the clipboard.');
           return true;
@@ -50,11 +50,11 @@ export function useExportActions() {
   );
 
   const save = useCallback(
-    async (dataUrl: string): Promise<void> => {
+    async (png: Uint8Array): Promise<void> => {
       const api = window?.electron?.ipcRenderer;
       if (!api) return;
       try {
-        const result = await api.invoke('save-image', { dataUrl });
+        const result = await api.invoke('save-image', { png });
         if (result.status === 'saved') {
           show('success', `Saved to ${result.filePath}`);
         } else if (result.status === 'failed') {

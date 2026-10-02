@@ -14,23 +14,21 @@ import { getLogger } from '../logger';
 
 const log = getLogger('files');
 
-const MAX_DATA_URL_LENGTH = 80 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 const MAX_NAME_ATTEMPTS = 1000;
-const UNSUPPORTED_IMAGE = 'The image is not a PNG or JPEG data URL.';
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const UNSUPPORTED_IMAGE = 'The image is not PNG data.';
 const EMPTY_IMAGE = 'The image is empty.';
 
-function isSupportedImageDataUrl(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length <= MAX_DATA_URL_LENGTH &&
-    /^data:image\/(?:png|jpe?g);base64,/i.test(value)
-  );
-}
-
-function dataUrlOf(payload: unknown): string | null {
+/** The request's PNG bytes, or null if they are missing or not a PNG. */
+function pngOf(payload: unknown): Buffer | null {
   if (typeof payload !== 'object' || payload === null) return null;
-  const { dataUrl } = payload as { dataUrl?: unknown };
-  return isSupportedImageDataUrl(dataUrl) ? dataUrl : null;
+  const { png } = payload as { png?: unknown };
+  if (!(png instanceof Uint8Array) || png.length > MAX_IMAGE_BYTES) {
+    return null;
+  }
+  const isPng = PNG_SIGNATURE.every((byte, i) => png[i] === byte);
+  return isPng ? Buffer.from(png.buffer, png.byteOffset, png.length) : null;
 }
 
 function errorMessage(error: unknown): string {
@@ -81,16 +79,16 @@ export default function registerFileIpcHandlers() {
       payload: CopyImageRequest | unknown,
     ): Promise<CopyImageResponse> => {
       const startTime = performance.now();
-      const dataUrl = dataUrlOf(payload);
-      if (!dataUrl) return { ok: false, error: UNSUPPORTED_IMAGE };
+      const png = pngOf(payload);
+      if (!png) return { ok: false, error: UNSUPPORTED_IMAGE };
       try {
-        const image = nativeImage.createFromDataURL(dataUrl);
+        const image = nativeImage.createFromBuffer(png);
         if (image.isEmpty()) return { ok: false, error: EMPTY_IMAGE };
         clipboard.writeImage(image);
         log.info('export-copy', {
           op: 'copy-image',
           durationMs: Math.round(performance.now() - startTime),
-          dataUrlChars: dataUrl.length,
+          bytes: png.length,
         });
         return { ok: true };
       } catch (error) {
@@ -107,20 +105,21 @@ export default function registerFileIpcHandlers() {
       payload: SaveImageRequest | unknown,
     ): Promise<SaveImageResponse> => {
       const startTime = performance.now();
-      const logSave = (outcome: string, dataUrlChars: number) => {
+      const png = pngOf(payload);
+      if (!png) return { status: 'failed', error: UNSUPPORTED_IMAGE };
+      const logSave = (outcome: string) => {
         log.info('export-save', {
           op: 'save-image',
           outcome,
           durationMs: Math.round(performance.now() - startTime),
-          dataUrlChars,
+          bytes: png.length,
         });
       };
-      const dataUrl = dataUrlOf(payload);
-      if (!dataUrl) return { status: 'failed', error: UNSUPPORTED_IMAGE };
       const request = payload as SaveImageRequest;
 
       try {
-        const image = nativeImage.createFromDataURL(dataUrl);
+        // Decoded and re-encoded as before, so files match the old output.
+        const image = nativeImage.createFromBuffer(png);
         if (image.isEmpty()) return { status: 'failed', error: EMPTY_IMAGE };
 
         const preferences = await loadPreferences();
@@ -141,7 +140,7 @@ export default function registerFileIpcHandlers() {
             extension,
             encode(image, format),
           );
-          logSave('auto-saved', dataUrl.length);
+          logSave('auto-saved');
           return { status: 'saved', filePath };
         }
 
@@ -170,11 +169,11 @@ export default function registerFileIpcHandlers() {
           result.filePath,
           encode(image, formatForPath(result.filePath, format)),
         );
-        logSave('saved', dataUrl.length);
+        logSave('saved');
         return { status: 'saved', filePath: result.filePath };
       } catch (error) {
         log.error('Failed to save image:', error);
-        logSave('failed', dataUrl.length);
+        logSave('failed');
         return { status: 'failed', error: errorMessage(error) };
       }
     },

@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react';
 import type { PresentationSettings } from './use-presentation-state';
 import {
-  exportAnnotatedDataUrl,
-  exportPresentedDataUrl,
+  exportAnnotatedPng,
+  exportPresentedPng,
 } from '../components/editor/editor-export';
 import { createRendererLogger } from '../utils/logger';
 import { getCurrentCaptureSessionId } from '../utils/capture-session';
@@ -25,12 +25,12 @@ export function useExportGlue({
   const presentationDisabled =
     presentation.padding === 0 && presentation.inset === 0;
 
-  const exportDataUrl = useCallback(async (): Promise<string> => {
+  const exportPng = useCallback(async (): Promise<Uint8Array> => {
     if (!stageRef.current) {
       throw new Error('Stage element not available for export');
     }
 
-    let result: string = '';
+    let result = new Uint8Array(0);
     try {
       setIsExporting?.(true);
 
@@ -47,9 +47,9 @@ export function useExportGlue({
       const startTime = Date.now();
 
       if (presentationDisabled) {
-        result = await exportAnnotatedDataUrl(stageRef.current, natural);
+        result = await exportAnnotatedPng(stageRef.current, natural);
       } else {
-        result = await exportPresentedDataUrl(
+        result = await exportPresentedPng(
           stageRef.current,
           natural,
           presentation,
@@ -61,7 +61,7 @@ export function useExportGlue({
         sessionId: getCurrentCaptureSessionId(),
         durationMs: duration,
         mode: presentationDisabled ? 'annotated' : 'presented',
-        outputChars: result.length,
+        outputBytes: result.length,
       });
 
       return result;
@@ -81,5 +81,5 @@ export function useExportGlue({
     }
   }, [presentationDisabled, stageRef, natural, presentation, setIsExporting]);
 
-  return { presentationDisabled, exportDataUrl };
+  return { presentationDisabled, exportPng };
 }

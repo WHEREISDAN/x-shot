@@ -38,13 +38,17 @@ export function respondToAssetRequest(
   if (!asset) {
     return new Response(null, { status: 404, headers: CORS_HEADERS });
   }
-  const { buffer, byteOffset, length } = asset.png;
+  const png = asset.png();
+  if (png.length === 0) {
+    return new Response(null, { status: 404, headers: CORS_HEADERS });
+  }
+  const { buffer, byteOffset, length } = png;
   return new Response(new Uint8Array(buffer, byteOffset, length), {
     status: 200,
     headers: {
       ...CORS_HEADERS,
       'Content-Type': 'image/png',
-      'Content-Length': String(asset.png.length),
+      'Content-Length': String(length),
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
     },

@@ -7,7 +7,12 @@ import {
   captureAssetUrl,
   isCaptureAssetId,
 } from '../shared/capture-asset';
-import { createCaptureAssetStore } from '../main/capture-assets';
+import {
+  createCaptureAssetStore,
+  type CaptureAsset,
+  type CaptureAssetKind,
+  type NewCaptureAsset,
+} from '../main/capture-assets';
 import {
   handleAssetProtocol,
   registerAssetScheme,
@@ -21,13 +26,23 @@ jest.mock('electron', () => ({
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 const UNKNOWN_ID = '0b7c2d4e-1f3a-4b5c-8d6e-7f8091a2b3c4';
 
-const capture = (sessionId: string) => ({
+const capture = (
+  sessionId: string,
+  kind: CaptureAssetKind = 'capture',
+  encode = jest.fn(() => PNG),
+): NewCaptureAsset => ({
   sessionId,
-  png: PNG,
+  kind,
   width: 4,
   height: 3,
   scaleFactor: 2,
+  encode,
 });
+
+const ofSession = (sessionId: string) => (asset: CaptureAsset) =>
+  asset.sessionId === sessionId;
+const notOfSession = (sessionId: string) => (asset: CaptureAsset) =>
+  asset.sessionId !== sessionId;
 
 const get = (url: string, method = 'GET') => new Request(url, { method });
 
@@ -60,21 +75,31 @@ describe('capture asset URLs', () => {
 });
 
 describe('createCaptureAssetStore', () => {
-  it('stores PNG bytes under a fresh opaque id', () => {
+  it('stores an image under a fresh opaque id', () => {
     const store = createCaptureAssetStore();
     const a = store.add(capture('s1'));
     const b = store.add(capture('s1'));
     expect(isCaptureAssetId(a.assetId)).toBe(true);
     expect(a.assetId).not.toBe(b.assetId);
-    expect(store.get(a.assetId)?.png).toBe(PNG);
+    expect(store.get(a.assetId)?.png()).toBe(PNG);
   });
 
-  it('refuses an empty image', () => {
+  it('encodes once, on first use, and then drops the source image', () => {
     const store = createCaptureAssetStore();
-    expect(() => store.add({ ...capture('s1'), png: Buffer.alloc(0) })).toThrow(
+    const encode = jest.fn(() => PNG);
+    const asset = store.add(capture('s1', 'snapshot', encode));
+    expect(encode).not.toHaveBeenCalled();
+    expect(asset.png()).toBe(PNG);
+    expect(asset.png()).toBe(PNG);
+    expect(encode).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an image without pixels', () => {
+    const store = createCaptureAssetStore();
+    expect(() => store.add({ ...capture('s1'), width: 0 })).toThrow(
       'The captured image is empty.',
     );
-    expect(() => store.add({ ...capture('s1'), width: 0 })).toThrow();
+    expect(() => store.add({ ...capture('s1'), height: 0 })).toThrow();
     expect(store.size()).toBe(0);
   });
 
@@ -82,7 +107,7 @@ describe('createCaptureAssetStore', () => {
     const store = createCaptureAssetStore();
     const kept = store.add(capture('delivered'));
     const dropped = store.add(capture('failed'));
-    store.releaseSession('failed');
+    store.releaseWhere(ofSession('failed'));
     expect(store.get(dropped.assetId)).toBeUndefined();
     expect(store.get(kept.assetId)).toBeDefined();
   });
@@ -91,7 +116,7 @@ describe('createCaptureAssetStore', () => {
     const store = createCaptureAssetStore();
     const first = store.add(capture('s1'));
     const second = store.add(capture('s2'));
-    store.releaseAllExcept('s2');
+    store.releaseWhere(notOfSession('s2'));
     expect(store.get(first.assetId)).toBeUndefined();
     expect(store.get(second.assetId)).toBeDefined();
   });
@@ -108,14 +133,21 @@ describe('createCaptureAssetStore', () => {
     const store = createCaptureAssetStore();
     const sizes = Array.from({ length: 20 }, (_, i) => {
       const session = `s${i}`;
-      if (i % 4 === 3) {
-        // A failed session stores nothing that outlives it.
+      // Each session shows two snapshots and a preview in its overlays.
+      store.add(capture(session, 'snapshot'));
+      store.add(capture(session, 'snapshot'));
+      store.add(capture(session, 'preview'));
+      const delivered = i % 4 !== 3;
+      if (delivered) {
         store.add(capture(session));
-        store.releaseSession(session);
-      } else {
-        store.add(capture(session));
-        store.releaseAllExcept(session);
+        store.releaseWhere(notOfSession(session));
       }
+      // Session end: overlay images go; an undelivered capture goes too.
+      store.releaseWhere(
+        (asset) =>
+          asset.sessionId === session &&
+          (asset.kind !== 'capture' || !delivered),
+      );
       return store.size();
     });
     expect(Math.max(...sizes)).toBe(1);
@@ -159,7 +191,7 @@ describe('respondToAssetRequest', () => {
   it('answers 404 once the asset is released', () => {
     const store = createCaptureAssetStore();
     const { assetId } = store.add(capture('s1'));
-    store.releaseSession('s1');
+    store.releaseWhere(ofSession('s1'));
     const response = respondToAssetRequest(
       store,
       get(captureAssetUrl(assetId)),
