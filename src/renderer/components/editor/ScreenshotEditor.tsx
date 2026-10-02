@@ -1,7 +1,6 @@
 import React, {
   RefObject,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +31,8 @@ import { useTextDetection } from '../../hooks/use-text-detection';
 import { usePiiMasking } from '../../hooks/use-pii-masking';
 import usePiiPreferences from '../../hooks/pii/preferences';
 import { useAutoCopy } from '../../hooks/use-auto-copy';
+import { useFitScale } from '../../hooks/use-fit-scale';
+import type { ExportAction } from '../../hooks/use-export-actions';
 import { MANUAL_MASK_TAG } from '../../hooks/pii/mask-layer';
 import { piiShapeStyle } from '../../hooks/pii/apply-masks';
 import {
@@ -61,6 +62,8 @@ interface ScreenshotEditorProps {
   onDelete: () => void;
   onCopy: (dataUrl: string) => Promise<boolean>;
   onSave: (dataUrl: string) => Promise<void>;
+  /** Rendering the export failed before it reached main. */
+  onExportError: (action: ExportAction, error: unknown) => void;
 }
 
 const ScreenshotEditor = memo(function ScreenshotEditor({
@@ -68,16 +71,16 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   onDelete,
   onCopy,
   onSave,
+  onExportError,
 }: ScreenshotEditorProps) {
   const state = useEditorState();
   const imgRef = useRef<HTMLImageElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const exportStageRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [fitScale, setFitScale] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const viewScale = fitScale * zoom;
 
   const natural = useMemo(
     () => ({ width: screenshot.width, height: screenshot.height }),
@@ -105,23 +108,24 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     setIsExporting,
   });
 
-  useEffect(() => {
-    const updateFit = () => {
-      const parent = containerRef.current;
-      if (!parent) return;
+  const fitScale = useFitScale(containerRef, toolbarRef, canvasW, canvasH);
+  const viewScale = fitScale * zoom;
 
-      const horizontalMargin = 32;
-      const maxWidth = Math.max(1, parent.clientWidth - horizontalMargin);
+  const handleCopy = useCallback(async () => {
+    try {
+      await onCopy(await exportDataUrl());
+    } catch (error) {
+      onExportError('copy', error);
+    }
+  }, [exportDataUrl, onCopy, onExportError]);
 
-      const widthFit = maxWidth / canvasW;
-
-      const next = Math.min(1.1, Math.max(0.05, widthFit));
-      setFitScale(next);
-    };
-    updateFit();
-    window.addEventListener('resize', updateFit);
-    return () => window.removeEventListener('resize', updateFit);
-  }, [canvasW, canvasH, presentationDisabled]);
+  const handleSave = useCallback(async () => {
+    try {
+      await onSave(await exportDataUrl());
+    } catch (error) {
+      onExportError('save', error);
+    }
+  }, [exportDataUrl, onSave, onExportError]);
 
   const toImageCoords = useCallback(
     (clientX: number, clientY: number) => {
@@ -284,14 +288,8 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   // Centralized keyboard shortcuts
   const { isSpacePressed } = useEditorShortcuts({
     editingActive: !!editingText,
-    onCopy: async () => {
-      const url = await exportDataUrl();
-      await onCopy(url);
-    },
-    onSave: async () => {
-      const url = await exportDataUrl();
-      await onSave(url);
-    },
+    onCopy: handleCopy,
+    onSave: handleSave,
     onUndo: state.undo,
     onRedo: state.redo,
     onDeleteSelected: deleteSelection,
@@ -606,16 +604,6 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     [fitScale, canvasW, canvasH, pan.x, pan.y, viewScale, zoom],
   );
 
-  const handleCopy = useCallback(async () => {
-    const url = await exportDataUrl();
-    await onCopy(url);
-  }, [exportDataUrl, onCopy]);
-
-  const handleSave = useCallback(async () => {
-    const url = await exportDataUrl();
-    await onSave(url);
-  }, [exportDataUrl, onSave]);
-
   return (
     <div
       data-session-id={screenshot.sessionId}
@@ -739,6 +727,7 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
       />
 
       <BottomToolbar
+        toolbarRef={toolbarRef}
         activeTool={state.activeTool}
         setActiveTool={state.setActiveTool}
         strokeColor={state.strokeColor}

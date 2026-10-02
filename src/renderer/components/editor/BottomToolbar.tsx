@@ -10,6 +10,8 @@ import {
 } from '../../design-system/tokens';
 
 interface BottomToolbarProps {
+  /** Lets the editor measure the toolbar to keep the stage clear of it. */
+  toolbarRef?: React.Ref<HTMLDivElement>;
   activeTool: ToolType;
   setActiveTool: (t: ToolType) => void;
   strokeColor: string;
@@ -25,6 +27,7 @@ interface BottomToolbarProps {
 }
 
 const BottomToolbar = memo(function BottomToolbar({
+  toolbarRef,
   activeTool,
   setActiveTool,
   strokeColor,
@@ -118,7 +121,12 @@ const BottomToolbar = memo(function BottomToolbar({
   ];
 
   return (
-    <div role="toolbar" aria-label="Editor tools" style={containerStyles}>
+    <div
+      ref={toolbarRef}
+      role="toolbar"
+      aria-label="Editor tools"
+      style={containerStyles}
+    >
       <ToolButton
         label="Select"
         active={activeTool === 'select'}

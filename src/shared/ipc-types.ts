@@ -202,10 +202,12 @@ export interface SaveImageRequest {
   defaultPath?: string;
 }
 
-export interface SaveImageResponse {
-  filePath: string | null;
-  canceled: boolean;
-}
+export type CopyImageResponse = { ok: true } | { ok: false; error: string };
+
+export type SaveImageResponse =
+  | { status: 'saved'; filePath: string }
+  | { status: 'canceled' }
+  | { status: 'failed'; error: string };
 
 // Display snapshot for pre-capture overlay backgrounds
 export interface GetDisplaySnapshotRequest {
@@ -265,7 +267,7 @@ export interface IpcInvokes {
   };
   'copy-image': {
     req: CopyImageRequest;
-    res: boolean;
+    res: CopyImageResponse;
   };
   'save-image': {
     req: SaveImageRequest;

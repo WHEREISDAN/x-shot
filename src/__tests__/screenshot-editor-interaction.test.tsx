@@ -74,6 +74,7 @@ async function renderEditor() {
       onDelete={jest.fn()}
       onCopy={jest.fn(async () => true)}
       onSave={jest.fn(async () => {})}
+      onExportError={jest.fn()}
     />,
   );
   // Let the preference requests resolve.

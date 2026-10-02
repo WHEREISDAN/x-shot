@@ -1,16 +1,23 @@
+import fs from 'fs/promises';
 import path from 'path';
 import { app, clipboard, dialog, ipcMain, nativeImage } from 'electron';
+import type { NativeImage } from 'electron';
 import type {
   CopyImageRequest,
+  CopyImageResponse,
   SaveImageRequest,
   SaveImageResponse,
 } from '../../shared/ipc-types';
+import { formatFilename, numberedFilename } from '../../shared/export-filename';
 import { loadPreferences, sanitizeFilenamePattern } from '../preferences';
 import { getLogger } from '../logger';
 
 const log = getLogger('files');
 
 const MAX_DATA_URL_LENGTH = 80 * 1024 * 1024;
+const MAX_NAME_ATTEMPTS = 1000;
+const UNSUPPORTED_IMAGE = 'The image is not a PNG or JPEG data URL.';
+const EMPTY_IMAGE = 'The image is empty.';
 
 function isSupportedImageDataUrl(value: unknown): value is string {
   return (
@@ -20,32 +27,75 @@ function isSupportedImageDataUrl(value: unknown): value is string {
   );
 }
 
+function dataUrlOf(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const { dataUrl } = payload as { dataUrl?: unknown };
+  return isSupportedImageDataUrl(dataUrl) ? dataUrl : null;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function encode(image: NativeImage, format: 'png' | 'jpg'): Buffer {
+  return format === 'png' ? image.toPNG() : image.toJPEG(90);
+}
+
+/**
+ * Writes `data` under the first free name: "name.png", "name (2).png", ...
+ * The exclusive 'wx' flag means an existing file is never overwritten, even
+ * if another save creates the same name at the same moment.
+ */
+async function writeWithoutOverwrite(
+  dir: string,
+  base: string,
+  extension: string,
+  data: Buffer,
+  attempt = 1,
+): Promise<string> {
+  if (attempt > MAX_NAME_ATTEMPTS) {
+    throw new Error(`No free file name for ${base}${extension} in ${dir}`);
+  }
+  const filePath = path.join(dir, numberedFilename(base, extension, attempt));
+  try {
+    await fs.writeFile(filePath, data, { flag: 'wx' });
+    return filePath;
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'EEXIST') throw error;
+    return writeWithoutOverwrite(dir, base, extension, data, attempt + 1);
+  }
+}
+
+function formatForPath(filePath: string, fallback: 'png' | 'jpg') {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === '.jpg' || extension === '.jpeg') return 'jpg';
+  if (extension === '.png') return 'png';
+  return fallback;
+}
+
 export default function registerFileIpcHandlers() {
   ipcMain.handle(
     'copy-image',
-    async (_event, payload: CopyImageRequest | unknown): Promise<boolean> => {
+    async (
+      _event,
+      payload: CopyImageRequest | unknown,
+    ): Promise<CopyImageResponse> => {
       const startTime = performance.now();
+      const dataUrl = dataUrlOf(payload);
+      if (!dataUrl) return { ok: false, error: UNSUPPORTED_IMAGE };
       try {
-        if (
-          typeof payload !== 'object' ||
-          payload === null ||
-          !isSupportedImageDataUrl((payload as CopyImageRequest).dataUrl)
-        ) {
-          return false;
-        }
-        const { dataUrl } = payload as CopyImageRequest;
         const image = nativeImage.createFromDataURL(dataUrl);
-        if (image.isEmpty()) return false;
+        if (image.isEmpty()) return { ok: false, error: EMPTY_IMAGE };
         clipboard.writeImage(image);
         log.info('export-copy', {
           op: 'copy-image',
           durationMs: Math.round(performance.now() - startTime),
           dataUrlChars: dataUrl.length,
         });
-        return true;
-      } catch (err) {
-        log.error('Failed to copy image:', err);
-        return false;
+        return { ok: true };
+      } catch (error) {
+        log.error('Failed to copy image:', error);
+        return { ok: false, error: errorMessage(error) };
       }
     },
   );
@@ -65,53 +115,34 @@ export default function registerFileIpcHandlers() {
           dataUrlChars,
         });
       };
-      try {
-        if (
-          typeof payload !== 'object' ||
-          payload === null ||
-          !isSupportedImageDataUrl((payload as SaveImageRequest).dataUrl)
-        ) {
-          return { filePath: null, canceled: true };
-        }
-        const request = payload as SaveImageRequest;
-        const image = nativeImage.createFromDataURL(request.dataUrl);
-        if (image.isEmpty()) {
-          return { filePath: null, canceled: true };
-        }
+      const dataUrl = dataUrlOf(payload);
+      if (!dataUrl) return { status: 'failed', error: UNSUPPORTED_IMAGE };
+      const request = payload as SaveImageRequest;
 
-        // Load preferences to get save location and format
+      try {
+        const image = nativeImage.createFromDataURL(dataUrl);
+        if (image.isEmpty()) return { status: 'failed', error: EMPTY_IMAGE };
+
         const preferences = await loadPreferences();
-        const defaultDir =
+        const saveDir =
           preferences.capture.defaultSaveLocation || app.getPath('pictures');
         const format = preferences.capture.defaultFormat || 'png';
+        const base = formatFilename(
+          sanitizeFilenamePattern(preferences.export.filenamePattern),
+          new Date(),
+        );
+        const extension = `.${format}`;
 
-        const timestamp = new Date()
-          .toISOString()
-          .replace(/[:.]/g, '-')
-          .replace('T', '_')
-          .slice(0, 19);
-
-        // Generate filename using pattern from preferences
-        const filenamePattern =
-          preferences.export.filenamePattern || 'X-Shot_$TIMESTAMP';
-        const filename = sanitizeFilenamePattern(filenamePattern)
-          .replace('$TIMESTAMP', timestamp)
-          .replace('$DATE', new Date().toISOString().slice(0, 10))
-          .replace(
-            '$TIME',
-            new Date().toTimeString().slice(0, 8).replace(/:/g, '-'),
-          );
-
-        const defaultName = `${filename}.${format}`;
-
-        // Check if auto-save is enabled
         if (preferences.export.autoSave && !request.defaultPath) {
-          const filePath = path.join(defaultDir, defaultName);
-          const buffer = format === 'png' ? image.toPNG() : image.toJPEG(90);
-          const fs = await import('fs/promises');
-          await fs.writeFile(filePath, buffer);
-          logSave('auto-saved', request.dataUrl.length);
-          return { filePath, canceled: false };
+          await fs.mkdir(saveDir, { recursive: true });
+          const filePath = await writeWithoutOverwrite(
+            saveDir,
+            base,
+            extension,
+            encode(image, format),
+          );
+          logSave('auto-saved', dataUrl.length);
+          return { status: 'saved', filePath };
         }
 
         const filters =
@@ -129,31 +160,22 @@ export default function registerFileIpcHandlers() {
 
         const result = await dialog.showSaveDialog({
           defaultPath:
-            request.defaultPath ?? path.join(defaultDir, defaultName),
+            request.defaultPath ?? path.join(saveDir, `${base}${extension}`),
           filters,
         });
+        if (result.canceled || !result.filePath) return { status: 'canceled' };
 
-        if (result.canceled || !result.filePath) {
-          return { filePath: null, canceled: true };
-        }
-
-        // Determine format from file extension if available, or use preference
-        const fileExtension = path.extname(result.filePath).toLowerCase();
-        let useFormat = format;
-        if (fileExtension === '.jpg' || fileExtension === '.jpeg') {
-          useFormat = 'jpg';
-        } else if (fileExtension === '.png') {
-          useFormat = 'png';
-        }
-
-        const buffer = useFormat === 'png' ? image.toPNG() : image.toJPEG(90);
-        const fs = await import('fs/promises');
-        await fs.writeFile(result.filePath, buffer);
-        logSave('saved', request.dataUrl.length);
-        return { filePath: result.filePath, canceled: false };
-      } catch (err) {
-        log.error('Failed to save image:', err);
-        return { filePath: null, canceled: true };
+        // The save dialog already asked before replacing an existing file.
+        await fs.writeFile(
+          result.filePath,
+          encode(image, formatForPath(result.filePath, format)),
+        );
+        logSave('saved', dataUrl.length);
+        return { status: 'saved', filePath: result.filePath };
+      } catch (error) {
+        log.error('Failed to save image:', error);
+        logSave('failed', dataUrl.length);
+        return { status: 'failed', error: errorMessage(error) };
       }
     },
   );

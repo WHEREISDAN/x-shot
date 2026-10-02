@@ -4,50 +4,54 @@ import {
   Route,
   useLocation,
 } from 'react-router-dom';
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import ScreenshotCapture from './ScreenshotCapture';
 import './App.css';
 import ScreenshotEditor from './components/editor/ScreenshotEditor';
-import CaptureErrorToast from './components/CaptureErrorToast';
+import Toast from './components/Toast';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
 import { useCaptureResult } from './hooks/use-capture-result';
+import { SUCCESS_TOAST_MS, useExportActions } from './hooks/use-export-actions';
 import removeLegacyPiiMaskKeys from './hooks/pii/legacy-mask-storage';
 
 function Hello() {
   const { screenshot, failure, dismissFailure, clearScreenshot } =
     useCaptureResult();
+  const { notice, dismissNotice, copy, save, reportExportError } =
+    useExportActions();
+
+  // A newer capture failure replaces an older copy or save message.
+  useEffect(() => {
+    if (failure) dismissNotice();
+  }, [failure, dismissNotice]);
 
   useEffect(() => {
     checkAndMigrateIfNeeded();
     removeLegacyPiiMaskKeys();
   }, []);
 
-  const handleCopy = useCallback(async (dataUrl: string) => {
-    const api = window?.electron?.ipcRenderer;
-    if (!api) return false;
-    try {
-      const ok = await api.invoke('copy-image', { dataUrl });
-      return ok;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const handleSave = useCallback(async (dataUrl: string) => {
-    const api = window?.electron?.ipcRenderer;
-    if (!api) return;
-    await api.invoke('save-image', { dataUrl });
-  }, []);
-
   return (
     <div className="app-container">
-      {failure && (
-        <CaptureErrorToast
+      {notice && (
+        <Toast
+          key={notice.id}
+          tone={notice.tone}
+          message={notice.message}
+          onDismiss={dismissNotice}
+          autoDismissMs={
+            notice.tone === 'success' ? SUCCESS_TOAST_MS : undefined
+          }
+        />
+      )}
+      {failure && !notice && (
+        <Toast
           key={failure.sessionId}
+          tone="error"
           message={failure.message}
           onDismiss={dismissFailure}
+          dismissLabel="Dismiss capture error"
         />
       )}
       {screenshot ? (
@@ -57,8 +61,9 @@ function Hello() {
           key={screenshot.sessionId}
           screenshot={screenshot}
           onDelete={clearScreenshot}
-          onCopy={handleCopy}
-          onSave={handleSave}
+          onCopy={copy}
+          onSave={save}
+          onExportError={reportExportError}
         />
       ) : (
         <div
