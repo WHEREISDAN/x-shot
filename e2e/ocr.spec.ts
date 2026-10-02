@@ -12,6 +12,15 @@ import {
 } from './packaged-app';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
+// 1920x1080 with 14 px UI text: two emails and two phone numbers, plus one
+// 20 px email and phone near y=400.
+const SCREEN_FIXTURE_PATH = path.join(
+  __dirname,
+  'fixtures',
+  'ocr-pii-screen.png',
+);
+const SCREEN_FIXTURE_MASKS = 6;
+const SCREEN_FIXTURE_LARGE_ROW_Y = 300;
 const FIXTURE_SIZE = { width: 1000, height: 420 };
 // Top edge (image pixels) of the rendered blur mask over the fixture's
 // email, phone and IPv4 lines.
@@ -86,6 +95,34 @@ test.describe('packaged OCR and PII masking', () => {
     const capture = fixtureCapture('smoke-ocr');
     await deliverScreenshot(packaged, capture);
     await expectFixtureMasked(packaged, capture);
+  });
+
+  test('masks small UI text in a full-resolution 1920x1080 capture', async () => {
+    const capture: ScreenshotResult = {
+      imageDataUrl: pngDataUrl(SCREEN_FIXTURE_PATH),
+      width: 1920,
+      height: 1080,
+      sessionId: 'smoke-ocr-screen',
+    };
+    await deliverScreenshot(packaged, capture);
+    const masks = await waitForPiiMasks(
+      packaged,
+      editorFor(packaged.window, capture),
+      SCREEN_FIXTURE_MASKS,
+    );
+
+    // Two 14 px emails and phones near the top, one 20 px pair lower down.
+    const rows = (tag: string) =>
+      masks
+        .filter((mask) => mask.tag === tag)
+        .map((mask) =>
+          mask.y < SCREEN_FIXTURE_LARGE_ROW_Y ? 'small' : 'large',
+        )
+        .sort();
+    expect(masks).toHaveLength(SCREEN_FIXTURE_MASKS);
+    expect(rows('pii-email')).toEqual(['large', 'small', 'small']);
+    expect(rows('pii-phone')).toEqual(['large', 'small', 'small']);
+    expect(hasOcrFailure(packaged)).toBe(false);
   });
 
   test('runs OCR again for a pixel-identical capture', async () => {
