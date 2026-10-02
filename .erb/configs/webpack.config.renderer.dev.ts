@@ -101,7 +101,7 @@ const configuration: webpack.Configuration = {
         },
       },
       {
-        test: /tesseract-core\.wasm\.js$/i,
+        test: /tesseract-core(?:-simd)?(?:-lstm)?\.wasm\.js$/i,
         type: 'asset/resource',
         generator: {
           filename: 'ocr/[name].[contenthash:8][ext]',

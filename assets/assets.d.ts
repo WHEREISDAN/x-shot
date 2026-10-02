@@ -39,7 +39,7 @@ declare module 'tesseract.js/dist/worker.min.js' {
   export default content;
 }
 
-declare module 'tesseract.js-core/tesseract-core.wasm.js' {
+declare module 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js' {
   const content: string;
   export default content;
 }

@@ -6,6 +6,7 @@ import type {
   OcrStatus,
   OcrWord,
   PiiDetectors,
+  PiiPreferencesState,
   UsePiiMaskingParams,
 } from '../renderer/hooks/pii/types';
 
@@ -28,18 +29,20 @@ const EMAIL_ONLY: PiiDetectors = {
   tokens: false,
 };
 
-let mockPiiPreferences = {
+let preferences: PiiPreferencesState = {
   censorPII: true,
   setCensorPII: jest.fn(),
-  defaultStyle: 'black' as const,
+  defaultStyle: 'black',
   detectors: EMAIL_ONLY,
   loaded: true,
 };
 
-jest.mock('../renderer/hooks/pii/preferences', () => ({
-  __esModule: true,
-  default: () => mockPiiPreferences,
-}));
+type LayerParams = Omit<UsePiiMaskingParams, 'preferences'>;
+
+// Reads the current preferences on every render, like the editor does.
+function useLayer(params: LayerParams) {
+  return usePiiMasking({ ...params, preferences });
+}
 
 const IMAGE_A = {
   imageDataUrl: 'data:image/png;base64,QUFBQQ==',
@@ -93,8 +96,8 @@ const maskRects = (masks: { tag: string; rect: { x: number; y: number } }[]) =>
 
 describe('usePiiMasking', () => {
   beforeEach(() => {
-    mockPiiPreferences = {
-      ...mockPiiPreferences,
+    preferences = {
+      ...preferences,
       censorPII: true,
       loaded: true,
     };
@@ -102,7 +105,7 @@ describe('usePiiMasking', () => {
 
   it('masks only the current image when OCR results arrive out of order', () => {
     const { result, rerender } = renderHook(
-      (params: UsePiiMaskingParams) => usePiiMasking(params),
+      (params: LayerParams) => useLayer(params),
       {
         initialProps: {
           screenshot: IMAGE_A,
@@ -125,7 +128,7 @@ describe('usePiiMasking', () => {
   it('keeps auto masks when annotations are undone', () => {
     const { result } = renderHook(() => ({
       editor: useEditorState(),
-      pii: usePiiMasking({
+      pii: useLayer({
         screenshot: IMAGE_A,
         ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
       }),
@@ -153,7 +156,7 @@ describe('usePiiMasking', () => {
 
   it('merges a manual mask drawn while OCR runs with the auto masks', () => {
     const { result, rerender } = renderHook(
-      (params: UsePiiMaskingParams) => usePiiMasking(params),
+      (params: LayerParams) => useLayer(params),
       { initialProps: { screenshot: IMAGE_A, ocr: RUNNING } },
     );
     expect(result.current.status).toBe('pending');
@@ -172,7 +175,7 @@ describe('usePiiMasking', () => {
 
   it('keeps a deleted auto mask deleted across recomputes and toggles', () => {
     const { result, rerender } = renderHook(
-      (params: UsePiiMaskingParams) => usePiiMasking(params),
+      (params: LayerParams) => useLayer(params),
       {
         initialProps: {
           screenshot: IMAGE_A,
@@ -196,16 +199,16 @@ describe('usePiiMasking', () => {
     });
     expect(result.current.masks).toEqual([]);
 
-    mockPiiPreferences = { ...mockPiiPreferences, censorPII: false };
+    preferences = { ...preferences, censorPII: false };
     rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
-    mockPiiPreferences = { ...mockPiiPreferences, censorPII: true };
+    preferences = { ...preferences, censorPII: true };
     rerender({ screenshot: IMAGE_A, ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl) });
     expect(result.current.masks).toEqual([]);
   });
 
   it('moves and resizes auto and manual masks', () => {
     const { result } = renderHook(() =>
-      usePiiMasking({
+      useLayer({
         screenshot: IMAGE_A,
         ocr: ocrFor(OCR_A, IMAGE_A.imageDataUrl),
       }),
@@ -245,9 +248,9 @@ describe('usePiiMasking', () => {
   });
 
   it('hides the layer while Censor PII is off and ignores tiny drags', () => {
-    mockPiiPreferences = { ...mockPiiPreferences, censorPII: false };
+    preferences = { ...preferences, censorPII: false };
     const { result } = renderHook(() =>
-      usePiiMasking({ screenshot: IMAGE_A, ocr: RUNNING }),
+      useLayer({ screenshot: IMAGE_A, ocr: RUNNING }),
     );
     expect(result.current.status).toBe('ready');
     let id: string | null = 'unset';
@@ -259,14 +262,14 @@ describe('usePiiMasking', () => {
   });
 
   it('reports pending until preferences load and ocr-failed on OCR errors', () => {
-    mockPiiPreferences = { ...mockPiiPreferences, loaded: false };
+    preferences = { ...preferences, loaded: false };
     const { result, rerender } = renderHook(
-      (params: UsePiiMaskingParams) => usePiiMasking(params),
+      (params: LayerParams) => useLayer(params),
       { initialProps: { screenshot: IMAGE_A, ocr: RUNNING } },
     );
     expect(result.current.status).toBe('pending');
 
-    mockPiiPreferences = { ...mockPiiPreferences, loaded: true };
+    preferences = { ...preferences, loaded: true };
     rerender({
       screenshot: IMAGE_A,
       ocr: { ...RUNNING, status: 'error' },

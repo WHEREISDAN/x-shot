@@ -1,6 +1,6 @@
 import workerUrl from 'tesseract.js/dist/worker.min.js';
-import coreUrl from 'tesseract.js-core/tesseract-core.wasm.js';
-import engDataUrl from '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz';
+import coreUrl from 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js';
+import engDataUrl from '@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz';
 
 export interface OcrAssetUrls {
   workerUrl: string;
@@ -13,6 +13,10 @@ export interface OcrAssetPaths {
   corePath: string;
   langPath: string;
 }
+
+// Where the worker caches the decompressed language data in IndexedDB. Tied
+// to the bundled data so a copy cached from other data is never reused.
+export const OCR_CACHE_PATH = 'tesseract-eng-4.0.0_best_int';
 
 const BUNDLED_OCR_ASSETS: OcrAssetUrls = {
   workerUrl,
