@@ -6,6 +6,7 @@ import {
   stubScreenAccess,
   type PackagedApp,
 } from './packaged-app';
+import { openedUrls, recordOpenedUrls } from './external-links';
 
 const SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
@@ -30,24 +31,6 @@ async function preferencesVisible(
     if (!lost || attempt >= 3) throw error;
     return preferencesVisible(packaged, attempt + 1);
   }
-}
-
-async function recordOpenedUrls({ app }: PackagedApp): Promise<void> {
-  await app.evaluate(({ shell }) => {
-    const store = global as unknown as { xshotOpened: string[] };
-    store.xshotOpened = [];
-    Object.assign(shell, {
-      openExternal: async (url: string) => {
-        store.xshotOpened.push(url);
-      },
-    });
-  });
-}
-
-async function openedUrls({ app }: PackagedApp): Promise<string[]> {
-  return app.evaluate(
-    () => (global as unknown as { xshotOpened: string[] }).xshotOpened,
-  );
 }
 
 test.describe('capture overlays', () => {
