@@ -1,7 +1,7 @@
 .box {
   position: absolute;
   z-index: 1001;
-  outline: 1px solid var(--color-overlay-outline);
+  outline: 1px solid var(--color-white);
   pointer-events: none;
   will-change: left, top, width, height;
   transform: translateZ(0);
@@ -14,7 +14,7 @@
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
   border-radius: 2.5px;
-  background: var(--color-handle);
+  background: var(--color-white);
   box-shadow: var(--handle-shadow);
   pointer-events: none;
 }

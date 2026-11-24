@@ -1,0 +1,87 @@
+.window {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.message {
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.nav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 164px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--color-line);
+  overflow-y: auto;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.tab:hover {
+  background: var(--color-raise);
+  color: var(--color-text);
+}
+
+.active,
+.active:hover {
+  background: var(--color-raise-strong);
+  color: var(--color-text);
+}
+
+.reset {
+  margin-top: auto;
+  color: var(--color-text-faint);
+  font-size: 12px;
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 20px 24px;
+  overflow-y: auto;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.toast {
+  top: 52px;
+}

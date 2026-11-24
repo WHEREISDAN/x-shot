@@ -1,8 +1,12 @@
 import { useId, type CSSProperties } from 'react';
+import cx from '../class-names';
 import styles from './Slider.module.css';
 
 export interface SliderProps {
-  label: string;
+  /** Visible label before the track; omit it and set `labelledBy` instead. */
+  label?: string;
+  /** Names the slider by another element, such as a settings row label. */
+  labelledBy?: string;
   value: number;
   min: number;
   max: number;
@@ -27,6 +31,7 @@ function fillRange(value: number, min: number, max: number) {
 /** A labelled range with a 3px track, its filled part and the value. */
 export function Slider({
   label,
+  labelledBy,
   value,
   min,
   max,
@@ -37,24 +42,39 @@ export function Slider({
 }: SliderProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
+  const range = (
+    <input
+      id={inputId}
+      type="range"
+      className={styles.range}
+      min={min}
+      max={max}
+      value={value}
+      disabled={disabled}
+      aria-labelledby={labelledBy}
+      onChange={(event) => onChange(Number(event.target.value))}
+      onBlur={onBlur}
+      style={fillRange(value, min, max)}
+    />
+  );
+  const readout = (
+    <output htmlFor={inputId} className={styles.value} aria-hidden>
+      {value}
+    </output>
+  );
+  if (label === undefined) {
+    return (
+      <span className={cx(styles.slider, styles.unlabelled)}>
+        {range}
+        {readout}
+      </span>
+    );
+  }
   return (
     <label htmlFor={inputId} className={styles.slider}>
       <span>{label}</span>
-      <input
-        id={inputId}
-        type="range"
-        className={styles.range}
-        min={min}
-        max={max}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(Number(event.target.value))}
-        onBlur={onBlur}
-        style={fillRange(value, min, max)}
-      />
-      <output htmlFor={inputId} className={styles.value} aria-hidden>
-        {value}
-      </output>
+      {range}
+      {readout}
     </label>
   );
 }

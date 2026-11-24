@@ -389,10 +389,10 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
 
   preferencesWindow = new BrowserWindow({
     title: 'X-Shot Preferences',
-    width: 600,
-    height: 700,
-    minWidth: 500,
-    minHeight: 600,
+    width: 640,
+    height: 680,
+    minWidth: 600,
+    minHeight: 520,
     show: false,
     resizable: true,
     icon: getAssetPath('icon.png'),

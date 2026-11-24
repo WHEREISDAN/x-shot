@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import cx from '../class-names';
 import styles from './Button.module.css';
 
-export type ButtonVariant = 'secondary' | 'primary';
+export type ButtonVariant = 'secondary' | 'primary' | 'danger';
 export type ButtonSize = 'md' | 'sm';
 
 export interface ButtonProps {
@@ -15,7 +15,10 @@ export interface ButtonProps {
   className?: string;
 }
 
-/** A text button; `primary` is the one filled button in a window. */
+/**
+ * A text button; `primary` is the one filled button in a window and
+ * `danger` confirms a destructive action with red text on a red tint.
+ */
 export function Button({
   children,
   onClick,
@@ -33,6 +36,7 @@ export function Button({
       className={cx(
         styles.button,
         variant === 'primary' && styles.primary,
+        variant === 'danger' && styles.danger,
         size === 'sm' && styles.small,
         className,
       )}

@@ -8,9 +8,15 @@ interface TitleBarProps {
   title: string;
   /** Shown after the title in mono, e.g. the capture's pixel size. */
   detail?: string;
+  /** The editor shows the logo; Preferences only its title. */
+  logo?: boolean;
 }
 
-export default function TitleBar({ title, detail }: TitleBarProps) {
+export default function TitleBar({
+  title,
+  detail,
+  logo = true,
+}: TitleBarProps) {
   const [state, setState] = useState<WindowState | null>(null);
 
   useEffect(() => {
@@ -36,7 +42,7 @@ export default function TitleBar({ title, detail }: TitleBarProps) {
       className={cx(styles.titleBar, mac && styles.mac)}
       onDoubleClick={handleDoubleClick}
     >
-      <Logo className={styles.logo} />
+      {logo && <Logo className={styles.logo} />}
       <span>{title}</span>
       {detail && <span className={styles.detail}>{detail}</span>}
     </div>

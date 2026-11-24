@@ -108,7 +108,9 @@ function Shell({ children }: { children: ReactNode }) {
   if (pathname === '/') return children;
   return (
     <div className="app-container">
-      {pathname === '/preferences' && <TitleBar title="Preferences" />}
+      {pathname === '/preferences' && (
+        <TitleBar title="Preferences" logo={false} />
+      )}
       <div className={styles.routeContent}>{children}</div>
     </div>
   );

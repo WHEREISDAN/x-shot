@@ -1,0 +1,48 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 44px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  color: var(--color-text);
+}
+
+.description {
+  display: block;
+  margin-top: 1px;
+  color: var(--color-text-faint);
+  font-size: 11.5px;
+}
+
+.control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.path {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -4,7 +4,7 @@
 }
 
 .handle {
-  fill: #fff;
+  fill: var(--color-white);
   stroke: var(--color-selection);
 }
 
@@ -23,7 +23,7 @@
 }
 
 .deleteButton {
-  fill: #191b1f;
+  fill: var(--color-island-solid);
   stroke: var(--color-line-strong);
 }
 

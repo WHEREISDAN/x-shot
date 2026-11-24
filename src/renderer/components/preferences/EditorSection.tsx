@@ -1,8 +1,10 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
 import type { UpdatePreferences } from '../../hooks/use-preferences';
-import { ColorDot, Input } from '../../design-system';
-import { colors, spacing, typography } from '../../design-system/tokens';
+import { ColorDot, Input, Slider } from '../../design-system';
+import SettingsCard from './SettingsCard';
+import SettingsRow from './SettingsRow';
+import controls from './PreferenceControls.module.css';
 
 interface EditorSectionProps {
   preferences: AppPreferences;
@@ -23,122 +25,37 @@ const COLOR_PRESETS = [
   '#ffffff', // white
 ];
 
+const HEX_COLOR = /^#[0-9A-F]{6}$/i;
+
 export default function EditorSection({
   preferences,
   onUpdate,
   onFlush,
 }: EditorSectionProps) {
-  const sectionStyles: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing[6],
-  };
-
-  const groupStyles: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing[3],
-  };
-
-  const labelStyles: React.CSSProperties = {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  };
-
-  const descriptionStyles: React.CSSProperties = {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginBottom: spacing[3],
-  };
-
-  const colorGridStyles: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))',
-    gap: spacing[2],
-    maxWidth: '300px',
-  };
-
-  const rangeContainerStyles: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing[2],
-    maxWidth: '300px',
-  };
-
-  const rangeStyles: React.CSSProperties = {
-    width: '100%',
-    accentColor: colors.primary.DEFAULT,
-  };
-
-  const rangeValueStyles: React.CSSProperties = {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    textAlign: 'right' as const,
-  };
+  const { editor } = preferences;
 
   const handleStrokeColorChange = useCallback(
-    async (defaultStrokeColor: string) => {
-      await onUpdate({ editor: { defaultStrokeColor } }, { debounce: true });
-    },
+    (defaultStrokeColor: string) =>
+      onUpdate({ editor: { defaultStrokeColor } }, { debounce: true }),
     [onUpdate],
   );
 
   const handleFillColorChange = useCallback(
-    async (defaultFillColor: string) => {
-      await onUpdate({ editor: { defaultFillColor } }, { debounce: true });
-    },
+    (defaultFillColor: string) =>
+      onUpdate({ editor: { defaultFillColor } }, { debounce: true }),
     [onUpdate],
-  );
-
-  const handleStrokeWidthChange = useCallback(
-    async (defaultStrokeWidth: number) => {
-      await onUpdate({ editor: { defaultStrokeWidth } }, { debounce: true });
-    },
-    [onUpdate],
-  );
-
-  const handleTextSizeChange = useCallback(
-    async (defaultTextSize: number) => {
-      await onUpdate({ editor: { defaultTextSize } }, { debounce: true });
-    },
-    [onUpdate],
-  );
-
-  const handleCustomStrokeColor = useCallback(
-    async (color: string) => {
-      if (/^#[0-9A-F]{6}$/i.test(color)) {
-        await handleStrokeColorChange(color);
-      }
-    },
-    [handleStrokeColorChange],
-  );
-
-  const handleCustomFillColor = useCallback(
-    async (color: string) => {
-      if (/^#[0-9A-F]{6}$/i.test(color) || color === 'transparent') {
-        await handleFillColorChange(color);
-      }
-    },
-    [handleFillColorChange],
   );
 
   return (
-    <div style={sectionStyles}>
-      {/* Default Colors */}
-      <div style={groupStyles}>
-        <h3 style={labelStyles}>Default Colors</h3>
-
-        <div>
-          <div style={labelStyles} id="stroke-color-label">
-            Stroke Color
-          </div>
-          <p style={descriptionStyles}>
-            Default color for drawing tools (pen, arrows, shapes)
-          </p>
+    <>
+      <SettingsCard label="Default Colors">
+        <SettingsRow
+          labelId="stroke-color-label"
+          label="Stroke Color"
+          description="Drawing tools: pen, arrows, shapes"
+        >
           <div
-            style={colorGridStyles}
+            className={controls.colorDots}
             role="radiogroup"
             aria-labelledby="stroke-color-label"
           >
@@ -146,193 +63,135 @@ export default function EditorSection({
               <ColorDot
                 key={color}
                 color={color}
-                selected={preferences.editor.defaultStrokeColor === color}
+                selected={editor.defaultStrokeColor === color}
                 onClick={() => handleStrokeColorChange(color)}
               />
             ))}
           </div>
-          <div
-            style={{
-              marginTop: spacing[3],
-              display: 'flex',
-              gap: spacing[2],
-              alignItems: 'center',
+        </SettingsRow>
+        <SettingsRow
+          labelId="custom-stroke-color-label"
+          label="Custom Stroke Color"
+        >
+          <Input
+            id="stroke-color-section"
+            type="color"
+            aria-label="Stroke color picker"
+            value={editor.defaultStrokeColor}
+            onChange={(e) => handleStrokeColorChange(e.target.value)}
+            onBlur={onFlush}
+          />
+          <Input
+            type="text"
+            mono
+            aria-labelledby="custom-stroke-color-label"
+            value={editor.defaultStrokeColor}
+            onChange={(e) => {
+              if (HEX_COLOR.test(e.target.value)) {
+                handleStrokeColorChange(e.target.value);
+              }
             }}
-          >
-            <Input
-              id="stroke-color-section"
-              type="color"
-              value={preferences.editor.defaultStrokeColor}
-              onChange={(e) => handleStrokeColorChange(e.target.value)}
-              onBlur={onFlush}
-              style={{ width: '40px', height: '32px', padding: '0' }}
-            />
-            <Input
-              type="text"
-              value={preferences.editor.defaultStrokeColor}
-              onChange={(e) => handleCustomStrokeColor(e.target.value)}
-              onBlur={onFlush}
-              placeholder="#ff0000"
-              style={{ width: '100px' }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <div style={labelStyles} id="fill-color-label">
-            Fill Color
-          </div>
-          <p style={descriptionStyles}>
-            Default fill color for shapes (rectangles, ellipses)
-          </p>
+            onBlur={onFlush}
+            placeholder="#ff0000"
+            className={controls.hex}
+          />
+        </SettingsRow>
+        <SettingsRow
+          labelId="fill-color-label"
+          label="Fill Color"
+          description="Shapes: rectangles, ellipses"
+        >
           <div
-            style={colorGridStyles}
+            className={controls.colorDots}
             role="radiogroup"
             aria-labelledby="fill-color-label"
           >
             <ColorDot
               color="transparent"
-              selected={preferences.editor.defaultFillColor === 'transparent'}
+              selected={editor.defaultFillColor === 'transparent'}
               onClick={() => handleFillColorChange('transparent')}
             />
             {COLOR_PRESETS.map((color) => (
               <ColorDot
                 key={color}
                 color={color}
-                selected={preferences.editor.defaultFillColor === color}
+                selected={editor.defaultFillColor === color}
                 onClick={() => handleFillColorChange(color)}
               />
             ))}
           </div>
-          <div
-            style={{
-              marginTop: spacing[3],
-              display: 'flex',
-              gap: spacing[2],
-              alignItems: 'center',
-            }}
-          >
-            <Input
-              type="color"
-              value={
-                preferences.editor.defaultFillColor === 'transparent'
-                  ? '#ffffff'
-                  : preferences.editor.defaultFillColor
+        </SettingsRow>
+        <SettingsRow
+          labelId="custom-fill-color-label"
+          label="Custom Fill Color"
+        >
+          <Input
+            type="color"
+            aria-label="Fill color picker"
+            value={
+              editor.defaultFillColor === 'transparent'
+                ? '#ffffff'
+                : editor.defaultFillColor
+            }
+            onChange={(e) => handleFillColorChange(e.target.value)}
+            onBlur={onFlush}
+          />
+          <Input
+            type="text"
+            mono
+            aria-labelledby="custom-fill-color-label"
+            value={editor.defaultFillColor}
+            onChange={(e) => {
+              const color = e.target.value;
+              if (HEX_COLOR.test(color) || color === 'transparent') {
+                handleFillColorChange(color);
               }
-              onChange={(e) => handleFillColorChange(e.target.value)}
-              onBlur={onFlush}
-              style={{ width: '40px', height: '32px', padding: '0' }}
-            />
-            <Input
-              type="text"
-              value={preferences.editor.defaultFillColor}
-              onChange={(e) => handleCustomFillColor(e.target.value)}
-              onBlur={onFlush}
-              placeholder="transparent or #ff0000"
-              style={{ width: '140px' }}
-            />
-          </div>
-        </div>
-      </div>
+            }}
+            onBlur={onFlush}
+            placeholder="transparent or #ff0000"
+            className={controls.field}
+          />
+        </SettingsRow>
+      </SettingsCard>
 
-      {/* Default Sizes */}
-      <div style={groupStyles}>
-        <h3 style={labelStyles}>Default Sizes</h3>
-
-        <div>
-          <div style={labelStyles} id="stroke-width-label">
-            Stroke Width
-          </div>
-          <p style={descriptionStyles}>
-            Default thickness for drawing tools and shape outlines
-          </p>
-          <div style={rangeContainerStyles}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: typography.fontSize.sm,
-                  color: colors.text.secondary,
-                }}
-              >
-                1px
-              </span>
-              <span style={rangeValueStyles}>
-                {preferences.editor.defaultStrokeWidth}px
-              </span>
-              <span
-                style={{
-                  fontSize: typography.fontSize.sm,
-                  color: colors.text.secondary,
-                }}
-              >
-                20px
-              </span>
-            </div>
-            <input
-              type="range"
+      <SettingsCard label="Default Sizes">
+        <SettingsRow
+          labelId="stroke-width-label"
+          label="Stroke Width"
+          description="Thickness of drawing tools and shape outlines, 1–20 px"
+        >
+          <div className={controls.slider}>
+            <Slider
+              labelledBy="stroke-width-label"
               min={1}
               max={20}
-              value={preferences.editor.defaultStrokeWidth}
-              onChange={(e) => handleStrokeWidthChange(Number(e.target.value))}
+              value={editor.defaultStrokeWidth}
+              onChange={(defaultStrokeWidth) =>
+                onUpdate({ editor: { defaultStrokeWidth } }, { debounce: true })
+              }
               onBlur={onFlush}
-              style={rangeStyles}
-              aria-labelledby="stroke-width-label"
             />
           </div>
-        </div>
-
-        <div>
-          <div style={labelStyles} id="text-size-label">
-            Text Size
-          </div>
-          <p style={descriptionStyles}>Default font size for text tool</p>
-          <div style={rangeContainerStyles}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: typography.fontSize.sm,
-                  color: colors.text.secondary,
-                }}
-              >
-                8px
-              </span>
-              <span style={rangeValueStyles}>
-                {preferences.editor.defaultTextSize}px
-              </span>
-              <span
-                style={{
-                  fontSize: typography.fontSize.sm,
-                  color: colors.text.secondary,
-                }}
-              >
-                72px
-              </span>
-            </div>
-            <input
-              type="range"
+        </SettingsRow>
+        <SettingsRow
+          labelId="text-size-label"
+          label="Text Size"
+          description="Font size of the text tool, 8–72 px"
+        >
+          <div className={controls.slider}>
+            <Slider
+              labelledBy="text-size-label"
               min={8}
               max={72}
-              value={preferences.editor.defaultTextSize}
-              onChange={(e) => handleTextSizeChange(Number(e.target.value))}
+              value={editor.defaultTextSize}
+              onChange={(defaultTextSize) =>
+                onUpdate({ editor: { defaultTextSize } }, { debounce: true })
+              }
               onBlur={onFlush}
-              style={rangeStyles}
-              aria-labelledby="text-size-label"
             />
           </div>
-        </div>
-      </div>
-    </div>
+        </SettingsRow>
+      </SettingsCard>
+    </>
   );
 }

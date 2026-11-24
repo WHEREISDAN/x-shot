@@ -9,6 +9,9 @@ export interface SwitchProps {
   children?: ReactNode;
   /** Names the switch when it has no visible label. */
   'aria-label'?: string;
+  /** Names the switch by another element, such as a settings row label. */
+  'aria-labelledby'?: string;
+  'aria-describedby'?: string;
   disabled?: boolean;
   className?: string;
 }
@@ -19,6 +22,8 @@ export function Switch({
   onChange,
   children,
   'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-describedby': ariaDescribedBy,
   disabled = false,
   className,
 }: SwitchProps) {
@@ -34,6 +39,8 @@ export function Switch({
         checked={checked}
         disabled={disabled}
         aria-label={children ? undefined : ariaLabel}
+        aria-labelledby={children ? undefined : ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
         onChange={(event) => onChange(event.target.checked)}
       />
       <span className={styles.track} aria-hidden />

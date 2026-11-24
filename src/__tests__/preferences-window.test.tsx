@@ -119,6 +119,26 @@ describe('Preferences window', () => {
     ]);
   });
 
+  it('lists the sections as vertical tabs and asks before a reset', async () => {
+    await openTab('Privacy');
+    expect(screen.getByRole('tablist')).toHaveAttribute(
+      'aria-orientation',
+      'vertical',
+    );
+    expect(screen.getByRole('tab', { name: 'Privacy' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tabpanel', { name: 'Privacy' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+    const dialog = screen.getByRole('dialog', { name: 'Reset preferences?' });
+    expect(dialog).toHaveTextContent('cannot be undone');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('reset-preferences', undefined);
+  });
+
   it('shows why a save failed and goes back to what main has', async () => {
     await openTab('General');
     nextSetResult = {

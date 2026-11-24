@@ -30,7 +30,7 @@
 }
 
 .danger:hover:not(:disabled) {
-  background: rgba(255, 107, 110, 0.12);
+  background: var(--color-danger-tint);
   color: var(--color-danger);
 }
 

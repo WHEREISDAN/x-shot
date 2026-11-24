@@ -1,0 +1,25 @@
+/* Widths of the controls on the right of a settings row. */
+.select {
+  width: 220px;
+}
+
+.field {
+  width: 190px;
+}
+
+.hex {
+  width: 96px;
+}
+
+.slider {
+  width: 180px;
+}
+
+.colorDots {
+  display: flex;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

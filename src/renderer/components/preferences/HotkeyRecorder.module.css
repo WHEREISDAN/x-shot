@@ -1,0 +1,62 @@
+.recorder {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.recorder:hover {
+  background: var(--color-raise);
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unset {
+  padding: 0 10px;
+  border: 1px dashed var(--color-line-strong);
+  color: var(--color-text-faint);
+  font-size: 12px;
+}
+
+.unset:hover {
+  color: var(--color-text-muted);
+}
+
+.recording,
+.recording:hover {
+  padding: 0 10px;
+  border-color: var(--color-spark-line);
+  background: var(--color-spark-tint);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-spark);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}

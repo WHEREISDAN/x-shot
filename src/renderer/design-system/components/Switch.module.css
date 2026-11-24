@@ -36,7 +36,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-white);
   transition:
     left 0.15s,
     background 0.15s;

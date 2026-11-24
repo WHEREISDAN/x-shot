@@ -40,6 +40,16 @@
   opacity: 0.9;
 }
 
+.danger {
+  border-color: var(--color-danger-line);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--color-danger-tint-strong);
+}
+
 .small {
   height: 28px;
   padding: 0 10px;

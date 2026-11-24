@@ -46,7 +46,7 @@
 }
 
 .native option {
-  background: #191b1f;
+  background: var(--color-island-solid);
   color: var(--color-text);
 }
 
