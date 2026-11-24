@@ -24,6 +24,15 @@ const nextFrame = () =>
     setTimeout(resolve, COMPOSITOR_FRAME_MS);
   });
 
+// The renderer's --color-canvas and --color-text, so the window and its
+// caption buttons match the page before and after it paints.
+const CANVAS_COLOR = '#0B0C0E';
+const CHROME_TITLE_BAR = {
+  color: CANVAS_COLOR,
+  symbolColor: '#F1F2F4',
+  height: 36,
+};
+
 const isDevelopment = () =>
   process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
@@ -47,13 +56,13 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     width: 1425,
     height: 980,
+    // Keeps the tool dock on one row clear of the capture.
+    minWidth: 960,
+    minHeight: 640,
     icon: getAssetPath('icon.png'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#111111',
-      symbolColor: '#ffffff',
-      height: 36,
-    },
+    titleBarOverlay: CHROME_TITLE_BAR,
+    backgroundColor: CANVAS_COLOR,
     webPreferences: {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
@@ -380,19 +389,16 @@ export async function createPreferencesWindow(): Promise<BrowserWindow> {
 
   preferencesWindow = new BrowserWindow({
     title: 'X-Shot Preferences',
-    width: 600,
-    height: 700,
-    minWidth: 500,
-    minHeight: 600,
+    width: 640,
+    height: 680,
+    minWidth: 600,
+    minHeight: 520,
     show: false,
     resizable: true,
     icon: getAssetPath('icon.png'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#111111',
-      symbolColor: '#ffffff',
-      height: 36,
-    },
+    titleBarOverlay: CHROME_TITLE_BAR,
+    backgroundColor: CANVAS_COLOR,
     webPreferences: {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')

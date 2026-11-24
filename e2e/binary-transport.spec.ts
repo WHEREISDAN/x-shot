@@ -278,7 +278,7 @@ test.describe('binary capture transport', () => {
       { steps: 10 },
     );
     await overlay.mouse.up();
-    await overlay.getByRole('button', { name: '✓ Capture' }).click();
+    await overlay.getByRole('button', { name: 'Capture', exact: true }).click();
 
     await expect.poll(() => shownSessionId(current.window)).not.toBe(before);
     const sessionId = (await shownSessionId(current.window)) as string;

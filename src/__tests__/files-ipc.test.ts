@@ -72,3 +72,11 @@ describe('save-image', () => {
     });
   });
 });
+
+describe('get-home-folder', () => {
+  it("returns the user's home folder", async () => {
+    await expect(handlerFor('get-home-folder')({}, undefined)).resolves.toBe(
+      '/tmp',
+    );
+  });
+});

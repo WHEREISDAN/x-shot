@@ -1,0 +1,48 @@
+.magnifier {
+  position: fixed;
+  z-index: 1004;
+  width: 120px;
+  height: 120px;
+  overflow: hidden;
+  border-radius: 50%;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 0 0 1px var(--magnifier-border),
+    var(--magnifier-shadow);
+  pointer-events: none;
+}
+
+.pixelGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      var(--magnifier-grid) 0,
+      var(--magnifier-grid) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      var(--magnifier-grid) 0,
+      var(--magnifier-grid) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  background-size:
+    3px 3px,
+    3px 3px;
+  mix-blend-mode: overlay;
+}
+
+/* One line through the centre each way, on the pixel under the pointer. */
+.crosshair {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--magnifier-crosshair), var(--magnifier-crosshair)) 60px
+      0 / 1px 100% no-repeat,
+    linear-gradient(var(--magnifier-crosshair), var(--magnifier-crosshair)) 0
+      60px / 100% 1px no-repeat;
+}

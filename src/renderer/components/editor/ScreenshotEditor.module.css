@@ -1,0 +1,60 @@
+/* Insets of the free area: the stage is centred and fitted inside it. */
+.editor {
+  --area-top: 64px;
+  --area-bottom: 84px;
+  --area-side: 16px;
+  --area-right: var(--area-side);
+
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Clear of the 280px panel and the 16px gaps either side of it. */
+.withPanel {
+  --area-right: 312px;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.area {
+  position: absolute;
+  top: var(--area-top);
+  right: var(--area-right);
+  bottom: var(--area-bottom);
+  left: var(--area-side);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel {
+  position: absolute;
+  top: var(--area-top);
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+}
+
+/* A dock wider than its lane runs under the panel, which then ends above it. */
+.panelAboveDock {
+  bottom: 78px;
+}
+
+.dockLane {
+  position: absolute;
+  right: var(--area-right);
+  bottom: 16px;
+  left: var(--area-side);
+  z-index: 30;
+  display: flex;
+  justify-content: safe center;
+  pointer-events: none;
+}

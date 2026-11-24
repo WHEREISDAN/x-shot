@@ -1,0 +1,74 @@
+.slider {
+  display: grid;
+  grid-template-columns: 60px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.unlabelled {
+  grid-template-columns: 1fr 30px;
+}
+
+.slider:has(.range:disabled) {
+  opacity: 0.32;
+}
+
+.range {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range:disabled {
+  cursor: default;
+}
+
+/* --fill-start and --fill-end mark the filled part, from 0 to the value. */
+.range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--color-track) var(--fill-start),
+    var(--color-text) var(--fill-start),
+    var(--color-text) var(--fill-end),
+    var(--color-track) var(--fill-end)
+  );
+}
+
+.range::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--color-white);
+  box-shadow:
+    0 0 0 3px var(--color-island-solid),
+    var(--shadow-thumb);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range:focus-visible {
+  outline: none;
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--color-island-solid),
+    0 0 0 5px var(--color-selection);
+}
+
+.value {
+  font: 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}

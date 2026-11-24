@@ -1,4 +1,4 @@
-import React from 'react';
+import styles from './DimOverlays.module.css';
 
 interface Rect {
   left: number;
@@ -14,15 +14,7 @@ interface DimOverlaysProps {
   bottom: Rect;
 }
 
-const baseStyle: React.CSSProperties = {
-  position: 'fixed',
-  background: 'rgba(0, 0, 0, 0.3)',
-  zIndex: 999,
-  pointerEvents: 'none',
-  willChange: 'left, top, width, height',
-  transform: 'translateZ(0)',
-};
-
+/** Darkens everything outside the selection, or the whole display without one. */
 export default function DimOverlays({
   top,
   left,
@@ -31,10 +23,10 @@ export default function DimOverlays({
 }: DimOverlaysProps) {
   return (
     <>
-      <div style={{ ...baseStyle, ...top }} />
-      <div style={{ ...baseStyle, ...left }} />
-      <div style={{ ...baseStyle, ...right }} />
-      <div style={{ ...baseStyle, ...bottom }} />
+      <div className={styles.dim} style={top} />
+      <div className={styles.dim} style={left} />
+      <div className={styles.dim} style={right} />
+      <div className={styles.dim} style={bottom} />
     </>
   );
 }

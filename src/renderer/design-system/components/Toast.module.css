@@ -1,0 +1,41 @@
+.toast {
+  position: fixed;
+  top: 100px;
+  right: 0;
+  left: 0;
+  z-index: 80;
+  display: flex;
+  width: fit-content;
+  max-width: min(720px, calc(100vw - 32px));
+  margin: 0 auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.icon {
+  flex: none;
+  display: flex;
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.success {
+  color: var(--color-success);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+}

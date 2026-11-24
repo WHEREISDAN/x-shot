@@ -54,6 +54,7 @@ export async function exportDomToPng({
     quality?: number;
     cacheBust?: boolean;
     filter?: (node: Node) => boolean;
+    disableEmbedFonts?: boolean;
   };
 
   // `width` and `height` resize the cloned element itself, so they stay at
@@ -69,6 +70,9 @@ export async function exportDomToPng({
     },
     quality: 0.92,
     cacheBust: true,
+    // The interface's bundled fonts are not drawn in an export (annotation
+    // text names its own font), so they are not fetched and inlined.
+    disableEmbedFonts: true,
   };
 
   if (backgroundColor && backgroundColor !== 'transparent') {

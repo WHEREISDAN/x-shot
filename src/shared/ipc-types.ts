@@ -226,6 +226,11 @@ export interface IpcInvokes {
     req: { defaultPath?: string };
     res: { filePath: string | null; canceled: boolean };
   };
+  /** The user's home folder, so paths in it can be shown with `~`. */
+  'get-home-folder': {
+    req: undefined;
+    res: string;
+  };
 }
 
 // Runtime validators (shared so they can be unit-tested without electron)

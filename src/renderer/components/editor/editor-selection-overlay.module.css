@@ -1,0 +1,32 @@
+/* Selection chrome is hidden during export, so it never reaches an image. */
+.outline {
+  stroke: var(--color-selection);
+}
+
+.handle {
+  fill: var(--color-white);
+  stroke: var(--color-selection);
+}
+
+.nw,
+.se {
+  cursor: nwse-resize;
+}
+
+.ne,
+.sw {
+  cursor: nesw-resize;
+}
+
+.delete {
+  cursor: pointer;
+}
+
+.deleteButton {
+  fill: var(--color-island-solid);
+  stroke: var(--color-line-strong);
+}
+
+.deleteIcon {
+  stroke: var(--color-danger);
+}

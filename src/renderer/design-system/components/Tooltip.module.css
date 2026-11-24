@@ -1,0 +1,51 @@
+/* A label shown on hover or keyboard focus, from the data-tooltip attribute. */
+.tip {
+  position: relative;
+}
+
+.tip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 4px 7px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 6px;
+  background: var(--color-black);
+  color: var(--color-white);
+  font: 500 11px/1.2 var(--font-sans);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s,
+    visibility 0.12s;
+}
+
+/* Keyboard focus only: a clicked button keeps focus without a tooltip. */
+.tip:hover::after,
+.tip:focus-visible::after,
+.tip:has(:focus-visible)::after {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0.25s;
+}
+
+.tip[data-tooltip-placement='top']::after {
+  top: auto;
+  bottom: calc(100% + 11px);
+}
+
+.tip[data-tooltip-align='end']::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.tip[data-tooltip-align='start']::after {
+  left: 0;
+  transform: none;
+}

@@ -1,0 +1,16 @@
+.dataHandling {
+  padding: 10px 12px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.dataHandling p {
+  margin: 0 0 4px;
+  color: var(--color-text);
+}
+
+.dataHandling ul {
+  margin: 0;
+  padding-left: 18px;
+}

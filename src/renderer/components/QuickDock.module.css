@@ -1,0 +1,9 @@
+.quickDock {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  z-index: 1005;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: default;
+}

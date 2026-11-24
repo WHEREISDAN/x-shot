@@ -14,6 +14,7 @@ import {
   type SeedPreferences,
 } from './packaged-app';
 import { ipcRecords, spyOnIpc } from './ipc-spy';
+import { exportScaleOption } from './editor-actions';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
 // A bundled background of about 5 MB, uploaded as a user image.
@@ -96,9 +97,6 @@ async function builtinSwatchUrl(page: Page, id: string): Promise<string> {
 const storedBackground = (dir: string) =>
   JSON.parse(fs.readFileSync(path.join(dir, 'preferences.json'), 'utf-8'))
     .presentation.backgroundImage;
-
-const exportScale = (page: Page) =>
-  page.getByRole('combobox', { name: 'Export scale' });
 
 test.describe('preferences persistence', () => {
   let packaged: PackagedApp | undefined;
@@ -208,7 +206,7 @@ test.describe('preferences persistence', () => {
       width: 1000,
       height: 420,
     });
-    await expect(exportScale(current.window)).toHaveValue('3');
+    await expect(exportScaleOption(current.window, 3)).toBeChecked();
 
     const stored = JSON.parse(
       fs.readFileSync(path.join(dir, 'preferences.json'), 'utf-8'),
@@ -285,12 +283,12 @@ test.describe('preferences persistence', () => {
       .toBe(2);
 
     await deliverScreenshot(current, fixture('scale-1'));
-    await expect(exportScale(page)).toHaveValue('2');
+    await expect(exportScaleOption(page, 2)).toBeChecked();
 
     // The panel's scale is this capture's only; it is never saved back.
-    await exportScale(page).selectOption('1');
+    await exportScaleOption(page, 1).check();
     await deliverScreenshot(current, fixture('scale-2'));
-    await expect(exportScale(page)).toHaveValue('2');
+    await expect(exportScaleOption(page, 2)).toBeChecked();
     const saved = await mainPreferences(current);
     expect(saved.export.defaultScale).toBe(2);
     expect(saved.presentation).not.toHaveProperty('exportScale');
@@ -300,7 +298,7 @@ test.describe('preferences persistence', () => {
     const oneX = path.join(dir, 'export (2).png');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('status')).toContainText(`Saved to ${twoX}`);
-    await exportScale(page).selectOption('1');
+    await exportScaleOption(page, 1).check();
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('status')).toContainText(`Saved to ${oneX}`);
     const sizes = await current.app.evaluate(

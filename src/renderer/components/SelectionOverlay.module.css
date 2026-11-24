@@ -1,0 +1,40 @@
+.box {
+  position: absolute;
+  z-index: 1001;
+  outline: 1px solid var(--color-white);
+  pointer-events: none;
+  will-change: left, top, width, height;
+  transform: translateZ(0);
+}
+
+.handle {
+  position: absolute;
+  z-index: 1001;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 2.5px;
+  background: var(--color-white);
+  box-shadow: var(--handle-shadow);
+  pointer-events: none;
+}
+
+/* Above the top-left corner; inside it when the display edge is too close. */
+.badge {
+  position: absolute;
+  z-index: 1002;
+  padding: 3px 7px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 7px;
+  background: var(--color-overlay-badge);
+  color: var(--color-text);
+  font: 11.5px/1.35 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(calc(-100% - 8px));
+}
+
+.badgeInside {
+  transform: translate(8px, 8px);
+}

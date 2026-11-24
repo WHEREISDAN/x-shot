@@ -13,6 +13,7 @@ let stored: AppPreferences;
 let nextSetResult: SetPreferencesResponse | null;
 const invoke = jest.fn(async (channel: string, payload?: unknown) => {
   if (channel === 'get-preferences') return stored;
+  if (channel === 'get-home-folder') return '/Users/alex';
   if (channel === 'set-preferences') {
     if (nextSetResult) return nextSetResult;
     stored = deepMerge(
@@ -117,6 +118,48 @@ describe('Preferences window', () => {
     expect(setPreferenceCalls()).toEqual([
       { export: { filenamePattern: 'shot' } },
     ]);
+  });
+
+  it('lists the sections as vertical tabs and asks before a reset', async () => {
+    await openTab('Privacy');
+    expect(screen.getByRole('tablist')).toHaveAttribute(
+      'aria-orientation',
+      'vertical',
+    );
+    expect(screen.getByRole('tab', { name: 'Privacy' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tabpanel', { name: 'Privacy' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+    const dialog = screen.getByRole('dialog', { name: 'Reset preferences?' });
+    expect(dialog).toHaveTextContent('cannot be undone');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('reset-preferences', undefined);
+  });
+
+  it('shows the save location from ~, with the full path as its title', async () => {
+    const location = '/Users/alex/Pictures/Screenshots';
+    stored = deepMerge(PREFERENCES, {
+      capture: { defaultSaveLocation: location },
+    });
+    await openTab('General');
+    await settle();
+    const path = screen.getByText('~/Pictures/Screenshots');
+    expect(path).toHaveAttribute('title', location);
+    expect(stored.capture.defaultSaveLocation).toBe(location);
+  });
+
+  it('draws a transparent fill colour as a checkerboard chip', async () => {
+    await openTab('Editor');
+    expect(screen.getByLabelText('Fill color picker')).toHaveClass(
+      'transparentChip',
+    );
+    expect(screen.getByLabelText('Stroke color picker')).not.toHaveClass(
+      'transparentChip',
+    );
   });
 
   it('shows why a save failed and goes back to what main has', async () => {

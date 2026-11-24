@@ -1,0 +1,34 @@
+.titleBar {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+/* macOS draws its window buttons at the left; Windows and Linux draw
+   caption buttons at the right through titleBarOverlay. */
+.logo {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  display: block;
+  -webkit-user-drag: none;
+}
+
+.mac .logo {
+  left: 80px;
+}
+
+.detail {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

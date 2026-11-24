@@ -1,0 +1,56 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  cursor: crosshair;
+}
+
+.overlay:focus {
+  outline: none;
+}
+
+.snapshot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.compositorLayer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+  pointer-events: none;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+/* Right-aligned under the selection's bottom-right corner. */
+.captureButton {
+  position: absolute;
+  z-index: 1003;
+  cursor: default;
+  transform: translateX(-100%);
+}
+
+.spark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-spark);
+}

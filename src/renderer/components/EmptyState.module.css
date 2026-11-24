@@ -1,0 +1,27 @@
+.canvas {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: min(100%, 420px);
+  height: 170px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.logo {
+  display: block;
+  -webkit-user-drag: none;
+}

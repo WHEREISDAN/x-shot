@@ -1,0 +1,137 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  overflow: hidden;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 6px 14px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Scrolls inside the island when the window is short. */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.section:last-child {
+  border-bottom: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 16px;
+  margin: 0 0 9px;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-label);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sectionSwitch {
+  flex: 1;
+  justify-content: space-between;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.swatch {
+  aspect-ratio: 3 / 2;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--color-swatch-ring);
+  cursor: pointer;
+}
+
+.swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--color-line-strong);
+  filter: brightness(1.08);
+}
+
+.selected {
+  outline: 2px solid var(--color-inverse);
+  outline-offset: 2px;
+}
+
+.upload {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--color-line-strong);
+  background: var(--color-raise);
+  box-shadow: none;
+  color: var(--color-text-muted);
+}
+
+.upload:hover {
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.upload svg {
+  width: 14px;
+  height: 14px;
+}
+
+.uploadError {
+  margin-top: 8px;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.border {
+  display: grid;
+  grid-template-columns: 60px 28px 1fr;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.hex {
+  text-transform: uppercase;
+}
+
+.sizeRow {
+  display: flex;
+  gap: 8px;
+}
+
+.sizeRow + .hex {
+  text-transform: uppercase;
+}
+
+.sizeRow {
+  margin-top: 8px;
+}
+
+.hiddenFileInput {
+  display: none;
+}

@@ -1,0 +1,63 @@
+.button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: var(--color-raise);
+  color: var(--color-text);
+  font: 500 13px/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-raise-strong);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary {
+  border-color: transparent;
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+}
+
+.primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.danger {
+  border-color: var(--color-danger-line);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--color-danger-tint-strong);
+}
+
+.small {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  font-size: 12px;
+}
+
+.small svg {
+  width: 14px;
+  height: 14px;
+}

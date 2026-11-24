@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { ToastTone } from '../components/Toast';
+import type { ToastTone } from '../design-system/components/Toast';
 import { createRendererLogger } from '../utils/logger';
 
 const logger = createRendererLogger('export-actions');

@@ -5,11 +5,20 @@ import DimOverlays from './components/DimOverlays';
 import SelectionOverlay from './components/SelectionOverlay';
 import QuickDock from './components/QuickDock';
 import SourcesPanel from './components/SourcesPanel';
+import Magnifier from './components/Magnifier';
+import CaptureHint from './components/CaptureHint';
+import capturePixelSize from './components/capture-pixel-size';
+import { Button } from './design-system';
+import styles from './ScreenshotCapture.module.css';
 import type { ScreenSourceItem, WindowSourceItem } from '../shared/ipc-types';
 import { captureAssetUrl } from '../shared/capture-asset';
 import { createRendererLogger } from './utils/logger';
 
 const logger = createRendererLogger('screenshot-capture');
+
+/** Controls that take the pointer; the magnifier hides over them. */
+const CONTROLS =
+  '[data-quick-dock="1"],[data-capture-button="1"],[data-sources-panel="1"]';
 
 function ScreenshotCapture() {
   const { offsetX, offsetY, displayId } = useMemo(() => {
@@ -60,7 +69,11 @@ function ScreenshotCapture() {
     width: number;
     height: number;
   } | null>(null);
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [pointer, setPointer] = useState<{
+    x: number;
+    y: number;
+    overControls: boolean;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,34 +172,31 @@ function ScreenshotCapture() {
     [clearSelection, screenSources],
   );
 
+  const pixelSize = useMemo(
+    () =>
+      selection.selection &&
+      capturePixelSize(
+        selection.selection,
+        { width: window.innerWidth, height: window.innerHeight },
+        background,
+        window.devicePixelRatio || 1,
+      ),
+    [selection.selection, background],
+  );
+  const panelOpen = showWindowsPanel || showDisplaysPanel;
+
   return (
     <div
-      style={{
-        margin: 0,
-        padding: 0,
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        background: 'transparent',
-        fontFamily: 'Arial, sans-serif',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        cursor: 'crosshair',
-      }}
+      className={styles.overlay}
       onMouseDown={(e) => {
         const target = e.target as HTMLElement;
-        if (
-          target.closest(
-            '[data-selection-root="1"],[data-quick-dock="1"],[data-capture-button="1"],[data-sources-panel="1"]',
-          )
-        ) {
+        if (target.closest(`[data-selection-root="1"],${CONTROLS}`)) {
           e.stopPropagation();
           return;
         }
 
         // If a sources panel is open and user clicks outside it, close panels
-        if (showWindowsPanel || showDisplaysPanel) {
+        if (panelOpen) {
           setShowWindowsPanel(false);
           setShowDisplaysPanel(false);
           e.preventDefault();
@@ -208,10 +218,15 @@ function ScreenshotCapture() {
         }
         selection.onMouseDown(e);
       }}
-      onMouseMove={(e) => {
-        setPointer({ x: e.clientX, y: e.clientY });
-        selection.onMouseMove(e);
-      }}
+      // Capture phase: the dock stops mouse moves from bubbling up here.
+      onMouseMoveCapture={(e) =>
+        setPointer({
+          x: e.clientX,
+          y: e.clientY,
+          overControls: !!(e.target as HTMLElement).closest(CONTROLS),
+        })
+      }
+      onMouseMove={selection.onMouseMove}
       onMouseUp={selection.onMouseUp}
       role="application"
       tabIndex={0}
@@ -220,33 +235,10 @@ function ScreenshotCapture() {
         <img
           src={background.url}
           alt="Display snapshot"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            objectFit: 'fill',
-            zIndex: 0,
-            pointerEvents: 'none',
-          }}
+          className={styles.snapshot}
         />
       )}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'transparent',
-          cursor: 'crosshair',
-          zIndex: 1000,
-          willChange: 'opacity',
-          transform: 'translateZ(0)',
-          pointerEvents: 'none',
-        }}
-      />
+      <div className={styles.compositorLayer} />
 
       <DimOverlays
         top={selection.overlayRects.top}
@@ -255,114 +247,51 @@ function ScreenshotCapture() {
         bottom={selection.overlayRects.bottom}
       />
 
-      <SelectionOverlay selection={selection.selection} />
+      <SelectionOverlay selection={selection.selection} pixelSize={pixelSize} />
 
-      {/* Magnifier */}
-      {background && pointer && (
+      {background && pointer && !pointer.overControls && !panelOpen && (
+        <Magnifier src={background.url} pointer={pointer} />
+      )}
+
+      {selection.selection && (
         <div
+          className={styles.captureButton}
           style={{
-            position: 'fixed',
-            left: Math.min(pointer.x + 24, window.innerWidth - 140),
-            top: Math.min(pointer.y + 24, window.innerHeight - 140),
-            width: 120,
-            height: 120,
-            borderRadius: 80,
-            overflow: 'hidden',
-            zIndex: 1004,
-            pointerEvents: 'none',
-            boxShadow:
-              '0 6px 16px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15)',
-            backgroundImage: `url(${background.url})`,
-            backgroundRepeat: 'no-repeat',
-            backgroundSize: `${window.innerWidth * 3}px ${window.innerHeight * 3}px`,
-            backgroundPosition: `-${pointer.x * 3 - 60}px -${pointer.y * 3 - 60}px`,
+            left: Math.min(
+              selection.selection.x + selection.selection.width,
+              window.innerWidth - 12,
+            ),
+            top: Math.min(
+              selection.selection.y + selection.selection.height + 12,
+              window.innerHeight - 56,
+            ),
           }}
-          aria-hidden="true"
+          data-capture-button="1"
         >
-          {/* Pixel grid */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundImage:
-                'repeating-linear-gradient(90deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(0deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 1px, transparent 3px)',
-              backgroundSize: '3px 3px, 3px 3px',
-              mixBlendMode: 'overlay',
-            }}
-          />
-          {/* Crosshair */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 60,
-              top: 0,
-              width: 1,
-              height: '100%',
-              background: 'rgba(255,255,255,0.8)',
-              opacity: 0.7,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: 60,
-              left: 0,
-              height: 1,
-              width: '100%',
-              background: 'rgba(255,255,255,0.8)',
-              opacity: 0.7,
-            }}
-          />
+          <Button
+            variant="primary"
+            icon={<span className={styles.spark} />}
+            onClick={selection.confirm}
+          >
+            Capture
+          </Button>
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={selection.confirm}
-        style={{
-          position: 'absolute',
-          appearance: 'none',
-          background: 'rgba(255,255,255,0.08)',
-          color: 'white',
-          border: '1px solid rgba(255,255,255,0.2)',
-          padding: '10px 14px',
-          borderRadius: 12,
-          cursor: 'pointer',
-          fontSize: 13,
-          fontWeight: 600,
-          letterSpacing: 0.2,
-          boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.25)',
-          whiteSpace: 'nowrap',
-          zIndex: 1003,
-          display: selection.selection ? 'block' : 'none',
-          left: selection.selection
-            ? Math.min(
-                selection.selection.x + selection.selection.width,
-                window.innerWidth - 12,
-              )
-            : 0,
-          top: selection.selection
-            ? Math.min(
-                selection.selection.y + selection.selection.height + 12,
-                window.innerHeight - 56,
-              )
-            : 0,
-          transform: 'translateX(-100%)',
-        }}
-        data-capture-button="1"
-      >
-        ✓ Capture
-      </button>
+      {!selection.selection && !panelOpen && <CaptureHint />}
 
       <QuickDock
         onToggleWindows={toggleWindowsPanel}
         onToggleDisplays={toggleDisplaysPanel}
         onCancel={cancelCapture}
+        windowsOpen={showWindowsPanel}
+        displaysOpen={showDisplaysPanel}
       />
 
       {showWindowsPanel && (
         <SourcesPanel
           title="Windows"
+          count={`${windowSources.length} open`}
           sources={windowSources}
           onSelect={captureWindow}
         />
@@ -371,6 +300,7 @@ function ScreenshotCapture() {
       {showDisplaysPanel && (
         <SourcesPanel
           title="Displays"
+          count={`${screenSources.length} connected`}
           sources={screenSources}
           onSelect={captureScreen}
         />
