@@ -121,8 +121,7 @@ test.describe('PII mask layer', () => {
     const editor = editorFor(page, image);
     await waitForPiiMasks(packaged, editor, FIXTURE_A_MASKS);
 
-    // With Censor PII on, the Rect tool draws a manual mask. Stay left of
-    // the presentation panel, which overlaps the right edge of the stage.
+    // With Censor PII on, the Rect tool draws a manual mask.
     await selectTool(page, 'Rect');
     const stage = await stageSvg(page, image).boundingBox();
     if (!stage) throw new Error('Editor stage is not visible');

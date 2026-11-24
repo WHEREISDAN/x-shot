@@ -1,0 +1,12 @@
+.logo {
+  display: block;
+  flex: none;
+}
+
+.mark {
+  stroke: var(--color-text);
+}
+
+.spark {
+  fill: var(--color-spark);
+}

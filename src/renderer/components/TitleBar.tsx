@@ -1,8 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import icon from '../../../assets/icon.png';
+import { useCallback, useEffect, useState } from 'react';
 import type { WindowState } from '../../shared/ipc-types';
+import { isMacPlatform, Logo } from '../design-system';
+import cx from '../design-system/class-names';
+import styles from './TitleBar.module.css';
 
-export default function TitleBar() {
+interface TitleBarProps {
+  title: string;
+  /** Shown after the title in mono, e.g. the capture's pixel size. */
+  detail?: string;
+}
+
+export default function TitleBar({ title, detail }: TitleBarProps) {
   const [state, setState] = useState<WindowState | null>(null);
 
   useEffect(() => {
@@ -16,65 +24,21 @@ export default function TitleBar() {
     return off;
   }, []);
 
-  const isMac = state?.platform === 'darwin';
+  const mac = state ? state.platform === 'darwin' : isMacPlatform();
 
   const handleDoubleClick = useCallback(() => {
     const api = window?.electron?.windowControls;
     api?.toggleMaximize();
   }, []);
 
-  const containerStyle = useMemo<React.CSSProperties>(
-    () => ({
-      height: 36,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '10px 24px',
-      background: 'rgb(17, 17, 17)',
-      color: '#ffffff',
-      borderBottom: '1px solid rgba(255,255,255,0.1)',
-      WebkitUserSelect: 'none',
-      WebkitAppRegion: 'drag',
-    }),
-    [],
-  );
-
-  const leftStyle = useMemo<React.CSSProperties>(
-    () => ({
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      paddingLeft: isMac ? 56 : 0,
-      opacity: 0.9,
-    }),
-    [isMac],
-  );
-
-  const rightStyle = useMemo<React.CSSProperties>(
-    () => ({
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      WebkitAppRegion: 'no-drag',
-    }),
-    [],
-  );
-
   return (
-    <div style={containerStyle} onDoubleClick={handleDoubleClick}>
-      <div style={leftStyle}>
-        <img
-          src={icon}
-          alt="X-Shot"
-          width={16}
-          height={16}
-          style={{ filter: 'grayscale(100%) brightness(200%)', opacity: 0.8 }}
-        />
-        {/* <span style={{ fontSize: 12, fontWeight: 600 }}>X‑Shot</span> */}
-      </div>
-      <div style={rightStyle}>
-        {/* Intentionally empty: we use native caption buttons provided by titleBarOverlay */}
-      </div>
+    <div
+      className={cx(styles.titleBar, mac && styles.mac)}
+      onDoubleClick={handleDoubleClick}
+    >
+      <Logo className={styles.logo} />
+      <span>{title}</span>
+      {detail && <span className={styles.detail}>{detail}</span>}
     </div>
   );
 }

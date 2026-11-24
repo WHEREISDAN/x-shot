@@ -109,10 +109,13 @@
     }
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "dom-to-image-more": "^3.6.3",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",
+    "lucide-react": "^1.79.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",

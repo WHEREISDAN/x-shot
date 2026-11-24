@@ -1,16 +1,31 @@
 import React, { memo } from 'react';
-import type { ToolType } from '../../hooks/use-editor-state';
-import { ToolButton, ColorSwatch } from './editor-tools';
-import { Select } from '../../design-system';
 import {
-  colors,
-  spacing,
-  borderRadius,
-  zIndex,
-} from '../../design-system/tokens';
+  ALargeSmall,
+  ArrowUpRight,
+  Ellipse,
+  Highlighter,
+  MousePointer2,
+  Pen,
+  Pipette,
+  Square,
+  SquareDashedText,
+  StrokeWidth,
+  Type,
+} from 'lucide-react';
+import type { ToolType } from '../../hooks/use-editor-state';
+import {
+  ColorDot,
+  Island,
+  IslandSeparator,
+  Select,
+  ToolButton,
+} from '../../design-system';
+import styles from './BottomToolbar.module.css';
+
+type TextSelectLevel = 'word' | 'line' | 'paragraph';
 
 interface BottomToolbarProps {
-  /** Lets the editor measure the toolbar to keep the stage clear of it. */
+  /** Lets the editor measure the dock. */
   toolbarRef?: React.Ref<HTMLDivElement>;
   activeTool: ToolType;
   setActiveTool: (t: ToolType) => void;
@@ -22,10 +37,53 @@ interface BottomToolbarProps {
   setTextSize: (n: number) => void;
   showTextControls: boolean;
   showTextSelectLevel: boolean;
-  textSelectLevel: 'word' | 'line' | 'paragraph';
-  setTextSelectLevel: (lvl: 'word' | 'line' | 'paragraph') => void;
+  textSelectLevel: TextSelectLevel;
+  setTextSelectLevel: (lvl: TextSelectLevel) => void;
 }
 
+const MODE_TOOLS: ReadonlyArray<{
+  tool: ToolType;
+  label: string;
+  icon: React.ReactNode;
+}> = [
+  { tool: 'text-select', label: 'Text Highlight', icon: <SquareDashedText /> },
+  { tool: 'highlighter', label: 'Highlight', icon: <Highlighter /> },
+  { tool: 'rect', label: 'Rect', icon: <Square /> },
+  { tool: 'ellipse', label: 'Ellipse', icon: <Ellipse /> },
+  { tool: 'arrow', label: 'Arrow', icon: <ArrowUpRight /> },
+  { tool: 'text', label: 'Text', icon: <Type /> },
+];
+
+const STROKE_COLORS = [
+  '#ef4444',
+  '#f59e0b',
+  '#22c55e',
+  '#3b82f6',
+  '#ffffff',
+  '#000000',
+];
+
+const STROKE_WIDTH_OPTIONS = [1, 2, 3, 4, 6, 8, 12].map((value) => ({
+  value,
+  label: String(value),
+}));
+
+const TEXT_SIZE_OPTIONS = [14, 16, 18, 20, 24, 28].map((value) => ({
+  value,
+  label: String(value),
+}));
+
+const TEXT_LEVEL_OPTIONS = [
+  { value: 'word', label: 'Word' },
+  { value: 'line', label: 'Line' },
+  { value: 'paragraph', label: 'Paragraph' },
+];
+
+type EyeDropperWindow = Window & {
+  EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+};
+
+/** The tool dock: tools, stroke colours, then the active tool's options. */
 const BottomToolbar = memo(function BottomToolbar({
   toolbarRef,
   activeTool,
@@ -41,235 +99,95 @@ const BottomToolbar = memo(function BottomToolbar({
   textSelectLevel,
   setTextSelectLevel,
 }: BottomToolbarProps) {
-  // Centered without translateX: a fixed box at left 50% may only grow to
-  // half the window, which would wrap far too early. In narrow windows the
-  // tools wrap onto a second row instead of running off-screen.
-  const containerStyles: React.CSSProperties = {
-    position: 'fixed',
-    left: 0,
-    right: 0,
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    width: 'fit-content',
-    maxWidth: `calc(100vw - ${spacing[8]})`,
-    boxSizing: 'border-box',
-    bottom: spacing[6],
-    // Above the presentation panel, so every tool stays clickable.
-    zIndex: zIndex.fixed,
-    background: colors.background.glass,
-    borderRadius: borderRadius['4xl'],
-    padding: `${spacing[3]} ${spacing[4]}`,
-    display: 'flex',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing[3],
-    border: `1px solid ${colors.border.default}`,
-    color: colors.text.primary,
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
+  const pickColor = async () => {
+    try {
+      const EyeDropperCtor = (window as EyeDropperWindow).EyeDropper;
+      if (EyeDropperCtor) {
+        const res = await new EyeDropperCtor().open();
+        setStrokeColor(res?.sRGBHex || '#ffffff');
+      }
+    } catch {
+      // noop
+    }
   };
 
-  const dividerStyles: React.CSSProperties = {
-    width: '1px',
-    height: spacing[6],
-    background: colors.border.muted,
-    margin: `0 ${spacing[2]}`,
-  };
-
-  const colorGroupStyles: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing[2],
-  };
-
-  const controlGroupStyles: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing[2],
-  };
-
-  const labelStyles: React.CSSProperties = {
-    fontSize: '12px',
-    opacity: 0.8,
-    color: colors.text.secondary,
-  };
-
-  const strokeWidthOptions = [
-    { value: 1, label: '1' },
-    { value: 2, label: '2' },
-    { value: 3, label: '3' },
-    { value: 4, label: '4' },
-    { value: 6, label: '6' },
-    { value: 8, label: '8' },
-    { value: 12, label: '12' },
-  ];
-
-  const textSizeOptions = [
-    { value: 14, label: '14' },
-    { value: 16, label: '16' },
-    { value: 18, label: '18' },
-    { value: 20, label: '20' },
-    { value: 24, label: '24' },
-    { value: 28, label: '28' },
-  ];
-
-  const textLevelOptions = [
-    { value: 'word', label: 'Word' },
-    { value: 'line', label: 'Line' },
-    { value: 'paragraph', label: 'Paragraph' },
-  ];
+  const modeButton = (tool: ToolType, label: string, icon: React.ReactNode) => (
+    <ToolButton
+      key={tool}
+      label={label}
+      icon={icon}
+      active={activeTool === tool}
+      pressed={activeTool === tool}
+      onClick={() => setActiveTool(tool)}
+    />
+  );
 
   return (
-    <div
-      ref={toolbarRef}
+    <Island
+      islandRef={toolbarRef}
       role="toolbar"
       aria-label="Editor tools"
-      style={containerStyles}
+      layout="dock"
+      className={styles.dock}
     >
-      <ToolButton
-        label="Select"
-        active={activeTool === 'select'}
-        onClick={() => setActiveTool('select')}
-      />
-      <ToolButton
-        label="Pen"
-        active={activeTool === 'pen'}
-        onClick={() => setActiveTool('pen')}
-      />
-      <ToolButton
-        label="Eyedropper"
-        active={false}
-        onClick={async () => {
-          try {
-            const EyeDropperCtor = (
-              window as Window & {
-                EyeDropper?: new () => {
-                  open: () => Promise<{ sRGBHex: string }>;
-                };
-              }
-            ).EyeDropper;
-            if (EyeDropperCtor) {
-              const ed = new EyeDropperCtor();
-              const res = await ed.open();
-              const color = res?.sRGBHex || '#ffffff';
-              setStrokeColor(color);
-            }
-          } catch {
-            // noop
-          }
-        }}
-      />
-      <ToolButton
-        label="Text Highlight"
-        active={activeTool === 'text-select'}
-        onClick={() => setActiveTool('text-select')}
-      />
-      <ToolButton
-        label="Highlight"
-        active={activeTool === 'highlighter'}
-        onClick={() => setActiveTool('highlighter')}
-      />
-      <ToolButton
-        label="Rect"
-        active={activeTool === 'rect'}
-        onClick={() => setActiveTool('rect')}
-      />
-      <ToolButton
-        label="Ellipse"
-        active={activeTool === 'ellipse'}
-        onClick={() => setActiveTool('ellipse')}
-      />
-      <ToolButton
-        label="Arrow"
-        active={activeTool === 'arrow'}
-        onClick={() => setActiveTool('arrow')}
-      />
-      <ToolButton
-        label="Text"
-        active={activeTool === 'text'}
-        onClick={() => setActiveTool('text')}
-      />
+      {modeButton('select', 'Select', <MousePointer2 />)}
+      {modeButton('pen', 'Pen', <Pen />)}
+      <ToolButton label="Eyedropper" icon={<Pipette />} onClick={pickColor} />
+      {MODE_TOOLS.map(({ tool, label, icon }) => modeButton(tool, label, icon))}
 
-      <div style={dividerStyles} />
+      <IslandSeparator />
 
-      <div style={colorGroupStyles}>
-        <ColorSwatch
-          color={colors.accent.red}
-          selected={strokeColor === colors.accent.red}
-          onClick={() => setStrokeColor(colors.accent.red)}
+      {STROKE_COLORS.map((color) => (
+        <ColorDot
+          key={color}
+          color={color}
+          selected={strokeColor === color}
+          onClick={() => setStrokeColor(color)}
         />
-        <ColorSwatch
-          color={colors.accent.orange}
-          selected={strokeColor === colors.accent.orange}
-          onClick={() => setStrokeColor(colors.accent.orange)}
-        />
-        <ColorSwatch
-          color={colors.accent.green}
-          selected={strokeColor === colors.accent.green}
-          onClick={() => setStrokeColor(colors.accent.green)}
-        />
-        <ColorSwatch
-          color={colors.accent.blue}
-          selected={strokeColor === colors.accent.blue}
-          onClick={() => setStrokeColor(colors.accent.blue)}
-        />
-        <ColorSwatch
-          color={colors.white}
-          selected={strokeColor === colors.white}
-          onClick={() => setStrokeColor(colors.white)}
-        />
-        <ColorSwatch
-          color={colors.black}
-          selected={strokeColor === colors.black}
-          onClick={() => setStrokeColor(colors.black)}
-        />
-      </div>
+      ))}
 
-      <div style={controlGroupStyles}>
-        <span style={labelStyles}>Stroke</span>
-        <Select
-          size="sm"
-          variant="filled"
-          value={strokeWidth}
-          onChange={(e) => setStrokeWidth(Number(e.target.value))}
-          options={strokeWidthOptions}
-          style={{ width: '60px' }}
-        />
-      </div>
+      <IslandSeparator />
+
+      <Select
+        size="dock"
+        mono
+        icon={<StrokeWidth aria-hidden />}
+        aria-label="Stroke width"
+        tooltip="Stroke width"
+        tooltipPlacement="top"
+        value={strokeWidth}
+        onChange={(e) => setStrokeWidth(Number(e.target.value))}
+        options={STROKE_WIDTH_OPTIONS}
+      />
 
       {showTextControls && (
-        <div style={controlGroupStyles}>
-          <span style={labelStyles}>Text</span>
-          <Select
-            size="sm"
-            variant="filled"
-            value={textSize}
-            onChange={(e) => setTextSize(Number(e.target.value))}
-            options={textSizeOptions}
-            style={{ width: '60px' }}
-          />
-        </div>
+        <Select
+          size="dock"
+          mono
+          icon={<ALargeSmall aria-hidden />}
+          aria-label="Text size"
+          tooltip="Text size"
+          tooltipPlacement="top"
+          value={textSize}
+          onChange={(e) => setTextSize(Number(e.target.value))}
+          options={TEXT_SIZE_OPTIONS}
+        />
       )}
 
       {showTextSelectLevel && (
-        <div style={controlGroupStyles}>
-          <span style={labelStyles}>Level</span>
-          <Select
-            size="sm"
-            variant="filled"
-            value={textSelectLevel}
-            onChange={(e) =>
-              setTextSelectLevel(
-                e.target.value as 'word' | 'line' | 'paragraph',
-              )
-            }
-            options={textLevelOptions}
-            style={{ width: '100px' }}
-          />
-        </div>
+        <Select
+          size="dock"
+          aria-label="Level"
+          tooltip="Level"
+          tooltipPlacement="top"
+          value={textSelectLevel}
+          onChange={(e) =>
+            setTextSelectLevel(e.target.value as TextSelectLevel)
+          }
+          options={TEXT_LEVEL_OPTIONS}
+        />
       )}
-    </div>
+    </Island>
   );
 });
 

@@ -1,0 +1,51 @@
+.input {
+  height: 28px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raise);
+  color: var(--color-text);
+  font: 12.5px var(--font-sans);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.input:focus-visible {
+  border-color: var(--color-selection);
+  outline: none;
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* A native colour input drawn as a 28px chip. */
+.color {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  border-color: var(--color-line-strong);
+  cursor: pointer;
+}
+
+.color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color::-webkit-color-swatch {
+  border: 0;
+  border-radius: 7px;
+}

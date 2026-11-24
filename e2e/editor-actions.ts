@@ -23,6 +23,13 @@ export function editorToolbar(page: Page) {
   return page.getByRole('toolbar', { name: 'Editor tools' });
 }
 
+/** One option of the Presentation panel's Export scale control. */
+export function exportScaleOption(page: Page, scale: number) {
+  return page
+    .getByRole('radiogroup', { name: 'Export scale' })
+    .getByRole('radio', { name: `${scale}x`, exact: true });
+}
+
 /** Picks a tool with a real click on the bottom toolbar. */
 export async function selectTool(page: Page, name: string) {
   await editorToolbar(page).getByRole('button', { name, exact: true }).click();

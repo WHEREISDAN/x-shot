@@ -5,10 +5,16 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { useEffect, type ReactNode } from 'react';
+import { LucideProvider } from 'lucide-react';
+import '@fontsource-variable/geist/index.css';
+import '@fontsource-variable/geist-mono/index.css';
 import ScreenshotCapture from './ScreenshotCapture';
 import './App.css';
+import styles from './App.module.css';
 import ScreenshotEditor from './components/editor/ScreenshotEditor';
-import Toast, { type ToastAction } from './components/Toast';
+import EmptyState from './components/EmptyState';
+import { Toast, type ToastAction } from './design-system';
+import cx from './design-system/class-names';
 import type { CaptureFailure } from '../shared/ipc-types';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
@@ -46,82 +52,80 @@ function Hello() {
   }, []);
 
   return (
-    <div className="app-container">
-      {notice && (
-        <Toast
-          key={notice.id}
-          tone={notice.tone}
-          message={notice.message}
-          onDismiss={dismissNotice}
-          autoDismissMs={
-            notice.tone === 'success' ? SUCCESS_TOAST_MS : undefined
-          }
-        />
-      )}
-      {failure && !notice && (
-        <Toast
-          key={failure.sessionId}
-          tone="error"
-          message={failure.message}
-          onDismiss={dismissFailure}
-          action={failureAction(failure)}
-          dismissLabel="Dismiss capture error"
-        />
-      )}
-      {screenshot ? (
-        // Keyed by session so every capture starts with a fresh editor:
-        // shapes, selection, undo history, text editing and OCR state.
-        <ScreenshotEditor
-          key={screenshot.sessionId}
-          screenshot={screenshot}
-          onDelete={clearScreenshot}
-          onCopy={copy}
-          onSave={save}
-          onExportError={reportExportError}
-        />
-      ) : (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            background: '#0b0b0c',
-            color: 'white',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div style={{ opacity: 0.6, fontSize: 12 }}>
-            Waiting for screenshot…
-          </div>
-        </div>
-      )}
+    <div className={cx('app-container', styles.editorWindow)}>
+      <TitleBar
+        title={screenshot ? 'Screenshot' : 'X-Shot'}
+        detail={
+          screenshot ? `${screenshot.width} × ${screenshot.height}` : undefined
+        }
+      />
+      <main className={styles.main}>
+        {notice && (
+          <Toast
+            key={notice.id}
+            className={styles.toast}
+            tone={notice.tone}
+            message={notice.message}
+            onDismiss={dismissNotice}
+            autoDismissMs={
+              notice.tone === 'success' ? SUCCESS_TOAST_MS : undefined
+            }
+          />
+        )}
+        {failure && !notice && (
+          <Toast
+            key={failure.sessionId}
+            className={styles.toast}
+            tone="error"
+            message={failure.message}
+            onDismiss={dismissFailure}
+            action={failureAction(failure)}
+            dismissLabel="Dismiss capture error"
+          />
+        )}
+        {screenshot ? (
+          // Keyed by session so every capture starts with a fresh editor:
+          // shapes, selection, undo history, text editing and OCR state.
+          <ScreenshotEditor
+            key={screenshot.sessionId}
+            screenshot={screenshot}
+            onDelete={clearScreenshot}
+            onCopy={copy}
+            onSave={save}
+            onExportError={reportExportError}
+          />
+        ) : (
+          <EmptyState />
+        )}
+      </main>
     </div>
   );
 }
 
 function Shell({ children }: { children: ReactNode }) {
-  const location = useLocation();
-  const hideTitleBar = location.pathname === '/screenshot';
+  const { pathname } = useLocation();
+  // The editor draws its own title bar, which shows the capture's size.
+  if (pathname === '/') return children;
   return (
     <div className="app-container">
-      {!hideTitleBar && <TitleBar />}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {children}
-      </div>
+      {pathname === '/preferences' && <TitleBar title="Preferences" />}
+      <div className={styles.routeContent}>{children}</div>
     </div>
   );
 }
 
 export default function App() {
   return (
-    <Router>
-      <Shell>
-        <Routes>
-          <Route path="/" element={<Hello />} />
-          <Route path="/screenshot" element={<ScreenshotCapture />} />
-          <Route path="/preferences" element={<PreferencesWindow />} />
-        </Routes>
-      </Shell>
-    </Router>
+    <LucideProvider strokeWidth={1.75}>
+      <Router>
+        <Shell>
+          <Routes>
+            <Route path="/" element={<Hello />} />
+            <Route path="/screenshot" element={<ScreenshotCapture />} />
+            <Route path="/preferences" element={<PreferencesWindow />} />
+          </Routes>
+        </Shell>
+      </Router>
+    </LucideProvider>
   );
 }

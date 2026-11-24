@@ -1,8 +1,7 @@
 import React, { useCallback } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
 import type { UpdatePreferences } from '../../hooks/use-preferences';
-import { Input } from '../../design-system';
-import { ColorSwatch } from '../editor/editor-tools';
+import { ColorDot, Input } from '../../design-system';
 import { colors, spacing, typography } from '../../design-system/tokens';
 
 interface EditorSectionProps {
@@ -144,12 +143,11 @@ export default function EditorSection({
             aria-labelledby="stroke-color-label"
           >
             {COLOR_PRESETS.map((color) => (
-              <ColorSwatch
+              <ColorDot
                 key={color}
                 color={color}
                 selected={preferences.editor.defaultStrokeColor === color}
                 onClick={() => handleStrokeColorChange(color)}
-                size="md"
               />
             ))}
           </div>
@@ -175,8 +173,6 @@ export default function EditorSection({
               onChange={(e) => handleCustomStrokeColor(e.target.value)}
               onBlur={onFlush}
               placeholder="#ff0000"
-              variant="filled"
-              size="sm"
               style={{ width: '100px' }}
             />
           </div>
@@ -194,19 +190,17 @@ export default function EditorSection({
             role="radiogroup"
             aria-labelledby="fill-color-label"
           >
-            <ColorSwatch
+            <ColorDot
               color="transparent"
               selected={preferences.editor.defaultFillColor === 'transparent'}
               onClick={() => handleFillColorChange('transparent')}
-              size="md"
             />
             {COLOR_PRESETS.map((color) => (
-              <ColorSwatch
+              <ColorDot
                 key={color}
                 color={color}
                 selected={preferences.editor.defaultFillColor === color}
                 onClick={() => handleFillColorChange(color)}
-                size="md"
               />
             ))}
           </div>
@@ -235,8 +229,6 @@ export default function EditorSection({
               onChange={(e) => handleCustomFillColor(e.target.value)}
               onBlur={onFlush}
               placeholder="transparent or #ff0000"
-              variant="filled"
-              size="sm"
               style={{ width: '140px' }}
             />
           </div>

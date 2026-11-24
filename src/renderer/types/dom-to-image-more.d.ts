@@ -7,6 +7,7 @@ declare module 'dom-to-image-more' {
     filter?: (node: Node) => boolean;
     quality?: number;
     cacheBust?: boolean;
+    disableEmbedFonts?: boolean;
   }
 
   export function toPng(

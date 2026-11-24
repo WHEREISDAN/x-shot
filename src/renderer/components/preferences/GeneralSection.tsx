@@ -289,8 +289,6 @@ export default function GeneralSection({
             onFocus={startRecording({ onAccelerator: handleHotkeyChange })}
             onBlur={stopRecording}
             placeholder="Click then press shortcut"
-            variant="filled"
-            size="md"
             style={{ width: '100%', maxWidth: '360px' }}
             readOnly
           />
@@ -326,8 +324,6 @@ export default function GeneralSection({
                 })}
                 onBlur={stopRecording}
                 placeholder="Click then press shortcut (3s)"
-                variant="filled"
-                size="md"
                 style={{ width: '100%' }}
                 readOnly
               />
@@ -346,8 +342,6 @@ export default function GeneralSection({
                 })}
                 onBlur={stopRecording}
                 placeholder="Click then press shortcut (5s)"
-                variant="filled"
-                size="md"
                 style={{ width: '100%' }}
                 readOnly
               />
@@ -366,8 +360,6 @@ export default function GeneralSection({
                 })}
                 onBlur={stopRecording}
                 placeholder="Click then press shortcut (Re-capture last area)"
-                variant="filled"
-                size="md"
                 style={{ width: '100%' }}
                 readOnly
               />
@@ -388,8 +380,6 @@ export default function GeneralSection({
               type="text"
               value={preferences.capture.defaultSaveLocation}
               onChange={(e) => handleSaveLocationChange(e.target.value)}
-              variant="filled"
-              size="md"
               style={{ flex: 1 }}
               readOnly
             />
@@ -423,8 +413,6 @@ export default function GeneralSection({
               handleFormatChange(e.target.value as 'png' | 'jpg')
             }
             options={formatOptions}
-            variant="filled"
-            size="md"
             style={{ maxWidth: '250px' }}
           />
         </div>

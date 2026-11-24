@@ -161,8 +161,6 @@ export default function PrivacySection({
               handleDefaultStyleChange(e.target.value as 'blur' | 'black')
             }
             options={styleOptions}
-            variant="filled"
-            size="md"
             style={{ maxWidth: '300px' }}
           />
         </div>

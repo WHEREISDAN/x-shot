@@ -1,5 +1,40 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { TextShape } from '../../hooks/use-editor-state';
+import styles from './TextEditOverlay.module.css';
+
+// The input's border and padding, as in TextEditOverlay.module.css.
+const BOX_LEFT = 1 + 5;
+const BOX_TOP = 1 + 2;
+const DEFAULT_FONT = '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto';
+
+interface FontBox {
+  /** Line height that holds exactly the font's ascent and descent. */
+  lineHeight: number;
+  /** From the top of that line down to the hanging baseline. */
+  hangingTop: number;
+}
+
+/**
+ * Where the stage's text starts vertically inside a line of the same font.
+ * The stage draws text from its hanging baseline (dominant-baseline
+ * "hanging"), so the input lines its hanging baseline up with it.
+ */
+function measureFont(font: string, fontPx: number): FontBox {
+  const fallback = { lineHeight: Math.round(fontPx * 1.2), hangingTop: 0 };
+  if (typeof OffscreenCanvas === 'undefined') return fallback;
+  const context = new OffscreenCanvas(1, 1).getContext('2d');
+  if (!context) return fallback;
+  context.font = font;
+  context.textBaseline = 'alphabetic';
+  const metrics = context.measureText('Hg');
+  const ascent = metrics.fontBoundingBoxAscent;
+  const descent = metrics.fontBoundingBoxDescent;
+  if (!Number.isFinite(ascent) || !Number.isFinite(descent)) return fallback;
+  return {
+    lineHeight: ascent + descent,
+    hangingTop: ascent - metrics.hangingBaseline,
+  };
+}
 
 export interface TextEditState {
   id: string;
@@ -63,8 +98,10 @@ export default function TextEditOverlay({
     const shape = getShapeById(editingText.id);
     if (!shape) return null;
 
-    const centerX = container.clientWidth / 2;
-    const centerY = container.clientHeight / 2;
+    // Viewport coordinates, the same mapping the pointer handlers use.
+    const bounds = container.getBoundingClientRect();
+    const centerX = bounds.left + bounds.width / 2;
+    const centerY = bounds.top + bounds.height / 2;
     const stageTopLeftX = centerX - (canvasW * viewScale) / 2 + pan.x;
     const stageTopLeftY = centerY - (canvasH * viewScale) / 2 + pan.y;
     const px =
@@ -72,10 +109,17 @@ export default function TextEditOverlay({
     const py =
       stageTopLeftY + (shotY + (shape.y / natural.height) * shotH) * viewScale;
 
+    const fontPx = Math.max(12, shape.fontSize * viewScale);
+    const fontFamily = shape.fontFamily ?? DEFAULT_FONT;
+    const fontWeight = shape.fontWeight ?? 600;
+    const box = measureFont(`${fontWeight} ${fontPx}px ${fontFamily}`, fontPx);
     return {
-      left: Math.round(px),
-      top: Math.round(py),
-      fontPx: Math.max(12, Math.round(shape.fontSize * viewScale)),
+      left: px - BOX_LEFT,
+      top: py - box.hangingTop - BOX_TOP,
+      fontPx,
+      fontFamily,
+      fontWeight,
+      lineHeight: box.lineHeight,
     };
   }, [
     editingText,
@@ -121,20 +165,14 @@ export default function TextEditOverlay({
         }
       }}
       onBlur={() => finish(editingText.value)}
+      className={styles.input}
       style={{
-        position: 'absolute',
         left: positioning.left,
         top: positioning.top,
-        transform: 'translateY(-2px)',
-        minWidth: 80,
-        padding: '4px 6px',
-        borderRadius: 6,
-        border: '1px solid rgba(255,255,255,0.3)',
-        outline: 'none',
-        background: 'rgba(17,17,17,0.95)',
-        color: 'white',
         fontSize: positioning.fontPx,
-        zIndex: 5,
+        fontFamily: positioning.fontFamily,
+        fontWeight: positioning.fontWeight,
+        lineHeight: `${positioning.lineHeight}px`,
       }}
     />
   );

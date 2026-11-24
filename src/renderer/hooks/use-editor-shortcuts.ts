@@ -32,6 +32,18 @@ export function isTextEntryElement(element: Element | null): boolean {
   return TEXT_INPUT_TYPES.has(type);
 }
 
+export const MIN_ZOOM = 0.25;
+export const MAX_ZOOM = 8;
+const ZOOM_STEP = 1.1;
+
+/** The zoom after one Zoom in step, as Cmd/Ctrl + = does it. */
+export const zoomInStep = (zoom: number) =>
+  Math.min(MAX_ZOOM, zoom * ZOOM_STEP);
+
+/** The zoom after one Zoom out step, as Cmd/Ctrl + - does it. */
+export const zoomOutStep = (zoom: number) =>
+  Math.max(MIN_ZOOM, zoom / ZOOM_STEP);
+
 export interface UseEditorShortcutsOptions {
   editingActive: boolean;
   suppressWhenInputFocused?: boolean;
@@ -78,12 +90,12 @@ export function useEditorShortcuts({
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
-          setZoom((z) => Math.min(8, (typeof z === 'number' ? z : 1) * 1.1));
+          setZoom((z) => zoomInStep(typeof z === 'number' ? z : 1));
           return;
         }
         if (e.key === '-') {
           e.preventDefault();
-          setZoom((z) => Math.max(0.25, (typeof z === 'number' ? z : 1) / 1.1));
+          setZoom((z) => zoomOutStep(typeof z === 'number' ? z : 1));
           return;
         }
         if (e.key === '0') {

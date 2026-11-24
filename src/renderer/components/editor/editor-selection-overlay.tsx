@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { MaskBox } from '../../hooks/pii/types';
+import styles from './editor-selection-overlay.module.css';
 
 export type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 
@@ -26,31 +27,26 @@ export function SelectionHandles({
     handle: ResizeHandle;
     x: number;
     y: number;
-    cursor: string;
   }> = [
     {
       handle: 'nw',
       x: b.x - handleSize,
       y: b.y - handleSize,
-      cursor: 'nwse-resize',
     },
     {
       handle: 'ne',
       x: b.x + b.width,
       y: b.y - handleSize,
-      cursor: 'nesw-resize',
     },
     {
       handle: 'sw',
       x: b.x - handleSize,
       y: b.y + b.height,
-      cursor: 'nesw-resize',
     },
     {
       handle: 'se',
       x: b.x + b.width,
       y: b.y + b.height,
-      cursor: 'nwse-resize',
     },
   ];
 
@@ -62,21 +58,21 @@ export function SelectionHandles({
         width={Math.max(1, b.width) + pad * 2}
         height={Math.max(1, b.height) + pad * 2}
         fill="none"
-        stroke="#60a5fa"
+        className={styles.outline}
         strokeDasharray="4 2"
         strokeWidth={1}
       />
-      {handles.map(({ handle, x, y, cursor }) => (
+      {handles.map(({ handle, x, y }) => (
         <rect
           key={handle}
           x={x}
           y={y}
           width={handleSize}
           height={handleSize}
-          fill="#60a5fa"
+          className={`${styles.handle} ${styles[handle]}`}
+          strokeWidth={1}
           rx={2}
           pointerEvents="all"
-          style={{ cursor }}
           onPointerDown={(ev) => {
             ev.stopPropagation();
             onResizeStart(handle, ev);
@@ -89,7 +85,7 @@ export function SelectionHandles({
           ev.stopPropagation();
           onDelete();
         }}
-        style={{ cursor: 'pointer' }}
+        className={styles.delete}
       >
         <rect
           x={b.x + b.width + pad + 8}
@@ -97,12 +93,11 @@ export function SelectionHandles({
           width={28}
           height={28}
           rx={8}
-          fill="#0f172a"
-          stroke="#1f2937"
+          className={styles.deleteButton}
         />
         <path
           d={`M ${b.x + b.width + pad + 16} ${b.y - pad - 16} l 8 8 M ${b.x + b.width + pad + 24} ${b.y - pad - 16} l -8 8`}
-          stroke="#f87171"
+          className={styles.deleteIcon}
           strokeWidth={2}
           strokeLinecap="round"
         />

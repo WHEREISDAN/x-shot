@@ -46,7 +46,8 @@ const configuration: webpack.Configuration = {
           {
             loader: 'css-loader',
             options: {
-              modules: true,
+              // A default export, as assets/assets.d.ts declares for *.css.
+              modules: { namedExport: false },
               sourceMap: true,
               importLoaders: 1,
             },

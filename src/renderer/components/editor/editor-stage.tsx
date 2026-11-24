@@ -41,6 +41,10 @@ export interface EditorStageProps {
   ocrKeyPrefix: string;
   isExporting?: boolean;
   renderSelectionOverlay: (() => React.ReactNode) | undefined;
+  /** The canvas behind the islands. */
+  viewportClassName?: string;
+  /** The free area the stage is centred in. */
+  areaClassName?: string;
 }
 
 export const EditorStage = memo(function EditorStage({
@@ -69,6 +73,8 @@ export const EditorStage = memo(function EditorStage({
   ocrKeyPrefix,
   isExporting = false,
   renderSelectionOverlay,
+  viewportClassName,
+  areaClassName,
 }: EditorStageProps) {
   const canvasW = presentationDisabled ? natural.width : layout.canvas.width;
   const canvasH = presentationDisabled ? natural.height : layout.canvas.height;
@@ -84,170 +90,168 @@ export const EditorStage = memo(function EditorStage({
   }
 
   return (
-    <div
-      ref={containerRef}
-      data-stage-mode={presentationDisabled ? 'plain' : 'presentation'}
-      onWheel={onWheel}
-      style={{
-        position: 'relative',
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-      }}
-    >
+    // The viewport takes wheel input anywhere on the canvas; the stage is
+    // centred in the free area and may overflow it when zoomed in.
+    <div className={viewportClassName} onWheel={onWheel}>
       <div
-        ref={exportStageRef}
-        style={{
-          position: 'relative',
-          width: canvasW,
-          height: canvasH,
-          minWidth: canvasW,
-          minHeight: canvasH,
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${viewScale})`,
-          transformOrigin: 'center center',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          background: stageBackground,
-          borderRadius: presentationDisabled ? 0 : 24,
-        }}
+        ref={containerRef}
+        data-stage-mode={presentationDisabled ? 'plain' : 'presentation'}
+        className={areaClassName}
       >
-        {!presentationDisabled ? (
-          <div
-            style={{
-              position: 'absolute',
-              left: layout.frame.x,
-              top: layout.frame.y,
-              width: layout.frame.width,
-              height: layout.frame.height,
-              borderRadius: layout.frame.radius,
-              boxShadow: presentation.shadow.enabled
-                ? `${presentation.shadow.x}px ${presentation.shadow.y}px ${presentation.shadow.blur}px ${presentation.shadow.spread}px ${presentation.shadow.color}`
-                : 'none',
-              background: presentation.borderColor,
-              overflow: 'hidden',
-            }}
-          >
-            {(() => {
-              const innerRadius = Math.max(
-                0,
-                Math.min(
-                  layout.frame.radius - presentation.inset,
-                  Math.min(layout.shot.width, layout.shot.height) / 2,
-                ),
-              );
-              return (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: layout.shot.x - layout.frame.x,
-                    top: layout.shot.y - layout.frame.y,
-                    width: layout.shot.width,
-                    height: layout.shot.height,
-                    borderRadius: innerRadius,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <img
-                    ref={imgRef}
-                    src={screenshotUrl}
-                    crossOrigin="anonymous"
-                    alt="Screenshot"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      background: '#0f0f10',
-                    }}
-                  />
-                  <svg
-                    width={layout.shot.width}
-                    height={layout.shot.height}
-                    viewBox={`0 0 ${natural.width} ${natural.height}`}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      pointerEvents: 'auto',
-                    }}
-                    onPointerDown={onPointerDown}
-                    onPointerMove={onPointerMove}
-                    onPointerUp={onPointerUp}
-                    onPointerCancel={onPointerUp}
-                    onDoubleClick={onDoubleClick}
-                    onKeyDown={onKeyDown}
-                    onContextMenu={onContextMenu}
-                  >
-                    <StageLayers
-                      shapes={shapes}
-                      piiMasks={piiMasks}
-                      provisionalShape={provisionalShape}
-                      showOcrOverlay={showOcrOverlay}
-                      ocrBoxes={ocrBoxes}
-                      ocrKeyPrefix={ocrKeyPrefix}
-                      isExporting={isExporting}
-                      renderSelectionOverlay={renderSelectionOverlay}
-                    />
-                  </svg>
-                </div>
-              );
-            })()}
-          </div>
-        ) : (
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width: natural.width,
-              height: natural.height,
-              overflow: 'hidden',
-            }}
-          >
-            <img
-              ref={imgRef}
-              src={screenshotUrl}
-              crossOrigin="anonymous"
-              alt="Screenshot"
+        <div
+          ref={exportStageRef}
+          style={{
+            position: 'relative',
+            width: canvasW,
+            height: canvasH,
+            minWidth: canvasW,
+            minHeight: canvasH,
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${viewScale})`,
+            transformOrigin: 'center center',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            background: stageBackground,
+            borderRadius: presentationDisabled ? 0 : 24,
+          }}
+        >
+          {!presentationDisabled ? (
+            <div
               style={{
                 position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                background: '#0f0f10',
+                left: layout.frame.x,
+                top: layout.frame.y,
+                width: layout.frame.width,
+                height: layout.frame.height,
+                borderRadius: layout.frame.radius,
+                boxShadow: presentation.shadow.enabled
+                  ? `${presentation.shadow.x}px ${presentation.shadow.y}px ${presentation.shadow.blur}px ${presentation.shadow.spread}px ${presentation.shadow.color}`
+                  : 'none',
+                background: presentation.borderColor,
+                overflow: 'hidden',
               }}
-            />
-            <svg
-              width={natural.width}
-              height={natural.height}
-              viewBox={`0 0 ${natural.width} ${natural.height}`}
-              style={{ position: 'absolute', inset: 0, pointerEvents: 'auto' }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onDoubleClick={onDoubleClick}
-              onKeyDown={onKeyDown}
-              onContextMenu={onContextMenu}
             >
-              <StageLayers
-                shapes={shapes}
-                piiMasks={piiMasks}
-                provisionalShape={provisionalShape}
-                showOcrOverlay={showOcrOverlay}
-                ocrBoxes={ocrBoxes}
-                ocrKeyPrefix={ocrKeyPrefix}
-                isExporting={isExporting}
-                renderSelectionOverlay={renderSelectionOverlay}
+              {(() => {
+                const innerRadius = Math.max(
+                  0,
+                  Math.min(
+                    layout.frame.radius - presentation.inset,
+                    Math.min(layout.shot.width, layout.shot.height) / 2,
+                  ),
+                );
+                return (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: layout.shot.x - layout.frame.x,
+                      top: layout.shot.y - layout.frame.y,
+                      width: layout.shot.width,
+                      height: layout.shot.height,
+                      borderRadius: innerRadius,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <img
+                      ref={imgRef}
+                      src={screenshotUrl}
+                      crossOrigin="anonymous"
+                      alt="Screenshot"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        background: '#0f0f10',
+                      }}
+                    />
+                    <svg
+                      width={layout.shot.width}
+                      height={layout.shot.height}
+                      viewBox={`0 0 ${natural.width} ${natural.height}`}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        pointerEvents: 'auto',
+                      }}
+                      onPointerDown={onPointerDown}
+                      onPointerMove={onPointerMove}
+                      onPointerUp={onPointerUp}
+                      onPointerCancel={onPointerUp}
+                      onDoubleClick={onDoubleClick}
+                      onKeyDown={onKeyDown}
+                      onContextMenu={onContextMenu}
+                    >
+                      <StageLayers
+                        shapes={shapes}
+                        piiMasks={piiMasks}
+                        provisionalShape={provisionalShape}
+                        showOcrOverlay={showOcrOverlay}
+                        ocrBoxes={ocrBoxes}
+                        ocrKeyPrefix={ocrKeyPrefix}
+                        isExporting={isExporting}
+                        renderSelectionOverlay={renderSelectionOverlay}
+                      />
+                    </svg>
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: natural.width,
+                height: natural.height,
+                overflow: 'hidden',
+              }}
+            >
+              <img
+                ref={imgRef}
+                src={screenshotUrl}
+                crossOrigin="anonymous"
+                alt="Screenshot"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  background: '#0f0f10',
+                }}
               />
-            </svg>
-          </div>
-        )}
+              <svg
+                width={natural.width}
+                height={natural.height}
+                viewBox={`0 0 ${natural.width} ${natural.height}`}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  pointerEvents: 'auto',
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onDoubleClick={onDoubleClick}
+                onKeyDown={onKeyDown}
+                onContextMenu={onContextMenu}
+              >
+                <StageLayers
+                  shapes={shapes}
+                  piiMasks={piiMasks}
+                  provisionalShape={provisionalShape}
+                  showOcrOverlay={showOcrOverlay}
+                  ocrBoxes={ocrBoxes}
+                  ocrKeyPrefix={ocrKeyPrefix}
+                  isExporting={isExporting}
+                  renderSelectionOverlay={renderSelectionOverlay}
+                />
+              </svg>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

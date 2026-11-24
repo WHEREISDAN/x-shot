@@ -20,12 +20,18 @@ import {
 } from '../../hooks/use-editor-state';
 import TopBar from './TopBar';
 import BottomToolbar from './BottomToolbar';
-import SidePanel from './SidePanel';
+import PresentationPanel from './PresentationPanel';
 import { getBoundsForShape, hitTestPoint } from './editor-geometry';
 import { EditorStage } from './editor-stage';
 import { usePresentationState } from '../../hooks/use-presentation-state';
 import { computeLayout } from './compute-presentation-layout';
-import { useEditorShortcuts } from '../../hooks/use-editor-shortcuts';
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  useEditorShortcuts,
+  zoomInStep,
+  zoomOutStep,
+} from '../../hooks/use-editor-shortcuts';
 import { useExportGlue } from '../../hooks/use-export-glue';
 import TextEditOverlay, { type TextEditState } from './TextEditOverlay';
 import { useTextDetection } from '../../hooks/use-text-detection';
@@ -33,6 +39,7 @@ import { usePiiMasking } from '../../hooks/use-pii-masking';
 import usePiiPreferences from '../../hooks/pii/preferences';
 import { useAutoCopy } from '../../hooks/use-auto-copy';
 import { useFitScale } from '../../hooks/use-fit-scale';
+import useDockOverflow from '../../hooks/use-dock-overflow';
 import type { ExportAction } from '../../hooks/use-export-actions';
 import { MANUAL_MASK_TAG } from '../../hooks/pii/mask-layer';
 import { piiShapeStyle } from '../../hooks/pii/apply-masks';
@@ -40,6 +47,8 @@ import {
   SelectionHandles,
   type ResizeHandle,
 } from './editor-selection-overlay';
+import cx from '../../design-system/class-names';
+import styles from './ScreenshotEditor.module.css';
 
 // What the select tool acts on: an annotation or a PII mask.
 type SelectionTarget = { kind: 'shape' | 'mask'; id: string };
@@ -78,10 +87,14 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   const imgRef = useRef<HTMLImageElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const dockLaneRef = useRef<HTMLDivElement | null>(null);
   const exportStageRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Not saved: every capture opens with the panel shown.
+  const [panelOpen, setPanelOpen] = useState(true);
+  const dockOverflows = useDockOverflow(dockLaneRef, toolbarRef);
 
   const natural = useMemo(
     () => ({ width: screenshot.width, height: screenshot.height }),
@@ -110,8 +123,12 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
     setIsExporting,
   });
 
-  const fitScale = useFitScale(containerRef, toolbarRef, canvasW, canvasH);
+  const fitScale = useFitScale(containerRef, canvasW, canvasH);
   const viewScale = fitScale * zoom;
+  const zoomIn = useCallback(() => setZoom(zoomInStep), []);
+  const zoomOut = useCallback(() => setZoom(zoomOutStep), []);
+  const showPanel = useCallback(() => setPanelOpen(true), []);
+  const hidePanel = useCallback(() => setPanelOpen(false), []);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -583,8 +600,8 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         const centerY = bounds.top + bounds.height / 2;
         const prevScale = viewScale;
         const nextZoom = Math.min(
-          8,
-          Math.max(0.25, zoom * 1.0015 ** -e.deltaY),
+          MAX_ZOOM,
+          Math.max(MIN_ZOOM, zoom * 1.0015 ** -e.deltaY),
         );
         const nextScale = fitScale * nextZoom;
         // keep pointer stable
@@ -613,24 +630,12 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
   return (
     <div
       data-session-id={screenshot.sessionId}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        background: '#0b0b0c',
-      }}
+      data-presentation-panel={panelOpen ? 'shown' : 'hidden'}
+      className={cx(styles.editor, panelOpen && styles.withPanel)}
     >
-      <TopBar
-        onDelete={onDelete}
-        onCopy={handleCopy}
-        onSave={handleSave}
-        viewScalePercent={viewScale * 100}
-        censorPII={pii.censorPII}
-        setCensorPII={pii.setCensorPII}
-      />
-
-      {/* Stage */}
       <EditorStage
+        viewportClassName={styles.viewport}
+        areaClassName={styles.area}
         natural={{ width: natural.width, height: natural.height }}
         presentationDisabled={presentationDisabled}
         layout={{
@@ -714,7 +719,31 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
           );
         }}
       />
-      <SidePanel settings={presentation} onChange={presActions} />
+      <TopBar
+        onUndo={state.undo}
+        onRedo={state.redo}
+        canUndo={state.hasUndo}
+        canRedo={state.hasRedo}
+        onZoomOut={zoomOut}
+        onZoomIn={zoomIn}
+        canZoomOut={zoom > MIN_ZOOM}
+        canZoomIn={zoom < MAX_ZOOM}
+        viewScalePercent={viewScale * 100}
+        censorPII={pii.censorPII}
+        setCensorPII={pii.setCensorPII}
+        onDelete={onDelete}
+        onCopy={handleCopy}
+        onSave={handleSave}
+        onShowPanel={panelOpen ? undefined : showPanel}
+      />
+      {panelOpen && (
+        <PresentationPanel
+          className={cx(styles.panel, dockOverflows && styles.panelAboveDock)}
+          settings={presentation}
+          onChange={presActions}
+          onHide={hidePanel}
+        />
+      )}
       <TextEditOverlay
         editingText={editingText}
         setEditingText={setEditingText}
@@ -732,21 +761,23 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         viewScale={viewScale}
       />
 
-      <BottomToolbar
-        toolbarRef={toolbarRef}
-        activeTool={state.activeTool}
-        setActiveTool={state.setActiveTool}
-        strokeColor={state.strokeColor}
-        setStrokeColor={state.setStrokeColor}
-        strokeWidth={state.strokeWidth}
-        setStrokeWidth={state.setStrokeWidth}
-        textSize={state.textSize}
-        setTextSize={state.setTextSize}
-        showTextControls={state.activeTool === 'text'}
-        showTextSelectLevel={state.activeTool === 'text-select'}
-        textSelectLevel={textSelectLevel}
-        setTextSelectLevel={(lvl) => setTextSelectLevel(lvl)}
-      />
+      <div ref={dockLaneRef} className={styles.dockLane}>
+        <BottomToolbar
+          toolbarRef={toolbarRef}
+          activeTool={state.activeTool}
+          setActiveTool={state.setActiveTool}
+          strokeColor={state.strokeColor}
+          setStrokeColor={state.setStrokeColor}
+          strokeWidth={state.strokeWidth}
+          setStrokeWidth={state.setStrokeWidth}
+          textSize={state.textSize}
+          setTextSize={state.setTextSize}
+          showTextControls={state.activeTool === 'text'}
+          showTextSelectLevel={state.activeTool === 'text-select'}
+          textSelectLevel={textSelectLevel}
+          setTextSelectLevel={(lvl) => setTextSelectLevel(lvl)}
+        />
+      </div>
     </div>
   );
 });

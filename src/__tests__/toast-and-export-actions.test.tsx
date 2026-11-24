@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { act, render, renderHook, screen } from '@testing-library/react';
-import Toast from '../renderer/components/Toast';
+import { Toast } from '../renderer/design-system';
 import {
   SUCCESS_TOAST_MS,
   useExportActions,

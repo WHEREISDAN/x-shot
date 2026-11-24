@@ -122,8 +122,6 @@ export default function ExportSection({
             onChange={(e) => handleFilenamePatternChange(e.target.value)}
             onBlur={onFlush}
             placeholder="X-Shot_$TIMESTAMP"
-            variant="filled"
-            size="md"
             style={{ maxWidth: '400px' }}
           />
           <div style={exampleStyles}>
@@ -176,8 +174,6 @@ export default function ExportSection({
             value={preferences.export.defaultScale}
             onChange={(e) => handleDefaultScaleChange(Number(e.target.value))}
             options={scaleOptions}
-            variant="filled"
-            size="md"
             style={{ maxWidth: '250px' }}
           />
         </div>

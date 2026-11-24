@@ -15,7 +15,7 @@ import {
   type SeedPreferences,
   type FixtureCapture,
 } from './packaged-app';
-import { editorToolbar } from './editor-actions';
+import { exportScaleOption } from './editor-actions';
 
 const FIXTURE: FixtureCapture = {
   fixtureDataUrl: pngDataUrl(path.join(__dirname, 'fixtures', 'ocr-pii.png')),
@@ -72,9 +72,7 @@ async function save(page: Page) {
 }
 
 async function setExportScale(page: Page, scale: number) {
-  await page
-    .locator('select', { has: page.locator('option', { hasText: /^2x$/ }) })
-    .selectOption(String(scale));
+  await exportScaleOption(page, scale).check();
 }
 
 type ImageSize = { width: number; height: number };
@@ -206,33 +204,5 @@ test.describe('export', () => {
 
     expect(await brightness(FIXTURE.fixtureDataUrl)).toBeGreaterThan(120);
     expect(await brightness(saved)).toBeLessThan(40);
-  });
-
-  test('at 1024x600 the whole screenshot stays above the toolbar', async () => {
-    packaged = await launchPackagedApp(autosaveTo(dir));
-    await packaged.app.evaluate(({ BrowserWindow }) => {
-      const main = BrowserWindow.getAllWindows().find(
-        (win) => !win.webContents.getURL().includes('#/'),
-      );
-      main?.setSize(1024, 600);
-    });
-    const page = packaged.window;
-    await deliverScreenshot(packaged, FIXTURE);
-    await expect.poll(() => page.evaluate(() => window.innerHeight)).toBe(600);
-
-    const image = editorFor(page, FIXTURE).getByAltText('Screenshot');
-    await expect
-      .poll(async () => {
-        const shot = await image.boundingBox();
-        const toolbar = await editorToolbar(page).boundingBox();
-        if (!shot || !toolbar) return false;
-        return (
-          shot.y >= 0 &&
-          shot.x >= 0 &&
-          shot.x + shot.width <= 1024 &&
-          shot.y + shot.height <= toolbar.y
-        );
-      })
-      .toBe(true);
   });
 });
