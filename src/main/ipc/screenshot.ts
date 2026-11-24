@@ -1,5 +1,5 @@
 import { desktopCapturer, ipcMain } from 'electron';
-import type { NativeImage } from 'electron';
+import type { DesktopCapturerSource, NativeImage } from 'electron';
 import log from 'electron-log';
 import type {
   IpcInvokes,
@@ -30,6 +30,7 @@ import {
   markCaptureStage,
 } from '../capture-diagnostics';
 import {
+  findDisplaySnapshot,
   overlaySnapshotFor,
   prepareDisplaySnapshots,
   releaseDisplaySnapshots,
@@ -138,11 +139,20 @@ export default function registerScreenshotIpcHandlers() {
             encode: () => image.toPNG(),
           }).assetId;
         };
+        // A live screen thumbnail would show this overlay, so a screen with
+        // a session snapshot is previewed from the snapshot.
+        const thumbnailOf = (s: DesktopCapturerSource) => {
+          const snapshot =
+            requestType === 'screen'
+              ? findDisplaySnapshot({ displayId: s.display_id, sourceId: s.id })
+              : undefined;
+          return snapshot?.image ?? s.thumbnail;
+        };
         const response: ListCaptureSourcesResponse = sources.map((s) => ({
           id: s.id,
           name: s.name,
           appIconAssetId: preview(s.appIcon),
-          thumbnailAssetId: preview(s.thumbnail?.resize({ width: 320 })),
+          thumbnailAssetId: preview(thumbnailOf(s)?.resize({ width: 320 })),
           displayId: s.display_id ?? null,
         }));
         return response;

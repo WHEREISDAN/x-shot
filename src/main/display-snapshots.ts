@@ -12,6 +12,7 @@ import { markCaptureStage } from './capture-diagnostics';
 import { captureAssets } from './capture-assets';
 
 export interface DisplaySnapshot {
+  displayId: number;
   image: NativeImage;
   /** The snapshot in the asset store, for the overlay's background. */
   assetId: string;
@@ -40,6 +41,29 @@ export function getDisplaySnapshot(
   displayId: number,
 ): DisplaySnapshot | undefined {
   return displaySnapshots.get(displayId);
+}
+
+/**
+ * The session's snapshot of a screen source: by display id, else by the
+ * desktopCapturer source id it was taken from.
+ */
+export function findDisplaySnapshot({
+  displayId,
+  sourceId,
+}: {
+  displayId?: number | string | null;
+  sourceId?: string;
+}): DisplaySnapshot | undefined {
+  const snapshots = Array.from(displaySnapshots.values());
+  const byDisplay = snapshots.find(
+    (snap) => displayId != null && String(snap.displayId) === String(displayId),
+  );
+  return (
+    byDisplay ??
+    snapshots.find(
+      (snap) => sourceId !== undefined && snap.sourceId === sourceId,
+    )
+  );
 }
 
 /** The screen source of a display: by id, else the closest aspect ratio. */
@@ -80,6 +104,7 @@ function storeSnapshot(
     encode: () => image.toPNG(),
   });
   return {
+    displayId: display.id,
     image,
     assetId: asset.assetId,
     width,

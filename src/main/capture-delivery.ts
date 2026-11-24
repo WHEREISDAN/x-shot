@@ -18,6 +18,7 @@ import {
 } from '../shared/crop-geometry';
 import { markCaptureStage } from './capture-diagnostics';
 import {
+  findDisplaySnapshot,
   getDisplaySnapshot,
   pickSourceForDisplay,
   releaseDisplaySnapshots,
@@ -33,7 +34,17 @@ import {
 // them in main's asset store and sends the editor their id and size.
 
 /** Pixels a selection is cropped from: a frozen snapshot or a live capture. */
-type CropSource = Omit<DisplaySnapshot, 'assetId'>;
+type CropSource = Omit<DisplaySnapshot, 'assetId' | 'displayId'>;
+
+/** A whole display's pixels and the ids the editor is told. */
+interface ScreenPixels {
+  image: NativeImage;
+  scaleFactor: number;
+  sourceId?: string;
+  displayId: string | null;
+}
+
+type ScreenRequest = { sourceId?: string; displayId?: number | string };
 
 /** Keeps the capture in main; the editor gets only its id and size. */
 const storeCapture = (
@@ -125,14 +136,14 @@ export const deliverWindowCapture = async (
   sendCaptureResult(win, session, result);
 };
 
-export const deliverScreenCapture = async (
+/** Captures a display live, once X-Shot's windows are hidden. */
+const captureScreenLive = async (
   session: CaptureSessionRef,
-  request: { sourceId?: string; displayId?: number | string },
-) => {
-  await closeScreenshotOverlays();
+  request: ScreenRequest,
+): Promise<ScreenPixels | null> => {
   releaseDisplaySnapshots();
   await hideWindowsForCapture();
-  if (!isSessionCurrent(session)) return;
+  if (!isSessionCurrent(session)) return null;
 
   // Request the chosen display at its native size; without a known display
   // use the largest one so no screen is downscaled.
@@ -155,23 +166,48 @@ export const deliverScreenCapture = async (
   if (!source) {
     throw new CaptureError('source-unavailable', 'Screen source not found');
   }
-
-  const asset = storeCapture(
-    session,
-    source.thumbnail,
-    scaleFactorOf(source.display_id || request.displayId),
-  );
-  const result = toCaptureSuccess({
-    ...asset,
+  return {
+    image: source.thumbnail,
+    scaleFactor: scaleFactorOf(source.display_id || request.displayId),
     sourceId: source.id,
     displayId: source.display_id || null,
+  };
+};
+
+export const deliverScreenCapture = async (
+  session: CaptureSessionRef,
+  request: ScreenRequest,
+) => {
+  await closeScreenshotOverlays();
+  if (!isSessionCurrent(session)) return;
+
+  // The display as it was when the capture started, before any overlay
+  // opened; captured live only when the session has no snapshot of it.
+  const snapshot = findDisplaySnapshot(request);
+  const pixels: ScreenPixels | null = snapshot
+    ? {
+        image: snapshot.image,
+        scaleFactor: snapshot.scaleFactor,
+        sourceId: snapshot.sourceId ?? request.sourceId,
+        displayId: String(snapshot.displayId),
+      }
+    : await captureScreenLive(session, request);
+  if (!pixels) return;
+
+  const asset = storeCapture(session, pixels.image, pixels.scaleFactor);
+  releaseDisplaySnapshots();
+  const result = toCaptureSuccess({
+    ...asset,
+    sourceId: pixels.sourceId,
+    displayId: pixels.displayId,
     isDisplayCapture: true,
     sessionId: session.id,
   } satisfies ScreenshotResult);
   const win = await ensureMainWindowReady();
   markCaptureStage('editor-sent', {
     captureKind: 'screen',
-    sourceId: source.id,
+    fromSnapshot: snapshot !== undefined,
+    sourceId: pixels.sourceId,
     outputWidth: asset.width,
     outputHeight: asset.height,
   });
