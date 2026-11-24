@@ -1,6 +1,6 @@
 {
   "name": "X-Shot",
-  "description": "A screenshot tool for macOS and Windows",
+  "description": "A screenshot tool for macOS, Windows and Linux",
   "keywords": [
     "electron",
     "boilerplate",
