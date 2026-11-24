@@ -4,6 +4,7 @@ import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { Button, Select, Switch } from '../../design-system';
 import { createRendererLogger } from '../../utils/logger';
 import HotkeyRecorder from './HotkeyRecorder';
+import { tildePath, useHomeFolder } from './home-folder';
 import SettingsCard from './SettingsCard';
 import SettingsRow, { PathText } from './SettingsRow';
 import controls from './PreferenceControls.module.css';
@@ -33,6 +34,7 @@ export default function GeneralSection({
   onUpdate,
 }: GeneralSectionProps) {
   const { capture, system } = preferences;
+  const home = useHomeFolder();
 
   const handleHotkeyChange = useCallback(
     (hotkey: string) => onUpdate({ capture: { hotkey } }),
@@ -95,7 +97,12 @@ export default function GeneralSection({
         <SettingsRow
           labelId="save-location-label"
           label="Default Save Location"
-          description={<PathText path={capture.defaultSaveLocation} />}
+          description={
+            <PathText
+              path={capture.defaultSaveLocation}
+              display={tildePath(capture.defaultSaveLocation, home)}
+            />
+          }
         >
           <Button size="sm" onClick={selectFolder}>
             Browse…

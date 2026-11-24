@@ -66,6 +66,38 @@ describe('ScreenshotCapture', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('hides the magnifier over the controls and while a panel is open', async () => {
+    (
+      window as unknown as {
+        electron: { ipcRenderer: { invoke: jest.Mock } };
+      }
+    ).electron.ipcRenderer.invoke.mockImplementation(async (channel: string) =>
+      channel === 'get-display-snapshot'
+        ? { assetId: 'snapshot', width: 2048, height: 1536 }
+        : null,
+    );
+    const { container } = render(<ScreenshotCapture />);
+    await screen.findByAltText('Display snapshot');
+    const magnifier = () => container.querySelector('[data-magnifier]');
+    const overlay = container.firstChild as HTMLElement;
+
+    fireEvent.mouseMove(overlay, { clientX: 300, clientY: 200 });
+    expect(magnifier()).toBeInTheDocument();
+
+    const dock = screen.getByRole('toolbar', {
+      name: 'Screenshot quick actions',
+    });
+    fireEvent.mouseMove(dock, { clientX: 500, clientY: 700 });
+    expect(magnifier()).not.toBeInTheDocument();
+
+    fireEvent.mouseMove(overlay, { clientX: 300, clientY: 200 });
+    expect(magnifier()).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Displays' }));
+    await screen.findByRole('dialog', { name: 'Displays' });
+    fireEvent.mouseMove(overlay, { clientX: 300, clientY: 200 });
+    expect(magnifier()).not.toBeInTheDocument();
+  });
+
   it('cancels on Escape wherever focus is', () => {
     render(<ScreenshotCapture />);
     expect(document.activeElement).toBe(document.body);

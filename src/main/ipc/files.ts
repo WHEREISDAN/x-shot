@@ -205,4 +205,9 @@ export default function registerFileIpcHandlers() {
       }
     },
   );
+
+  ipcMain.handle(
+    'get-home-folder',
+    async (): Promise<string> => app.getPath('home'),
+  );
 }

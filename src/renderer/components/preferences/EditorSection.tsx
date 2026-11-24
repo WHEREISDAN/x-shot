@@ -33,6 +33,7 @@ export default function EditorSection({
   onFlush,
 }: EditorSectionProps) {
   const { editor } = preferences;
+  const fillTransparent = editor.defaultFillColor === 'transparent';
 
   const handleStrokeColorChange = useCallback(
     (defaultStrokeColor: string) =>
@@ -108,7 +109,7 @@ export default function EditorSection({
           >
             <ColorDot
               color="transparent"
-              selected={editor.defaultFillColor === 'transparent'}
+              selected={fillTransparent}
               onClick={() => handleFillColorChange('transparent')}
             />
             {COLOR_PRESETS.map((color) => (
@@ -128,13 +129,10 @@ export default function EditorSection({
           <Input
             type="color"
             aria-label="Fill color picker"
-            value={
-              editor.defaultFillColor === 'transparent'
-                ? '#ffffff'
-                : editor.defaultFillColor
-            }
+            value={fillTransparent ? '#ffffff' : editor.defaultFillColor}
             onChange={(e) => handleFillColorChange(e.target.value)}
             onBlur={onFlush}
+            className={fillTransparent ? controls.transparentChip : undefined}
           />
           <Input
             type="text"

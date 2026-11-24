@@ -25,6 +25,7 @@ export default function Magnifier({ src, pointer }: MagnifierProps) {
         backgroundPosition: `${centre - pointer.x * ZOOM}px ${centre - pointer.y * ZOOM}px`,
       }}
       aria-hidden="true"
+      data-magnifier="1"
     >
       <div className={styles.pixelGrid} />
       <div className={styles.crosshair} />

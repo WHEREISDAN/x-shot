@@ -16,6 +16,10 @@ import { createRendererLogger } from './utils/logger';
 
 const logger = createRendererLogger('screenshot-capture');
 
+/** Controls that take the pointer; the magnifier hides over them. */
+const CONTROLS =
+  '[data-quick-dock="1"],[data-capture-button="1"],[data-sources-panel="1"]';
+
 function ScreenshotCapture() {
   const { offsetX, offsetY, displayId } = useMemo(() => {
     const { hash } = window.location;
@@ -65,7 +69,11 @@ function ScreenshotCapture() {
     width: number;
     height: number;
   } | null>(null);
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [pointer, setPointer] = useState<{
+    x: number;
+    y: number;
+    overControls: boolean;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,11 +190,7 @@ function ScreenshotCapture() {
       className={styles.overlay}
       onMouseDown={(e) => {
         const target = e.target as HTMLElement;
-        if (
-          target.closest(
-            '[data-selection-root="1"],[data-quick-dock="1"],[data-capture-button="1"],[data-sources-panel="1"]',
-          )
-        ) {
+        if (target.closest(`[data-selection-root="1"],${CONTROLS}`)) {
           e.stopPropagation();
           return;
         }
@@ -214,10 +218,15 @@ function ScreenshotCapture() {
         }
         selection.onMouseDown(e);
       }}
-      onMouseMove={(e) => {
-        setPointer({ x: e.clientX, y: e.clientY });
-        selection.onMouseMove(e);
-      }}
+      // Capture phase: the dock stops mouse moves from bubbling up here.
+      onMouseMoveCapture={(e) =>
+        setPointer({
+          x: e.clientX,
+          y: e.clientY,
+          overControls: !!(e.target as HTMLElement).closest(CONTROLS),
+        })
+      }
+      onMouseMove={selection.onMouseMove}
       onMouseUp={selection.onMouseUp}
       role="application"
       tabIndex={0}
@@ -240,7 +249,7 @@ function ScreenshotCapture() {
 
       <SelectionOverlay selection={selection.selection} pixelSize={pixelSize} />
 
-      {background && pointer && (
+      {background && pointer && !pointer.overControls && !panelOpen && (
         <Magnifier src={background.url} pointer={pointer} />
       )}
 

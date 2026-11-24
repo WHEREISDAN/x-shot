@@ -23,3 +23,9 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* The colour chip for `transparent`: a checkerboard over the swatch. */
+.transparentChip::-webkit-color-swatch {
+  background-image: var(--checkerboard);
+  background-size: var(--checkerboard-size);
+}

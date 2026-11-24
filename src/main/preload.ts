@@ -47,6 +47,7 @@ const invokeChannels = new Set<keyof IpcInvokes>([
   'open-screen-recording-settings',
   'reset-preferences',
   'select-folder',
+  'get-home-folder',
 ]);
 
 function assertAllowed<T extends string>(channel: T, allowed: Set<T>): void {

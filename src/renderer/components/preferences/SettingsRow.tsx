@@ -37,11 +37,17 @@ export default function SettingsRow({
   );
 }
 
+interface PathTextProps {
+  path: string;
+  /** Shown instead of `path`, e.g. with the home folder as `~`. */
+  display?: string;
+}
+
 /** A path in mono on one line, cut with an ellipsis; the full path is its title. */
-export function PathText({ path }: { path: string }) {
+export function PathText({ path, display = path }: PathTextProps) {
   return (
     <span className={styles.path} title={path}>
-      {path}
+      {display}
     </span>
   );
 }
