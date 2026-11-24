@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import icon from '../../../assets/icon.png';
 import type { WindowState } from '../../shared/ipc-types';
-import { isMacPlatform, Logo } from '../design-system';
+import { isMacPlatform } from '../design-system';
 import cx from '../design-system/class-names';
 import styles from './TitleBar.module.css';
 
@@ -42,7 +43,9 @@ export default function TitleBar({
       className={cx(styles.titleBar, mac && styles.mac)}
       onDoubleClick={handleDoubleClick}
     >
-      {logo && <Logo className={styles.logo} />}
+      {logo && (
+        <img src={icon} alt="" width={20} height={20} className={styles.logo} />
+      )}
       <span>{title}</span>
       {detail && <span className={styles.detail}>{detail}</span>}
     </div>

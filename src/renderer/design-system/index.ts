@@ -4,7 +4,6 @@ export * from './components/IconButton';
 export * from './components/Input';
 export * from './components/Island';
 export * from './components/KeyCap';
-export * from './components/Logo';
 export * from './components/SegmentedControl';
 export * from './components/Select';
 export * from './components/Slider';

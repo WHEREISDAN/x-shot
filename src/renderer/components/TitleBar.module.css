@@ -17,8 +17,10 @@
    caption buttons at the right through titleBarOverlay. */
 .logo {
   position: absolute;
-  top: 10px;
+  top: 8px;
   left: 16px;
+  display: block;
+  -webkit-user-drag: none;
 }
 
 .mac .logo {

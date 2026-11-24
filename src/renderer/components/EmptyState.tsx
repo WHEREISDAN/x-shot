@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Hotkey, Logo } from '../design-system';
+import icon from '../../../assets/icon.png';
+import { Hotkey } from '../design-system';
 import styles from './EmptyState.module.css';
 
 /** The capture hotkey from the stored preferences, once they are read. */
@@ -22,7 +23,7 @@ export default function EmptyState() {
   return (
     <div className={styles.canvas}>
       <div className={styles.box}>
-        <Logo size={26} />
+        <img src={icon} alt="" width={36} height={36} className={styles.logo} />
         Waiting for screenshot…
         {hotkey && <Hotkey accelerator={hotkey} />}
       </div>
