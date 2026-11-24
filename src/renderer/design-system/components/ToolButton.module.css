@@ -29,3 +29,10 @@
   background: var(--color-inverse);
   color: var(--color-on-inverse);
 }
+
+.labelled {
+  gap: 7px;
+  padding: 0 12px 0 10px;
+  font: 500 13px/1 var(--font-sans);
+  white-space: nowrap;
+}

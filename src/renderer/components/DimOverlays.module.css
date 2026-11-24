@@ -1,0 +1,8 @@
+.dim {
+  position: fixed;
+  z-index: 999;
+  background: var(--color-overlay-dim);
+  pointer-events: none;
+  will-change: left, top, width, height;
+  transform: translateZ(0);
+}

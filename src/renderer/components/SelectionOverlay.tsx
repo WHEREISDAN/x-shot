@@ -1,102 +1,53 @@
-import React from 'react';
 import type { SelectionArea } from '../hooks/use-selection';
+import type { Size } from '../../shared/crop-geometry';
+import cx from '../design-system/class-names';
+import styles from './SelectionOverlay.module.css';
 
 interface SelectionOverlayProps {
   selection: SelectionArea | null;
+  /** The size of the image the capture will produce; shown as a badge. */
+  pixelSize?: Size | null;
 }
 
-const handleStyle: React.CSSProperties = {
-  position: 'absolute',
-  width: 14,
-  height: 14,
-  marginLeft: -7,
-  marginTop: -7,
-  background: 'rgba(255,255,255,0.95)',
-  borderRadius: 7,
-  boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-};
+/** Room the badge needs above the selection before it moves inside. */
+const BADGE_ROOM = 32;
 
-export default function SelectionOverlay({ selection }: SelectionOverlayProps) {
+export default function SelectionOverlay({
+  selection,
+  pixelSize,
+}: SelectionOverlayProps) {
   if (!selection) return null;
   const { x, y, width, height } = selection;
+  const handles: Array<[string, number, number]> = [
+    ['top-left', x, y],
+    ['top-middle', x + width / 2, y],
+    ['top-right', x + width, y],
+    ['left-middle', x, y + height / 2],
+    ['right-middle', x + width, y + height / 2],
+    ['bottom-left', x, y + height],
+    ['bottom-middle', x + width / 2, y + height],
+    ['bottom-right', x + width, y + height],
+  ];
 
   return (
     <>
       <div
-        style={{
-          position: 'absolute',
-          border: '2px solid rgba(255,255,255,0.9)',
-          background: 'transparent',
-          left: x,
-          top: y,
-          width,
-          height,
-          zIndex: 1001,
-          pointerEvents: 'none',
-          willChange: 'left, top, width, height',
-          transform: 'translateZ(0)',
-          boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
-        }}
+        className={styles.box}
+        style={{ left: x, top: y, width, height }}
         data-selection-root="1"
       />
-      {/* Handles */}
-      <div style={{ ...handleStyle, left: x, top: y, pointerEvents: 'none' }} />
-      <div
-        style={{
-          ...handleStyle,
-          left: x + width,
-          top: y,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x,
-          top: y + height,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x + width,
-          top: y + height,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x + width / 2,
-          top: y,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x + width / 2,
-          top: y + height,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x,
-          top: y + height / 2,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          ...handleStyle,
-          left: x + width,
-          top: y + height / 2,
-          pointerEvents: 'none',
-        }}
-      />
+      {handles.map(([name, left, top]) => (
+        <div key={name} className={styles.handle} style={{ left, top }} />
+      ))}
+      {pixelSize && (
+        <span
+          className={cx(styles.badge, y < BADGE_ROOM && styles.badgeInside)}
+          style={{ left: x, top: y }}
+          data-size-badge="1"
+        >
+          {pixelSize.width} × {pixelSize.height}
+        </span>
+      )}
     </>
   );
 }

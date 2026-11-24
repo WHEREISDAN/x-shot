@@ -39,4 +39,17 @@
     transparent 1.2px
   );
   --canvas-grid-size: 20px 20px;
+
+  /* Capture overlay */
+  --color-overlay-dim: rgba(6, 7, 9, 0.45);
+  --color-overlay-badge: rgba(11, 12, 14, 0.85);
+  --color-overlay-hint: rgba(11, 12, 14, 0.7);
+  --color-overlay-outline: #fff;
+  --color-handle: #fff;
+  --handle-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --magnifier-border: rgba(255, 255, 255, 0.6);
+  --magnifier-crosshair: rgba(255, 255, 255, 0.75);
+  --magnifier-grid: rgba(255, 255, 255, 0.15);
+  --magnifier-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.5);
 }

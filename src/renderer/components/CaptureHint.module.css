@@ -1,0 +1,20 @@
+.hint {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  z-index: 1005;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 99px;
+  background: var(--color-overlay-hint);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}

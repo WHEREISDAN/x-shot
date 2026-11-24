@@ -178,7 +178,7 @@ test.describe('capture overlays', () => {
 
     // A click without a drag leaves a zero-size selection.
     await overlay.mouse.click(400, 300);
-    await overlay.getByRole('button', { name: '✓ Capture' }).click();
+    await overlay.getByRole('button', { name: 'Capture', exact: true }).click();
 
     await expect.poll(() => overlayPages(current).length).toBe(0);
     await expect(current.window.getByRole('alert')).toContainText(
