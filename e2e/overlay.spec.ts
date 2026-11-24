@@ -1,12 +1,25 @@
-import { expect, test } from '@playwright/test';
+import path from 'path';
+import { expect, test, type Locator } from '@playwright/test';
 import {
+  HIDDEN,
+  SHOWN,
+  editorFor,
   launchPackagedApp,
   openOverlays,
   overlayPages,
   stubScreenAccess,
+  windowLooks,
   type PackagedApp,
 } from './packaged-app';
 import { openedUrls, recordOpenedUrls } from './external-links';
+import {
+  paintScreens,
+  shownCaptureSize,
+  shownSessionId,
+  stubCaptureSources,
+} from './capture-stubs';
+
+const SCREEN_FIXTURE = path.join(__dirname, 'fixtures', 'ocr-pii-screen.png');
 
 const SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
@@ -33,6 +46,25 @@ async function preferencesVisible(
     if (!lost || attempt >= 3) throw error;
     return preferencesVisible(packaged, attempt + 1);
   }
+}
+
+/** Mean RGB brightness (0-255) of the image an <img> shows. */
+async function brightnessOf(image: Locator): Promise<number> {
+  return image.evaluate(async (img: HTMLImageElement) => {
+    const blob = await (await fetch(img.src)).blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext(
+      '2d',
+    ) as OffscreenCanvasRenderingContext2D;
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let total = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+    return total / (data.length / 4);
+  });
 }
 
 test.describe('capture overlays', () => {
@@ -80,6 +112,63 @@ test.describe('capture overlays', () => {
     await overlays[0].getByRole('button', { name: 'Cancel' }).click();
     await expect.poll(() => overlayPages(current).length).toBe(0);
     await expect.poll(() => preferencesVisible(current)).toBe(true);
+    await expect
+      .poll(() => windowLooks(current))
+      .toEqual({ editor: SHOWN, preferences: SHOWN });
+  });
+
+  test('a display capture keeps the screen as it was before the overlays', async () => {
+    const current = packaged as PackagedApp;
+    await stubScreenAccess(current, 'granted');
+    // A near-white screen; see paintScreens below.
+    await stubCaptureSources(current, {
+      screenPng: SCREEN_FIXTURE,
+      window: { noise: { width: 64, height: 64 } },
+    });
+    await current.window.evaluate(() =>
+      window.electron.ipcRenderer.invoke('open-preferences-window', undefined),
+    );
+    await expect
+      .poll(() => windowLooks(current))
+      .toEqual({ editor: SHOWN, preferences: SHOWN });
+    const before = await shownSessionId(current.window);
+
+    const [overlay] = await openOverlays(current);
+    expect(await windowLooks(current)).toEqual({
+      editor: HIDDEN,
+      preferences: HIDDEN,
+    });
+    // From here on a live capture returns black, standing in for a screen
+    // that now shows the overlay.
+    await paintScreens(current, 0);
+
+    await overlay
+      .getByRole('button', { name: 'Displays', exact: true })
+      .click();
+    const entry = overlay.getByRole('button', { name: 'Screen 1' });
+    const preview = entry.getByRole('img', { name: 'Screen 1' });
+    await expect(preview).toBeVisible();
+    expect(await brightnessOf(preview)).toBeGreaterThan(200);
+    await entry.click();
+
+    await expect.poll(() => shownSessionId(current.window)).not.toBe(before);
+    const sessionId = (await shownSessionId(current.window)) as string;
+    expect(overlayPages(current)).toHaveLength(0);
+    const display = await current.app.evaluate(({ screen }) => {
+      const [first] = screen.getAllDisplays();
+      return {
+        width: Math.round(first.bounds.width * first.scaleFactor),
+        height: Math.round(first.bounds.height * first.scaleFactor),
+      };
+    });
+    expect(await shownCaptureSize(current.window, sessionId)).toEqual(display);
+    const capture = editorFor(current.window, { sessionId }).getByAltText(
+      'Screenshot',
+    );
+    expect(await brightnessOf(capture)).toBeGreaterThan(200);
+    await expect
+      .poll(() => windowLooks(current))
+      .toEqual({ editor: SHOWN, preferences: SHOWN });
   });
 
   test('an empty selection is reported, not ignored', async () => {

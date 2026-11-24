@@ -3,11 +3,13 @@ import { expect, test, type Page } from '@playwright/test';
 import type { PiiDetectors, ScreenshotResult } from '../src/shared/ipc-types';
 import { captureAssetUrl } from '../src/shared/capture-asset';
 import {
+  SHOWN,
   deliverScreenshot,
   editorFor,
   launchPackagedApp,
   pngDataUrl,
   triggerFailedCapture,
+  windowLooks,
   type FixtureCapture,
   type PackagedApp,
 } from './packaged-app';
@@ -109,6 +111,9 @@ test.describe('capture result and editor lifecycle', () => {
     await triggerFailedCapture(packaged);
 
     await expect(page.getByRole('alert')).toBeVisible();
+    await expect
+      .poll(async () => (await windowLooks(packaged)).editor)
+      .toEqual(SHOWN);
     await expect(editorFor(page, imageA)).toBeVisible();
     expect(
       await showsCapture(page, deliveredA),

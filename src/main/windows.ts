@@ -12,6 +12,8 @@ let preferencesWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
 // Set while a capture has hidden the Preferences window.
 let preferencesHiddenForCapture = false;
+// Windows a capture hid at opacity 0 that have not been made opaque again.
+const transparentForCapture = new Set<BrowserWindow>();
 
 // Time for the compositor to drop a hidden or closed window from screen.
 const COMPOSITOR_FRAME_MS = 60;
@@ -115,7 +117,18 @@ export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
   return win;
 };
 
-/** Hides a window and resolves once the compositor has dropped it. */
+/** Turns a window that a capture made transparent opaque again. */
+const makeOpaque = (win: BrowserWindow): void => {
+  if (!transparentForCapture.delete(win)) return;
+  if (!win.isDestroyed()) win.setOpacity(1);
+};
+
+/**
+ * Hides a window and resolves once the compositor has dropped it. The window
+ * turns transparent first, so no hide animation can reach the capture, and
+ * opaque again whenever it is shown. setOpacity does nothing on Linux, which
+ * relies on the wait alone.
+ */
 const hideAndWait = (win: BrowserWindow): Promise<void> =>
   new Promise<void>((resolve) => {
     const timeout = setTimeout(resolve, 300 /* ms safety timeout */);
@@ -124,9 +137,13 @@ const hideAndWait = (win: BrowserWindow): Promise<void> =>
       setTimeout(resolve, COMPOSITOR_FRAME_MS);
     });
     try {
+      win.setOpacity(0);
+      transparentForCapture.add(win);
+      win.once('show', () => makeOpaque(win));
       win.hide();
     } catch {
       clearTimeout(timeout);
+      makeOpaque(win);
       resolve();
     }
   });
@@ -148,8 +165,13 @@ export const hideWindowsForCapture = async (): Promise<void> => {
   await Promise.all(hiding);
 };
 
-/** Shows the Preferences window again if a capture hid it. */
+/**
+ * Makes every window the capture hid opaque, even one whose show event never
+ * arrived (macOS derives it from occlusion), and shows Preferences again if
+ * the capture hid it.
+ */
 export const restoreWindowsAfterCapture = (): void => {
+  Array.from(transparentForCapture).forEach(makeOpaque);
   if (!preferencesHiddenForCapture) return;
   preferencesHiddenForCapture = false;
   if (preferencesWindow && !preferencesWindow.isDestroyed()) {
@@ -274,7 +296,8 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       resizable: false,
       movable: false,
       show: false,
-      titleBarStyle: 'hidden',
+      // No titleBarStyle: on macOS it keeps the window buttons on a
+      // frameless window, and they would show in the capture.
       fullscreenable: true,
       webPreferences: {
         preload: app.isPackaged

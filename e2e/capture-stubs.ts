@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { expect, type Page } from '@playwright/test';
+import type { NativeImage } from 'electron';
 import { editorFor, type PackagedApp } from './packaged-app';
 
 export const FAKE_WINDOW_ID = 'window:4242:0';
@@ -22,7 +23,7 @@ export interface SourceStubs {
  * window thumbnail is scaled to fill the requested box, so only a request for
  * the window's exact size returns it unscaled. Every window thumbnail is a
  * fresh bitmap, so no cached PNG encoding is reused. Requested window sizes
- * are recorded.
+ * are recorded. paintScreens changes what the screens show.
  */
 export async function stubCaptureSources(
   { app }: PackagedApp,
@@ -37,9 +38,11 @@ export async function stubCaptureSources(
     ({ desktopCapturer, nativeImage, screen }, input) => {
       const requests: Array<{ width: number; height: number }> = [];
       Object.assign(global, { xshotWindowRequests: requests });
-      const screenImage = nativeImage.createFromBuffer(
-        Buffer.from(input.screenBase64, 'base64'),
-      );
+      Object.assign(global, {
+        xshotScreenImage: nativeImage.createFromBuffer(
+          Buffer.from(input.screenBase64, 'base64'),
+        ),
+      });
       const { pngBase64, noise: noiseSize } = input.windowSource;
       const windowImage = pngBase64
         ? nativeImage.createFromBuffer(Buffer.from(pngBase64, 'base64'))
@@ -77,6 +80,9 @@ export async function stubCaptureSources(
         }) => {
           const box = options.thumbnailSize ?? { width: 150, height: 150 };
           if (options.types.includes('screen')) {
+            const { xshotScreenImage: screenImage } = global as unknown as {
+              xshotScreenImage: NativeImage;
+            };
             return screen.getAllDisplays().map((display, i) => ({
               id: `screen:${i}:0`,
               name: `Screen ${i + 1}`,
@@ -108,6 +114,21 @@ export async function stubCaptureSources(
     },
     { screenBase64, windowSource },
   );
+}
+
+/** From now on every screen shows one grey level (0-255), opaque. */
+export async function paintScreens(
+  { app }: PackagedApp,
+  grey: number,
+): Promise<void> {
+  await app.evaluate(({ nativeImage }, level) => {
+    const size = { width: 64, height: 64 };
+    const bitmap = Buffer.alloc(size.width * size.height * 4, level);
+    for (let i = 3; i < bitmap.length; i += 4) bitmap[i] = 255;
+    Object.assign(global, {
+      xshotScreenImage: nativeImage.createFromBitmap(bitmap, size),
+    });
+  }, grey);
 }
 
 export async function requestedWindowSizes({

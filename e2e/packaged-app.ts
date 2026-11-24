@@ -298,6 +298,39 @@ export async function openOverlays(packaged: PackagedApp): Promise<Page[]> {
   return pages;
 }
 
+export interface WindowLook {
+  visible: boolean;
+  opacity: number;
+}
+
+/** How the editor and Preferences windows look; null if one is not open. */
+export async function windowLooks({ app }: PackagedApp): Promise<{
+  editor: WindowLook | null;
+  preferences: WindowLook | null;
+}> {
+  return app.evaluate(({ BrowserWindow }) => {
+    const look = (matches: (url: string) => boolean) => {
+      const win = BrowserWindow.getAllWindows().find(
+        (w) => !w.webContents.isDestroyed() && matches(w.webContents.getURL()),
+      );
+      return win
+        ? { visible: win.isVisible(), opacity: win.getOpacity() }
+        : null;
+    };
+    return {
+      editor: look((url) => !url.includes('#/')),
+      preferences: look((url) => url.includes('#/preferences')),
+    };
+  });
+}
+
+export const SHOWN: WindowLook = { visible: true, opacity: 1 };
+// setOpacity does nothing on Linux.
+export const HIDDEN: WindowLook = {
+  visible: false,
+  opacity: process.platform === 'linux' ? 1 : 0,
+};
+
 export async function triggerFailedCapture(
   packaged: PackagedApp,
 ): Promise<void> {
