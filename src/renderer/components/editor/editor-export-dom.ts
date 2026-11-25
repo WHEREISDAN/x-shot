@@ -27,23 +27,22 @@ export async function exportDomToPng({
     throw new Error('Element has zero dimensions - cannot export');
   }
 
-  // Calculate memory usage and apply limits
-  const width = element.offsetWidth * scale;
-  const height = element.offsetHeight * scale;
-  const estimatedMemoryMB = (width * height * 4) / (1024 * 1024);
+  // Calculate memory usage from 1x base dimensions and apply limits
+  const baseMemoryMB =
+    (element.offsetWidth * element.offsetHeight * 4) / (1024 * 1024);
+  const estimatedMemoryMB = baseMemoryMB * scale * scale;
 
   // Prevent excessive memory usage
   const MAX_EXPORT_MEMORY_MB = 500; // 500MB limit
   let finalScale = scale;
-  if (estimatedMemoryMB > MAX_EXPORT_MEMORY_MB) {
-    const maxScale = Math.sqrt(
-      MAX_EXPORT_MEMORY_MB / ((width * height * 4) / (1024 * 1024)),
-    );
+  if (baseMemoryMB > 0 && estimatedMemoryMB > MAX_EXPORT_MEMORY_MB) {
+    const maxScale = Math.sqrt(MAX_EXPORT_MEMORY_MB / baseMemoryMB);
     finalScale = Math.min(scale, maxScale);
     logger.warn(
       `Export scale reduced from ${scale} to ${finalScale.toFixed(2)} to limit memory usage`,
     );
   }
+  const actualMemoryMB = baseMemoryMB * finalScale * finalScale;
 
   type DomToImageOptions = {
     width?: number;
@@ -91,7 +90,7 @@ export async function exportDomToPng({
     const png = new Uint8Array(await blob.arrayBuffer());
     const duration = Date.now() - startTime;
     logger.info(
-      `Export completed in ${duration}ms (${Math.round(estimatedMemoryMB)}MB)`,
+      `Export completed in ${duration}ms (${Math.round(actualMemoryMB)}MB)`,
     );
 
     return png;

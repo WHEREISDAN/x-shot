@@ -2,7 +2,9 @@ import {
   addressRegex,
   emailRegex,
   ipv4Regex,
+  obfuscatedEmailRegex,
   phoneRegex,
+  postalUKRegex,
 } from '../renderer/hooks/pii/regex';
 import { findCardNumberSpans } from '../renderer/hooks/pii/card-numbers';
 
@@ -112,5 +114,61 @@ describe('findCardNumberSpans', () => {
     ['one 20-digit number', 'ID 12345678901234567890'],
   ])('finds nothing in %s', (_label, text) => {
     expect(cards(text)).toEqual([]);
+  });
+});
+
+describe('postalUKRegex', () => {
+  it.each([
+    ['SW1A 1AA', 'SW1A 1AA'],
+    ['EC1A 1BB', 'EC1A 1BB'],
+    ['W1A 0AX', 'W1A 0AX'],
+    ['M1 1AE', 'M1 1AE'],
+    ['B33 8TH', 'B33 8TH'],
+    ['CR2 6XH', 'CR2 6XH'],
+    ['DN55 1PT', 'DN55 1PT'],
+    ['GIR 0AA', 'GIR 0AA'],
+    ['SW1A1AA', 'SW1A1AA'],
+    ['Ship to SW1A 1AA London', 'SW1A 1AA'],
+  ])('matches valid UK postcode %j', (text, expected) => {
+    expect(firstMatch(postalUKRegex, text)).toBe(expected);
+  });
+
+  it.each([
+    'build2025ab',
+    'sha123ab',
+    'item1 2ab',
+    'GIR 0AAextra',
+    'prefixSW1A 1AA',
+  ])('does not match embedded identifier %j', (text) => {
+    expect(firstMatch(postalUKRegex, text)).toBeNull();
+  });
+});
+
+describe('obfuscatedEmailRegex', () => {
+  it.each([
+    ['jane (at) example (dot) com', 'jane (at) example (dot) com'],
+    ['jane(at)example(dot)com', 'jane(at)example(dot)com'],
+    ['jane [at] example [dot] com', 'jane [at] example [dot] com'],
+    ['jane[at]example[dot]com', 'jane[at]example[dot]com'],
+    ['jane at example dot com', 'jane at example dot com'],
+    [
+      'Contact jane.doe (at) sub.example [dot] co (dot) uk today',
+      'jane.doe (at) sub.example [dot] co (dot) uk',
+    ],
+    ['JANE [AT] EXAMPLE [DOT] ORG', 'JANE [AT] EXAMPLE [DOT] ORG'],
+  ])('matches valid obfuscated email %j', (text, expected) => {
+    expect(firstMatch(obfuscatedEmailRegex, text)).toBe(expected);
+  });
+
+  it.each([
+    'jane at) example dot] com',
+    'jane (at] example [dot) com',
+    'jane [at) example (dot] com',
+    'jane (at example dot) com',
+    'jane at) example (dot) com',
+    'jane (at) example dot] com',
+    'chat example dot com',
+  ])('rejects malformed or asymmetric brackets in %j', (text) => {
+    expect(firstMatch(obfuscatedEmailRegex, text)).toBeNull();
   });
 });
