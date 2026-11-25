@@ -12,6 +12,7 @@ export interface ToolButtonProps {
   active?: boolean;
   /** Set for tools that stay on; omit for one-shot actions. */
   pressed?: boolean;
+  disabled?: boolean;
   /** Shows `label` beside the icon instead of only in the tooltip. */
   showLabel?: boolean;
   /** Defaults to `label` for an icon-only button and none for a labelled one. */
@@ -27,6 +28,7 @@ export function ToolButton({
   onClick,
   active = false,
   pressed,
+  disabled = false,
   showLabel = false,
   tooltip = showLabel ? undefined : label,
   tooltipPlacement = 'top',
@@ -37,6 +39,7 @@ export function ToolButton({
       type="button"
       aria-label={label}
       aria-pressed={pressed}
+      disabled={disabled}
       data-tooltip={tooltip}
       data-tooltip-placement={tooltip && tooltipPlacement}
       data-tooltip-align={tooltip && tooltipAlign}

@@ -109,6 +109,13 @@ describe('captureMenuItems', () => {
     );
   });
 
+  it('binds CommandOrControl+, to Preferences...', () => {
+    const items = captureMenuItems(ACCELERATORS, actions());
+    expect(byLabel(items, 'Preferences...')?.accelerator).toBe(
+      'CommandOrControl+,',
+    );
+  });
+
   it('runs the matching action for each item', () => {
     const menuActions = actions();
     const items = captureMenuItems(ACCELERATORS, menuActions);
@@ -138,6 +145,9 @@ describe('applicationMenuTemplate', () => {
       );
       expect(byLabel(capture, 'Delayed Screenshot (5s)')?.accelerator).toBe(
         ACCELERATORS.delay5,
+      );
+      expect(byLabel(capture, 'Preferences...')?.accelerator).toBe(
+        'CommandOrControl+,',
       );
     },
   );

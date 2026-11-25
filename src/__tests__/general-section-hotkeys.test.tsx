@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import GeneralSection from '../renderer/components/preferences/GeneralSection';
 import PREFERENCES from './fixtures/preferences';
 
@@ -86,5 +86,29 @@ describe('GeneralSection hotkey recorder', () => {
     expect(onUpdate).toHaveBeenCalledWith({
       capture: { hotkey: 'CommandOrControl+W' },
     });
+  });
+
+  it('disables and annotates Launch at startup on Linux', async () => {
+    const prevElectron = (window as unknown as { electron?: unknown }).electron;
+    (window as unknown as { electron: unknown }).electron = {
+      platform: 'linux',
+      ipcRenderer: { invoke: jest.fn(async () => '/home/alex') },
+    };
+    try {
+      const { onUpdate } = renderSection();
+      await act(async () => {});
+      const startupSwitch = screen.getByRole('switch', {
+        name: 'Launch X-Shot at system startup',
+      });
+      expect(startupSwitch).toBeDisabled();
+      expect(startupSwitch).not.toBeChecked();
+      expect(startupSwitch).toHaveAccessibleDescription(
+        /not supported on linux/i,
+      );
+      fireEvent.click(startupSwitch);
+      expect(onUpdate).not.toHaveBeenCalled();
+    } finally {
+      (window as unknown as { electron?: unknown }).electron = prevElectron;
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AppPreferences } from '../../../shared/ipc-types';
 import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { ColorDot, Input, Slider } from '../../design-system';
@@ -27,6 +27,17 @@ const COLOR_PRESETS = [
 
 const HEX_COLOR = /^#[0-9A-F]{6}$/i;
 
+function normalizeStrokeColor(raw: string): string | null {
+  const trimmed = raw.trim();
+  return HEX_COLOR.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+function normalizeFillColor(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.toLowerCase() === 'transparent') return 'transparent';
+  return HEX_COLOR.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
 export default function EditorSection({
   preferences,
   onUpdate,
@@ -34,6 +45,16 @@ export default function EditorSection({
 }: EditorSectionProps) {
   const { editor } = preferences;
   const fillTransparent = editor.defaultFillColor === 'transparent';
+  const [strokeDraft, setStrokeDraft] = useState(editor.defaultStrokeColor);
+  const [fillDraft, setFillDraft] = useState(editor.defaultFillColor);
+
+  useEffect(() => {
+    setStrokeDraft(editor.defaultStrokeColor);
+  }, [editor.defaultStrokeColor]);
+
+  useEffect(() => {
+    setFillDraft(editor.defaultFillColor);
+  }, [editor.defaultFillColor]);
 
   const handleStrokeColorChange = useCallback(
     (defaultStrokeColor: string) =>
@@ -65,7 +86,10 @@ export default function EditorSection({
                 key={color}
                 color={color}
                 selected={editor.defaultStrokeColor === color}
-                onClick={() => handleStrokeColorChange(color)}
+                onClick={() => {
+                  setStrokeDraft(color);
+                  handleStrokeColorChange(color);
+                }}
               />
             ))}
           </div>
@@ -79,20 +103,38 @@ export default function EditorSection({
             type="color"
             aria-label="Stroke color picker"
             value={editor.defaultStrokeColor}
-            onChange={(e) => handleStrokeColorChange(e.target.value)}
+            onChange={(e) => {
+              setStrokeDraft(e.target.value);
+              handleStrokeColorChange(e.target.value);
+            }}
             onBlur={onFlush}
           />
           <Input
             type="text"
             mono
             aria-labelledby="custom-stroke-color-label"
-            value={editor.defaultStrokeColor}
+            value={strokeDraft}
             onChange={(e) => {
-              if (HEX_COLOR.test(e.target.value)) {
-                handleStrokeColorChange(e.target.value);
+              const next = e.target.value;
+              setStrokeDraft(next);
+              const normalized = normalizeStrokeColor(next);
+              if (normalized) {
+                setStrokeDraft(normalized);
+                handleStrokeColorChange(normalized);
               }
             }}
-            onBlur={onFlush}
+            onBlur={() => {
+              const normalized = normalizeStrokeColor(strokeDraft);
+              if (normalized) {
+                setStrokeDraft(normalized);
+                if (normalized !== editor.defaultStrokeColor) {
+                  handleStrokeColorChange(normalized);
+                }
+              } else {
+                setStrokeDraft(editor.defaultStrokeColor);
+              }
+              onFlush();
+            }}
             placeholder="#ff0000"
             className={controls.hex}
           />
@@ -110,14 +152,20 @@ export default function EditorSection({
             <ColorDot
               color="transparent"
               selected={fillTransparent}
-              onClick={() => handleFillColorChange('transparent')}
+              onClick={() => {
+                setFillDraft('transparent');
+                handleFillColorChange('transparent');
+              }}
             />
             {COLOR_PRESETS.map((color) => (
               <ColorDot
                 key={color}
                 color={color}
                 selected={editor.defaultFillColor === color}
-                onClick={() => handleFillColorChange(color)}
+                onClick={() => {
+                  setFillDraft(color);
+                  handleFillColorChange(color);
+                }}
               />
             ))}
           </div>
@@ -130,7 +178,10 @@ export default function EditorSection({
             type="color"
             aria-label="Fill color picker"
             value={fillTransparent ? '#ffffff' : editor.defaultFillColor}
-            onChange={(e) => handleFillColorChange(e.target.value)}
+            onChange={(e) => {
+              setFillDraft(e.target.value);
+              handleFillColorChange(e.target.value);
+            }}
             onBlur={onFlush}
             className={fillTransparent ? controls.transparentChip : undefined}
           />
@@ -138,14 +189,28 @@ export default function EditorSection({
             type="text"
             mono
             aria-labelledby="custom-fill-color-label"
-            value={editor.defaultFillColor}
+            value={fillDraft}
             onChange={(e) => {
-              const color = e.target.value;
-              if (HEX_COLOR.test(color) || color === 'transparent') {
-                handleFillColorChange(color);
+              const next = e.target.value;
+              setFillDraft(next);
+              const normalized = normalizeFillColor(next);
+              if (normalized) {
+                setFillDraft(normalized);
+                handleFillColorChange(normalized);
               }
             }}
-            onBlur={onFlush}
+            onBlur={() => {
+              const normalized = normalizeFillColor(fillDraft);
+              if (normalized) {
+                setFillDraft(normalized);
+                if (normalized !== editor.defaultFillColor) {
+                  handleFillColorChange(normalized);
+                }
+              } else {
+                setFillDraft(editor.defaultFillColor);
+              }
+              onFlush();
+            }}
             placeholder="transparent or #ff0000"
             className={controls.field}
           />

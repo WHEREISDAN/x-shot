@@ -58,6 +58,7 @@ function assertAllowed<T extends string>(channel: T, allowed: Set<T>): void {
 }
 
 const electronHandler = {
+  platform: process.platform as WindowState['platform'],
   ipcRenderer: {
     sendMessage<K extends keyof RendererToMainPayloads>(
       channel: K,

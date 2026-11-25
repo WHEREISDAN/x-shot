@@ -70,7 +70,11 @@ export function captureMenuItems(
       click: () => actions.delayedScreenshot(5000),
     },
     separator,
-    { label: 'Preferences...', click: () => actions.openPreferences() },
+    {
+      label: 'Preferences...',
+      accelerator: 'CommandOrControl+,',
+      click: () => actions.openPreferences(),
+    },
     separator,
     { label: 'Quit', click: () => actions.quit() },
   ];

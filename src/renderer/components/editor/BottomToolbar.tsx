@@ -99,6 +99,10 @@ const BottomToolbar = memo(function BottomToolbar({
   textSelectLevel,
   setTextSelectLevel,
 }: BottomToolbarProps) {
+  const eyeDropperAvailable =
+    typeof window !== 'undefined' &&
+    typeof (window as EyeDropperWindow).EyeDropper === 'function';
+
   const pickColor = async () => {
     try {
       const EyeDropperCtor = (window as EyeDropperWindow).EyeDropper;
@@ -132,7 +136,17 @@ const BottomToolbar = memo(function BottomToolbar({
     >
       {modeButton('select', 'Select', <MousePointer2 />)}
       {modeButton('pen', 'Pen', <Pen />)}
-      <ToolButton label="Eyedropper" icon={<Pipette />} onClick={pickColor} />
+      <ToolButton
+        label={eyeDropperAvailable ? 'Eyedropper' : 'Eyedropper (unavailable)'}
+        tooltip={
+          eyeDropperAvailable
+            ? 'Eyedropper'
+            : 'Eyedropper is unavailable on this platform'
+        }
+        icon={<Pipette />}
+        disabled={!eyeDropperAvailable}
+        onClick={pickColor}
+      />
       {MODE_TOOLS.map(({ tool, label, icon }) => modeButton(tool, label, icon))}
 
       <IslandSeparator />

@@ -7,6 +7,7 @@ import {
   isAppPage,
   openExternalIfAllowed,
 } from '../main/navigation-guards';
+import { resolveHtmlPath } from '../main/util';
 
 jest.mock('electron', () => ({
   app: { on: jest.fn() },
@@ -51,6 +52,28 @@ describe('isAppPage', () => {
       isAppPage('http://localhost:1212/index.html#/preferences', dev),
     ).toBe(true);
     expect(isAppPage('http://localhost:1213/index.html', dev)).toBe(false);
+  });
+
+  it('encodes #, ?, % and spaces in resolveHtmlPath and matches them in isAppPage', () => {
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const appPage = resolveHtmlPath('My Apps/100% #1?test/index.html');
+      const parsed = new URL(appPage);
+      expect(parsed.protocol).toBe('file:');
+      expect(parsed.hash).toBe('');
+      expect(parsed.search).toBe('');
+      expect(appPage).toContain('My%20Apps/100%25%20%231%3Ftest/index.html');
+
+      expect(isAppPage(`${appPage}#/preferences`, appPage)).toBe(true);
+      expect(isAppPage(`${appPage}?x=1#/screenshot`, appPage)).toBe(true);
+      expect(
+        isAppPage(`${appPage.replace('%3F', '%3f')}#/preferences`, appPage),
+      ).toBe(true);
+      expect(isAppPage('file:///etc/hosts', appPage)).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
   });
 });
 

@@ -41,7 +41,9 @@ export function Switch({
         aria-label={children ? undefined : ariaLabel}
         aria-labelledby={children ? undefined : ariaLabelledBy}
         aria-describedby={ariaDescribedBy}
-        onChange={(event) => onChange(event.target.checked)}
+        onChange={(event) => {
+          if (!disabled) onChange(event.target.checked);
+        }}
       />
       <span className={styles.track} aria-hidden />
     </label>

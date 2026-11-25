@@ -1,5 +1,5 @@
 /* eslint import/prefer-default-export: off */
-import { URL } from 'url';
+import { URL, pathToFileURL } from 'url';
 import path from 'path';
 
 export function resolveHtmlPath(htmlFileName: string) {
@@ -9,5 +9,6 @@ export function resolveHtmlPath(htmlFileName: string) {
     url.pathname = htmlFileName;
     return url.href;
   }
-  return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
+  return pathToFileURL(path.resolve(__dirname, '../renderer/', htmlFileName))
+    .href;
 }
