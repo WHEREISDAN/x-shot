@@ -47,7 +47,10 @@ function addInspectElementMenu(win: BrowserWindow): void {
   });
 }
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(
+  options: { showOnReady?: boolean } = {},
+): BrowserWindow {
+  const { showOnReady = true } = options;
   const RESOURCES_PATH = getResourcesPath();
   const getAssetPath = (...paths: string[]): string =>
     path.join(RESOURCES_PATH, ...paths);
@@ -76,13 +79,15 @@ export function createMainWindow(): BrowserWindow {
   mainWindow = win;
   win.loadURL(resolveHtmlPath('index.html'));
 
-  win.on('ready-to-show', () => {
-    if (process.env.START_MINIMIZED) {
-      win.minimize();
-    } else {
-      win.show();
-    }
-  });
+  if (showOnReady) {
+    win.on('ready-to-show', () => {
+      if (process.env.START_MINIMIZED) {
+        win.minimize();
+      } else {
+        win.show();
+      }
+    });
+  }
 
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
@@ -109,9 +114,13 @@ export function showMainWindow(): void {
   win.focus();
 }
 
-export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
+export const ensureMainWindowLoaded = async ({
+  show = false,
+}: {
+  show?: boolean;
+} = {}): Promise<BrowserWindow> => {
   if (mainWindow === null) {
-    createMainWindow();
+    createMainWindow({ showOnReady: show });
   }
   if (!mainWindow) throw new Error('Failed to create main window');
   const win = mainWindow;
@@ -120,11 +129,16 @@ export const ensureMainWindowReady = async (): Promise<BrowserWindow> => {
       win.webContents.once('did-finish-load', () => resolve());
     });
   }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  if (show) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
   return win;
 };
+
+export const ensureMainWindowReady = (): Promise<BrowserWindow> =>
+  ensureMainWindowLoaded({ show: true });
 
 /** Turns a window that a capture made transparent opaque again. */
 const makeOpaque = (win: BrowserWindow): void => {

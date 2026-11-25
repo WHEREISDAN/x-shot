@@ -160,6 +160,7 @@ export async function prepareDisplaySnapshots(
   } catch (err) {
     log.error('Failed to prepare display snapshots:', err);
     releaseDisplaySnapshots();
+    throw err;
   }
 }
 
