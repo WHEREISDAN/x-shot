@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import log from 'electron-log';
 import type {
   AppPreferences,
@@ -86,6 +86,47 @@ function conflictMessage(failures: HotkeyFailure[]): string {
   return `The shortcut ${keys} is already in use by another app or X-Shot shortcut. Your previous shortcut still works.`;
 }
 
+/** Electron only supports login item registration on macOS and Windows. */
+export function supportsLaunchAtStartup(
+  platform: typeof process.platform = process.platform,
+): boolean {
+  return platform === 'darwin' || platform === 'win32';
+}
+
+function applyLaunchAtStartup(enabled: boolean): void {
+  if (!supportsLaunchAtStartup()) return;
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    name: 'X-Shot',
+  });
+}
+
+function broadcastPreferencesChanged(preferences: AppPreferences): void {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('preferences-changed', preferences);
+    }
+  });
+}
+
+function applyPostSaveSideEffects(
+  preferences: AppPreferences,
+  options: {
+    refreshHotkeys: boolean;
+    applyLoginItem: boolean;
+    applyTray: boolean;
+  },
+): void {
+  if (options.refreshHotkeys) hotkeysHandler?.saved();
+  if (options.applyLoginItem) {
+    applyLaunchAtStartup(preferences.system.launchAtStartup);
+  }
+  if (options.applyTray) {
+    onTrayVisibilityChange?.(preferences.system.showInTray);
+  }
+  broadcastPreferencesChanged(preferences);
+}
+
 /**
  * Applies a preferences update. Shortcuts are registered first, so one that
  * is taken is reported and nothing is saved; the update is saved before any
@@ -124,17 +165,38 @@ export async function applyPreferencesUpdate(
     };
   }
 
-  if (hasHotkeyChanges) hotkeysHandler?.saved();
-  if (update.system?.launchAtStartup !== undefined) {
-    app.setLoginItemSettings({
-      openAtLogin: update.system.launchAtStartup,
-      name: 'X-Shot',
-    });
-  }
-  if (update.system?.showInTray !== undefined) {
-    onTrayVisibilityChange?.(update.system.showInTray);
-  }
+  applyPostSaveSideEffects(preferences, {
+    refreshHotkeys: hasHotkeyChanges,
+    applyLoginItem: update.system?.launchAtStartup !== undefined,
+    applyTray: update.system?.showInTray !== undefined,
+  });
   return { ok: true, preferences };
+}
+
+/** Resets stored preferences to defaults and reconciles all OS side effects. */
+export async function applyPreferencesReset(): Promise<AppPreferences> {
+  const defaultPrefs = await resetPreferences();
+  if (hotkeysHandler) {
+    const failures = hotkeysHandler.apply({
+      main: defaultPrefs.capture.hotkey,
+      delay3: defaultPrefs.capture.hotkeyDelay3 ?? null,
+      delay5: defaultPrefs.capture.hotkeyDelay5 ?? null,
+      recapture: defaultPrefs.capture.hotkeyRecapture ?? null,
+    });
+    if (failures.length > 0) {
+      log.warn(
+        'Failed to re-register default shortcuts after reset:',
+        failures,
+      );
+    }
+  }
+  applyPostSaveSideEffects(defaultPrefs, {
+    refreshHotkeys: true,
+    applyLoginItem: true,
+    applyTray: true,
+  });
+  log.info('Preferences reset to defaults');
+  return defaultPrefs;
 }
 
 export default function registerPreferencesIpcHandlers() {
@@ -181,9 +243,7 @@ export default function registerPreferencesIpcHandlers() {
 
   ipcMain.handle('reset-preferences', async (): Promise<AppPreferences> => {
     try {
-      const defaultPrefs = await resetPreferences();
-      log.info('Preferences reset to defaults');
-      return defaultPrefs;
+      return await applyPreferencesReset();
     } catch (error) {
       log.error('Failed to reset preferences:', error);
       throw error;

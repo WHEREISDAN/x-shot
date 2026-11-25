@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import type { EditorPreferences } from '../../shared/ipc-types';
 import { createRendererLogger } from '../utils/logger';
 
 const logger = createRendererLogger('use-editor-state');
@@ -228,26 +229,69 @@ export function useEditorState(): UseEditorStateResult {
   // Shapes from before the open gesture, or null when none is open.
   const gestureBaseRef = useRef<EditorShape[] | null>(null);
 
-  // Load editor preferences on initialization
+  const lastEditorPrefsRef = useRef<EditorPreferences | null>(null);
+
+  // Load editor preferences and keep changed defaults in sync across windows.
   useEffect(() => {
+    const api = window?.electron?.ipcRenderer;
+    if (!api) return () => {};
+    let active = true;
+
+    const applyEditorPrefs = (
+      editor: EditorPreferences | undefined,
+      initial: boolean,
+    ) => {
+      if (!active || !editor) return;
+      const prev = lastEditorPrefsRef.current;
+      if (
+        initial ||
+        !prev ||
+        editor.defaultStrokeColor !== prev.defaultStrokeColor
+      ) {
+        setStrokeColor(editor.defaultStrokeColor);
+      }
+      if (
+        initial ||
+        !prev ||
+        editor.defaultFillColor !== prev.defaultFillColor
+      ) {
+        setFillColor(editor.defaultFillColor);
+      }
+      if (
+        initial ||
+        !prev ||
+        editor.defaultStrokeWidth !== prev.defaultStrokeWidth
+      ) {
+        setStrokeWidth(editor.defaultStrokeWidth);
+      }
+      if (initial || !prev || editor.defaultTextSize !== prev.defaultTextSize) {
+        setTextSize(editor.defaultTextSize);
+      }
+      lastEditorPrefsRef.current = editor;
+    };
+
     const loadPreferences = async () => {
       try {
-        const api = window?.electron?.ipcRenderer;
-        if (!api) return;
-
         const preferences = await api.invoke('get-preferences', {});
-        if (preferences?.editor) {
-          setStrokeColor(preferences.editor.defaultStrokeColor);
-          setFillColor(preferences.editor.defaultFillColor);
-          setStrokeWidth(preferences.editor.defaultStrokeWidth);
-          setTextSize(preferences.editor.defaultTextSize);
-        }
+        applyEditorPrefs(preferences?.editor, true);
       } catch (error) {
         logger.warn('Failed to load editor preferences', error);
       }
     };
 
     loadPreferences();
+
+    const unsubscribe =
+      typeof api.on === 'function'
+        ? api.on('preferences-changed', (next) =>
+            applyEditorPrefs(next?.editor, false),
+          )
+        : undefined;
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const pushUndo = useCallback((entry: EditorShape[]) => {

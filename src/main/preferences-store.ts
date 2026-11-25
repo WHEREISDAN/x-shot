@@ -72,10 +72,12 @@ export function createPreferencesStore({
   now = () => new Date(),
 }: PreferencesStoreOptions): PreferencesStore {
   let cache: AppPreferences | null = null;
+  let lastPersisted: AppPreferences | null = null;
   let outcome: LoadOutcome | null = null;
   let loading: Promise<AppPreferences> | null = null;
   let version = 0;
   let writtenVersion = 0;
+  let pendingWrites = 0;
   let queue: Promise<void> = Promise.resolve();
 
   /** Writes the newest copy unless a write already covered `target`. */
@@ -83,19 +85,32 @@ export function createPreferencesStore({
     if (writtenVersion >= target || !cache) return;
     const snapshot = cache;
     const snapshotVersion = version;
-    await writeFileAtomic(
-      filePath,
-      `${JSON.stringify(snapshot, null, 2)}\n`,
-      fileOps,
-    );
+    try {
+      await writeFileAtomic(
+        filePath,
+        `${JSON.stringify(snapshot, null, 2)}\n`,
+        fileOps,
+      );
+    } catch (error) {
+      if (pendingWrites === 1 && version === snapshotVersion) {
+        cache = lastPersisted;
+      }
+      throw error;
+    }
     writtenVersion = Math.max(writtenVersion, snapshotVersion);
+    lastPersisted = snapshot;
     onPersisted?.(snapshot);
   };
 
   const enqueueWrite = (): Promise<void> => {
     version += 1;
+    pendingWrites += 1;
     const target = version;
-    const task = queue.then(() => writeLatest(target));
+    const task = queue
+      .then(() => writeLatest(target))
+      .finally(() => {
+        pendingWrites -= 1;
+      });
     // A failed write fails its own callers; later writes still run.
     queue = task.catch(() => {});
     return task;
@@ -145,10 +160,12 @@ export function createPreferencesStore({
     const stored = await readStored();
     if (!stored) {
       cache = sanitizePreferences(defaults, defaults);
+      lastPersisted = cache;
       return cache;
     }
     const migrated = await migrateStoredPreferences(stored, saveBackground);
     cache = sanitizePreferences(migrated.value, defaults);
+    lastPersisted = cache;
     if (migrated.changes.length > 0) {
       migrated.changes.forEach((change) =>
         log.info(`Preferences migrated: ${change}`),

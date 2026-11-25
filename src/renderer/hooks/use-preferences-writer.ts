@@ -16,6 +16,8 @@ export interface PreferencesWriter {
   flush: (
     updates?: PreferencesUpdate,
   ) => Promise<SetPreferencesResponse | null>;
+  /** Unsaved debounced changes still waiting to flush, if any. */
+  getPending: () => PreferencesUpdate | null;
 }
 
 async function sendUpdates(
@@ -84,5 +86,10 @@ export default function usePreferencesWriter(
     };
   }, [flush]);
 
-  return useMemo(() => ({ schedule, flush }), [schedule, flush]);
+  const getPending = useCallback(() => pendingRef.current, []);
+
+  return useMemo(
+    () => ({ schedule, flush, getPending }),
+    [schedule, flush, getPending],
+  );
 }

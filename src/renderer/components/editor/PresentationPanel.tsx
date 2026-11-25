@@ -6,6 +6,7 @@ import type {
   PresentationSettings,
 } from '../../hooks/use-presentation-state';
 import type { BackgroundImageRef } from '../../../shared/ipc-types';
+import PRESENTATION_BOUNDS from '../../../shared/presentation-bounds';
 import { presets, toCssGradient } from './gradient-presets';
 import { BUILTIN_BACKGROUNDS, builtinBackgroundRef } from './background-images';
 import {
@@ -182,24 +183,24 @@ export default function PresentationPanel({
           <h4 className={styles.sectionTitle}>Frame</h4>
           <Slider
             label="Padding"
-            min={0}
-            max={400}
+            min={PRESENTATION_BOUNDS.padding.min}
+            max={PRESENTATION_BOUNDS.padding.max}
             value={settings.padding}
             onChange={onChange.setPadding}
             onBlur={onChange.flush}
           />
           <Slider
             label="Inset"
-            min={0}
-            max={200}
+            min={PRESENTATION_BOUNDS.inset.min}
+            max={PRESENTATION_BOUNDS.inset.max}
             value={settings.inset}
             onChange={onChange.setInset}
             onBlur={onChange.flush}
           />
           <Slider
             label="Radius"
-            min={0}
-            max={200}
+            min={PRESENTATION_BOUNDS.radius.min}
+            max={PRESENTATION_BOUNDS.radius.max}
             value={settings.radius}
             onChange={onChange.setRadius}
             onBlur={onChange.flush}
@@ -237,8 +238,8 @@ export default function PresentationPanel({
           </h4>
           <Slider
             label="Offset X"
-            min={-64}
-            max={64}
+            min={PRESENTATION_BOUNDS.shadowX.min}
+            max={PRESENTATION_BOUNDS.shadowX.max}
             value={settings.shadow.x}
             onChange={(x) => onChange.setShadow({ x })}
             onBlur={onChange.flush}
@@ -246,8 +247,8 @@ export default function PresentationPanel({
           />
           <Slider
             label="Offset Y"
-            min={-64}
-            max={64}
+            min={PRESENTATION_BOUNDS.shadowY.min}
+            max={PRESENTATION_BOUNDS.shadowY.max}
             value={settings.shadow.y}
             onChange={(y) => onChange.setShadow({ y })}
             onBlur={onChange.flush}
@@ -255,8 +256,8 @@ export default function PresentationPanel({
           />
           <Slider
             label="Blur"
-            min={0}
-            max={296}
+            min={PRESENTATION_BOUNDS.shadowBlur.min}
+            max={PRESENTATION_BOUNDS.shadowBlur.max}
             value={settings.shadow.blur}
             onChange={(blur) => onChange.setShadow({ blur })}
             onBlur={onChange.flush}
@@ -264,8 +265,8 @@ export default function PresentationPanel({
           />
           <Slider
             label="Spread"
-            min={0}
-            max={264}
+            min={PRESENTATION_BOUNDS.shadowSpread.min}
+            max={PRESENTATION_BOUNDS.shadowSpread.max}
             value={settings.shadow.spread}
             onChange={(spread) => onChange.setShadow({ spread })}
             onBlur={onChange.flush}
@@ -297,7 +298,8 @@ export default function PresentationPanel({
               <Input
                 type="number"
                 aria-label="Custom width"
-                min={1}
+                min={PRESENTATION_BOUNDS.customAspect.min}
+                max={PRESENTATION_BOUNDS.customAspect.max}
                 mono
                 fullWidth
                 value={settings.aspect.custom?.w ?? ''}
@@ -312,7 +314,8 @@ export default function PresentationPanel({
               <Input
                 type="number"
                 aria-label="Custom height"
-                min={1}
+                min={PRESENTATION_BOUNDS.customAspect.min}
+                max={PRESENTATION_BOUNDS.customAspect.max}
                 mono
                 fullWidth
                 value={settings.aspect.custom?.h ?? ''}

@@ -8,11 +8,25 @@ function useCaptureHotkey(): string | null {
   const [hotkey, setHotkey] = useState<string | null>(null);
   useEffect(() => {
     const api = window?.electron?.ipcRenderer;
-    if (!api) return;
+    if (!api) return () => {};
+    let active = true;
     api
       .invoke('get-preferences', {})
-      .then((preferences) => setHotkey(preferences?.capture?.hotkey ?? null))
+      .then((preferences) => {
+        if (active) setHotkey(preferences?.capture?.hotkey ?? null);
+        return preferences;
+      })
       .catch(() => {});
+    const unsubscribe =
+      typeof api.on === 'function'
+        ? api.on('preferences-changed', (preferences) => {
+            if (active) setHotkey(preferences?.capture?.hotkey ?? null);
+          })
+        : undefined;
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
   return hotkey;
 }

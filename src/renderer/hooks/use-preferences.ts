@@ -65,18 +65,36 @@ export default function usePreferences(): UsePreferencesResult {
   const writer = usePreferencesWriter(handleResult);
 
   useEffect(() => {
+    let active = true;
+    const api = window?.electron?.ipcRenderer;
     const loadOnce = async () => {
       try {
-        await reload();
+        if (!api) throw new Error('Electron IPC not available');
+        const loaded = await api.invoke('get-preferences', {});
+        if (active) setPreferences(loaded);
       } catch (err) {
-        setError(messageOf(err, 'Failed to load preferences'));
+        if (active) setError(messageOf(err, 'Failed to load preferences'));
         logger.error('Failed to load preferences', err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     loadOnce().catch(() => {});
-  }, [reload]);
+
+    const unsubscribe =
+      typeof api?.on === 'function'
+        ? api.on('preferences-changed', (next) => {
+            if (!active) return;
+            const pending = writer.getPending();
+            setPreferences(pending ? deepMerge(next, pending) : next);
+          })
+        : undefined;
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [writer]);
 
   const updatePreferences = useCallback<UpdatePreferences>(
     async (updates, options) => {

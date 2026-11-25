@@ -30,6 +30,7 @@ const receiveChannels = new Set<keyof MainToRendererEvents>([
   'capture-result',
   'window-state',
   'flush-preferences',
+  'preferences-changed',
 ]);
 
 const invokeChannels = new Set<keyof IpcInvokes>([
