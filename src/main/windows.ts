@@ -12,8 +12,8 @@ let preferencesWindow: BrowserWindow | null = null;
 let screenshotWindows: BrowserWindow[] = [];
 // Set while a capture has hidden the Preferences window.
 let preferencesHiddenForCapture = false;
-// Windows a capture hid at opacity 0 that have not been made opaque again.
-const transparentForCapture = new Set<BrowserWindow>();
+// Windows a capture hid at opacity 0 -> cleanup for their pending show listener.
+const transparentForCapture = new Map<BrowserWindow, () => void>();
 
 // Time for the compositor to drop a hidden or closed window from screen.
 const COMPOSITOR_FRAME_MS = 60;
@@ -32,6 +32,8 @@ const CHROME_TITLE_BAR = {
   symbolColor: '#F1F2F4',
   height: 36,
 };
+// Above the macOS menu bar (layer 24) and Windows/Linux taskbars on every display.
+const OVERLAY_WINDOW_LEVEL = 'screen-saver' as const;
 
 const isDevelopment = () =>
   process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
@@ -142,7 +144,10 @@ export const ensureMainWindowReady = (): Promise<BrowserWindow> =>
 
 /** Turns a window that a capture made transparent opaque again. */
 const makeOpaque = (win: BrowserWindow): void => {
-  if (!transparentForCapture.delete(win)) return;
+  const cleanup = transparentForCapture.get(win);
+  if (!cleanup) return;
+  transparentForCapture.delete(win);
+  cleanup();
   if (!win.isDestroyed()) win.setOpacity(1);
 };
 
@@ -161,8 +166,17 @@ const hideAndWait = (win: BrowserWindow): Promise<void> =>
     });
     try {
       win.setOpacity(0);
-      transparentForCapture.add(win);
-      win.once('show', () => makeOpaque(win));
+      const onShow = () => {
+        // On macOS, a delayed occlusion 'show' from a recent show() can arrive
+        // after win.hide() while the window is already hidden.
+        if (!win.isDestroyed() && !win.isVisible()) return;
+        makeOpaque(win);
+      };
+      transparentForCapture.get(win)?.();
+      transparentForCapture.set(win, () => {
+        if (!win.isDestroyed()) win.removeListener('show', onShow);
+      });
+      win.on('show', onShow);
       win.hide();
     } catch {
       clearTimeout(timeout);
@@ -194,7 +208,7 @@ export const hideWindowsForCapture = async (): Promise<void> => {
  * the capture hid it.
  */
 export const restoreWindowsAfterCapture = (): void => {
-  Array.from(transparentForCapture).forEach(makeOpaque);
+  Array.from(transparentForCapture.keys()).forEach(makeOpaque);
   if (!preferencesHiddenForCapture) return;
   preferencesHiddenForCapture = false;
   if (preferencesWindow && !preferencesWindow.isDestroyed()) {
@@ -304,6 +318,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
 
   enableScreenSaverMode();
 
+  const isMac = process.platform === 'darwin';
   const primaryDisplayId = screen.getPrimaryDisplay().id;
   displays.forEach((display) => {
     const { x, y, width, height } = display.bounds;
@@ -314,6 +329,9 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       height,
       transparent: true,
       frame: false,
+      hasShadow: false,
+      roundedCorners: false,
+      enableLargerThanScreen: true,
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
@@ -321,7 +339,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
       show: false,
       // No titleBarStyle: on macOS it keeps the window buttons on a
       // frameless window, and they would show in the capture.
-      fullscreenable: true,
+      fullscreenable: !isMac,
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
@@ -341,18 +359,26 @@ export const createScreenshotOverlays = async (): Promise<void> => {
 
     // Ensure overlay appears across all spaces and full-screen apps (macOS)
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    if (isMac) {
+      overlay.setAlwaysOnTop(true, OVERLAY_WINDOW_LEVEL);
+      overlay.setBounds(display.bounds);
+    }
 
     overlay.once('ready-to-show', () => {
+      if (overlay.isDestroyed() || !screenshotWindows.includes(overlay)) return;
       logger.info(`✅ Screenshot overlay ready on display ${display.id}`);
-      overlay.setAlwaysOnTop(true, 'floating');
-      // Enter full screen on the focused display only so we own input over the menu bar
-      try {
-        if (display.id === focusedDisplay.id) {
-          if (process.platform === 'darwin') overlay.setSimpleFullScreen(true);
-          else overlay.setFullScreen(true);
+      overlay.setAlwaysOnTop(true, OVERLAY_WINDOW_LEVEL);
+      if (isMac) {
+        overlay.setBounds(display.bounds);
+      } else {
+        // Enter full screen on the focused display on Windows/Linux so we own input over the taskbar
+        try {
+          if (display.id === focusedDisplay.id) {
+            overlay.setFullScreen(true);
+          }
+        } catch (error) {
+          logger.warn('Failed to set fullscreen on screenshot overlay', error);
         }
-      } catch (error) {
-        logger.warn('Failed to set fullscreen on screenshot overlay', error);
       }
       markCaptureStage('overlay-visible', {
         displayId: display.id,
@@ -363,6 +389,9 @@ export const createScreenshotOverlays = async (): Promise<void> => {
         overlay.focus();
       } else {
         overlay.showInactive();
+      }
+      if (isMac) {
+        overlay.setBounds(display.bounds);
       }
     });
 
@@ -380,7 +409,7 @@ export const showScreenshotOverlays = (): void => {
   enableScreenSaverMode();
   screenshotWindows.forEach((w) => {
     try {
-      w.setAlwaysOnTop(true, 'floating');
+      w.setAlwaysOnTop(true, OVERLAY_WINDOW_LEVEL);
       w.showInactive();
     } catch (error) {
       logger.warn('Failed to show screenshot overlay window', error);
