@@ -4,6 +4,7 @@
 import { EventEmitter } from 'events';
 import { BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron';
 import {
+  closeScreenshotOverlays,
   createMainWindow,
   createPreferencesWindow,
   ensureMainWindowReady,
@@ -801,4 +802,26 @@ describe('overlay window bounds and stacking', () => {
       expect(primaryWin.setFullScreen).not.toHaveBeenCalled();
     },
   );
+
+  it('ignores ready-to-show after closeScreenshotOverlays cancels the overlay', async () => {
+    setPlatform('darwin');
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [overlay] = overlays();
+
+    await closeScreenshotOverlays();
+    overlay.setAlwaysOnTop.mockClear();
+    overlay.setBounds.mockClear();
+    overlay.calls.length = 0;
+
+    // Even before native destruction finishes, a late ready-to-show must not
+    // flash or focus a closed overlay.
+    overlay.destroyed = false;
+    overlay.emit('ready-to-show');
+
+    expect(overlay.calls).toEqual([]);
+    expect(overlay.focus).not.toHaveBeenCalled();
+    expect(overlay.setAlwaysOnTop).not.toHaveBeenCalled();
+    expect(overlay.setBounds).not.toHaveBeenCalled();
+  });
 });

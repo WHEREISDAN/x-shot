@@ -365,6 +365,7 @@ export const createScreenshotOverlays = async (): Promise<void> => {
     }
 
     overlay.once('ready-to-show', () => {
+      if (overlay.isDestroyed() || !screenshotWindows.includes(overlay)) return;
       logger.info(`✅ Screenshot overlay ready on display ${display.id}`);
       overlay.setAlwaysOnTop(true, OVERLAY_WINDOW_LEVEL);
       if (isMac) {

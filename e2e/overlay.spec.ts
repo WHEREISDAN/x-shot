@@ -55,13 +55,46 @@ async function preferencesVisible(
   }
 }
 
+interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface OverlayGeometry {
   displayId: number;
   visible: boolean;
-  bounds: { x: number; y: number; width: number; height: number };
-  contentBounds: { x: number; y: number; width: number; height: number };
-  displayBounds: { x: number; y: number; width: number; height: number } | null;
+  bounds: Bounds;
+  contentBounds: Bounds;
+  displayBounds: Bounds | null;
   isSimpleFullScreen: boolean;
+}
+
+/**
+ * Under WM-less Xvfb on Linux CI, X11/Chromium can report a frameless
+ * fullscreen window as 1 px smaller than the screen (e.g. 1279x1023 for
+ * 1280x1024) while x and y remain exact. macOS and Windows stay strict.
+ */
+function expectSizeMatchesDisplay(
+  actual: { width: number; height: number },
+  display: { width: number; height: number },
+): void {
+  if (process.platform === 'linux') {
+    expect(actual.width).toBeGreaterThanOrEqual(display.width - 1);
+    expect(actual.width).toBeLessThanOrEqual(display.width);
+    expect(actual.height).toBeGreaterThanOrEqual(display.height - 1);
+    expect(actual.height).toBeLessThanOrEqual(display.height);
+    return;
+  }
+  expect(actual.width).toBe(display.width);
+  expect(actual.height).toBe(display.height);
+}
+
+function expectBoundsMatchDisplay(actual: Bounds, display: Bounds): void {
+  expect(actual.x).toBe(display.x);
+  expect(actual.y).toBe(display.y);
+  expectSizeMatchesDisplay(actual, display);
 }
 
 async function overlayGeometries(
@@ -192,8 +225,9 @@ test.describe('capture overlays', () => {
         finalGeos.forEach((geo) => {
           expect(geo.visible).toBe(true);
           expect(geo.displayBounds).not.toBeNull();
-          expect(geo.bounds).toEqual(geo.displayBounds);
-          expect(geo.contentBounds).toEqual(geo.displayBounds);
+          const displayBounds = geo.displayBounds as Bounds;
+          expectBoundsMatchDisplay(geo.bounds, displayBounds);
+          expectBoundsMatchDisplay(geo.contentBounds, displayBounds);
           if (process.platform === 'darwin') {
             expect(geo.isSimpleFullScreen).toBe(false);
           }
@@ -219,8 +253,7 @@ test.describe('capture overlays', () => {
           const displayId = Number(params.get('displayId'));
           const geo = finalGeos.find((g) => g.displayId === displayId);
           expect(geo?.displayBounds).toBeTruthy();
-          expect(layout.width).toBe(geo?.displayBounds?.width);
-          expect(layout.height).toBe(geo?.displayBounds?.height);
+          expectSizeMatchesDisplay(layout, geo?.displayBounds as Bounds);
           expect(layout.dockTop).toBeGreaterThanOrEqual(0);
           expect(layout.dockBottom).toBeLessThanOrEqual(layout.height);
         }),
