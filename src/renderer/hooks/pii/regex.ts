@@ -1,8 +1,17 @@
 export const emailRegex = /[a-zA-Z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g;
+const bracketedSep = (word: string) =>
+  String.raw`\s*(?:\(${word}\)|\[${word}\])\s*`;
+const bareSep = (word: string) => String.raw`\s+${word}\s+`;
 const obfuscatedSep = (word: string) =>
-  String.raw`(?:\s*\(${word}\)\s*|\s*\[${word}\]\s*|\s+${word}\s+)`;
+  String.raw`(?:${bracketedSep(word)}|${bareSep(word)})`;
+const commonTld = String.raw`(?:com|org|net|edu|gov|mil|int|io|co|ai|app|dev|me|us|uk|ca|de|fr|au|jp|nl|eu|info|biz|xyz|gg|tv|cc|sh|to)`;
+const obfuscatedLocal = String.raw`[A-Za-z0-9._%+-]+`;
+const obfuscatedDomain = (dotSep: string) =>
+  String.raw`[A-Za-z0-9.-]+(?:${dotSep}[A-Za-z0-9-]+)*${dotSep}`;
+// Bracketed forms accept any 2+ letter TLD; bare whitespace-delimited forms
+// require a common TLD so ordinary prose ("looked at the dot matrix") is ignored.
 export const obfuscatedEmailRegex = new RegExp(
-  String.raw`\b[A-Za-z0-9._%+-]+${obfuscatedSep('at')}[A-Za-z0-9.-]+(?:${obfuscatedSep('dot')}[A-Za-z0-9-]+)*${obfuscatedSep('dot')}[A-Za-z]{2,}\b`,
+  String.raw`\b${obfuscatedLocal}(?:${bracketedSep('at')}${obfuscatedDomain(bracketedSep('dot'))}[A-Za-z]{2,}|${obfuscatedSep('at')}${obfuscatedDomain(obfuscatedSep('dot'))}${commonTld})\b`,
   'gi',
 );
 // Separators between digit groups are required, so unbroken digit runs

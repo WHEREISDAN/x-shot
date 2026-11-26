@@ -150,11 +150,12 @@ describe('obfuscatedEmailRegex', () => {
     ['jane(at)example(dot)com', 'jane(at)example(dot)com'],
     ['jane [at] example [dot] com', 'jane [at] example [dot] com'],
     ['jane[at]example[dot]com', 'jane[at]example[dot]com'],
-    ['jane at example dot com', 'jane at example dot com'],
+    ['alice at example dot com', 'alice at example dot com'],
     [
       'Contact jane.doe (at) sub.example [dot] co (dot) uk today',
       'jane.doe (at) sub.example [dot] co (dot) uk',
     ],
+    ['jane (at) example (dot) museum', 'jane (at) example (dot) museum'],
     ['JANE [AT] EXAMPLE [DOT] ORG', 'JANE [AT] EXAMPLE [DOT] ORG'],
   ])('matches valid obfuscated email %j', (text, expected) => {
     expect(firstMatch(obfuscatedEmailRegex, text)).toBe(expected);
@@ -168,7 +169,9 @@ describe('obfuscatedEmailRegex', () => {
     'jane at) example (dot) com',
     'jane (at) example dot] com',
     'chat example dot com',
-  ])('rejects malformed or asymmetric brackets in %j', (text) => {
+    'looked at the dot matrix',
+    'meet at office dot room',
+  ])('rejects malformed brackets or plain prose in %j', (text) => {
     expect(firstMatch(obfuscatedEmailRegex, text)).toBeNull();
   });
 });

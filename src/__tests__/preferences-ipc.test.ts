@@ -310,4 +310,71 @@ describe('reset-preferences', () => {
     expect(app.setLoginItemSettings).not.toHaveBeenCalled();
     expect(live.webContents.send).not.toHaveBeenCalled();
   });
+
+  it('clears all shortcut slots before applying defaults so swapped shortcuts do not self-conflict', async () => {
+    const slots: Record<
+      'main' | 'delay3' | 'delay5' | 'recapture',
+      string | null
+    > = {
+      main: 'CommandOrControl+Shift+9',
+      delay3: 'CommandOrControl+Shift+1',
+      delay5: null,
+      recapture: null,
+    };
+    const registered = new Set<string>([
+      'CommandOrControl+Shift+9',
+      'CommandOrControl+Shift+1',
+    ]);
+    const statefulHotkeys: HotkeysHandler = {
+      apply: jest.fn((changes) => {
+        const failures: Array<{
+          label: 'main' | '3s delayed' | '5s delayed' | 'recapture';
+          accelerator: string;
+        }> = [];
+        const order: Array<{
+          slot: keyof typeof slots;
+          label: 'main' | '3s delayed' | '5s delayed' | 'recapture';
+        }> = [
+          { slot: 'main', label: 'main' },
+          { slot: 'delay3', label: '3s delayed' },
+          { slot: 'delay5', label: '5s delayed' },
+          { slot: 'recapture', label: 'recapture' },
+        ];
+        order.forEach(({ slot, label }) => {
+          if (changes[slot] === undefined) return;
+          const prev = slots[slot];
+          if (prev) registered.delete(prev);
+          const next = changes[slot] ?? null;
+          if (!next) {
+            slots[slot] = null;
+            return;
+          }
+          if (registered.has(next)) {
+            failures.push({ label, accelerator: next });
+            if (prev) registered.add(prev);
+            return;
+          }
+          registered.add(next);
+          slots[slot] = next;
+        });
+        return failures;
+      }),
+      saved: jest.fn(),
+    };
+    setHotkeysHandler(statefulHotkeys);
+    const resetHandler = getRegisteredHandler('reset-preferences');
+
+    await withPlatform('darwin', () =>
+      Promise.resolve(resetHandler() as Promise<unknown>),
+    );
+
+    expect(slots).toEqual({
+      main: 'CommandOrControl+Shift+1',
+      delay3: null,
+      delay5: null,
+      recapture: null,
+    });
+    expect(Array.from(registered)).toEqual(['CommandOrControl+Shift+1']);
+    expect(statefulHotkeys.saved).toHaveBeenCalledTimes(1);
+  });
 });

@@ -18,7 +18,7 @@ import { createPreferencesWindow } from '../windows';
 
 /** Shortcut slots an update changes; undefined slots stay as they are. */
 export interface HotkeyChanges {
-  main?: string;
+  main?: string | null;
   delay3?: string | null;
   delay5?: string | null;
   recapture?: string | null;
@@ -177,6 +177,14 @@ export async function applyPreferencesUpdate(
 export async function applyPreferencesReset(): Promise<AppPreferences> {
   const defaultPrefs = await resetPreferences();
   if (hotkeysHandler) {
+    // Clear every slot first so a default shortcut held by another slot
+    // (e.g. default main bound to a delay slot) does not self-conflict.
+    hotkeysHandler.apply({
+      main: null,
+      delay3: null,
+      delay5: null,
+      recapture: null,
+    });
     const failures = hotkeysHandler.apply({
       main: defaultPrefs.capture.hotkey,
       delay3: defaultPrefs.capture.hotkeyDelay3 ?? null,

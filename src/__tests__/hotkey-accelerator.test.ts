@@ -63,6 +63,24 @@ describe('acceleratorFromKeyEvent', () => {
     );
   });
 
+  it('preserves layout-mapped ASCII letters on non-US keyboards like German and French', () => {
+    const germanCtrlShiftZ = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      shiftKey: true,
+      key: 'z',
+      code: 'KeyY',
+    });
+    const frenchCtrlA = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'a',
+      code: 'KeyQ',
+    });
+    expect(acceleratorFromKeyEvent(germanCtrlShiftZ)).toBe(
+      'CommandOrControl+Shift+Z',
+    );
+    expect(acceleratorFromKeyEvent(frenchCtrlA)).toBe('CommandOrControl+A');
+  });
+
   it('falls back to key when code is omitted and allows bare F-keys', () => {
     expect(acceleratorFromKeyEvent({ metaKey: true, key: 'k' })).toBe(
       'CommandOrControl+K',

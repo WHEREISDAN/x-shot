@@ -572,6 +572,38 @@ describe('capture sessions', () => {
     expect(captureAssets.size()).toBe(sizeAfterFirst);
   });
 
+  it('scopes preview release per overlay sender so multi-monitor overlays do not evict each other', async () => {
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [, listSources] = (ipcMain.handle as jest.Mock).mock.calls.find(
+      ([channel]) => channel === 'list-capture-sources',
+    );
+    const senderA = { sender: { id: 101 } };
+    const senderB = { sender: { id: 202 } };
+
+    const firstA: ListCaptureSourcesResponse = await listSources(senderA, {
+      type: 'window',
+    });
+    const firstB: ListCaptureSourcesResponse = await listSources(senderB, {
+      type: 'window',
+    });
+    const aFirstId = firstA[0].thumbnailAssetId as string;
+    const bFirstId = firstB[0].thumbnailAssetId as string;
+
+    // Sender B listing must not release sender A's cached preview assets.
+    expect(captureAssets.get(aFirstId)).toBeDefined();
+    expect(captureAssets.get(bFirstId)).toBeDefined();
+
+    // Sender A re-listing releases only sender A's prior previews, keeping sender B's intact.
+    const secondA: ListCaptureSourcesResponse = await listSources(senderA, {
+      type: 'window',
+    });
+    const aSecondId = secondA[0].thumbnailAssetId as string;
+    expect(captureAssets.get(aFirstId)).toBeUndefined();
+    expect(captureAssets.get(aSecondId)).toBeDefined();
+    expect(captureAssets.get(bFirstId)).toBeDefined();
+  });
+
   it('aborts prepareSession with screen-permission failure and zero overlays when getSources throws', async () => {
     const editor = shownEditor();
     (desktopCapturer.getSources as jest.Mock).mockRejectedValueOnce(

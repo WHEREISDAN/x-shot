@@ -24,9 +24,9 @@ export default function acceleratorFromKeyEvent(e: ShortcutKeyEvent): string {
   const isFn = /^F\d{1,2}$/.test(key);
   const digit =
     code.match(/^Digit(\d)$/i)?.[1] ?? (/^[0-9]$/.test(key) ? key : '');
-  const letter =
-    code.match(/^Key([A-Z])$/i)?.[1]?.toUpperCase() ??
-    (/^[A-Z]$/.test(key) ? key : '');
+  const letter = /^[A-Z]$/.test(key)
+    ? key
+    : (code.match(/^Key([A-Z])$/i)?.[1]?.toUpperCase() ?? '');
   const isSpace =
     code.toUpperCase() === 'SPACE' || rawKey === ' ' || key === 'SPACE';
   let finalKey = '';

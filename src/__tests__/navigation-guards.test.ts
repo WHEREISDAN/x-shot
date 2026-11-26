@@ -68,7 +68,7 @@ describe('isAppPage', () => {
       expect(isAppPage(`${appPage}#/preferences`, appPage)).toBe(true);
       expect(isAppPage(`${appPage}?x=1#/screenshot`, appPage)).toBe(true);
       expect(
-        isAppPage(`${appPage.replace('%3F', '%3f')}#/preferences`, appPage),
+        isAppPage(`${appPage.replace(/%3F/g, '%3f')}#/preferences`, appPage),
       ).toBe(true);
       expect(isAppPage('file:///etc/hosts', appPage)).toBe(false);
     } finally {
