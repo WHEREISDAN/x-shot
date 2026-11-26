@@ -10,6 +10,7 @@ import {
   hideWindowsForCapture,
   restoreWindowsAfterCapture,
   showMainWindow,
+  showScreenshotOverlays,
 } from '../main/windows';
 import registerScreenshotIpcHandlers from '../main/ipc/screenshot';
 import { captureAssets } from '../main/capture-assets';
@@ -123,6 +124,8 @@ class FakeWindow extends EventEmitter {
 
   readonly calls: string[] = [];
 
+  readonly ops: string[] = [];
+
   url = '';
 
   visible = false;
@@ -147,7 +150,17 @@ class FakeWindow extends EventEmitter {
 
   restore = jest.fn();
 
-  setAlwaysOnTop = jest.fn();
+  setAlwaysOnTop = jest.fn((flag: boolean, level?: string) => {
+    this.ops.push(`alwaysOnTop:${flag}:${level ?? ''}`);
+  });
+
+  setBounds = jest.fn(
+    (bounds: { x: number; y: number; width: number; height: number }) => {
+      this.ops.push(
+        `bounds:${bounds.x},${bounds.y},${bounds.width}x${bounds.height}`,
+      );
+    },
+  );
 
   setVisibleOnAllWorkspaces = jest.fn();
 
@@ -205,6 +218,7 @@ class FakeWindow extends EventEmitter {
 
   private reveal(call: string) {
     this.calls.push(call);
+    this.ops.push(call);
     const wasVisible = this.visible;
     this.visible = true;
     if (!wasVisible && this.emitsShow) this.emit('show');
@@ -320,6 +334,20 @@ describe('hiding X-Shot windows for a capture', () => {
     restoreWindowsAfterCapture();
 
     expect(visibility(editor)).toEqual(SHOWN_OPAQUE);
+  });
+
+  it('ignores a delayed macOS show event that arrives while the window is hidden', async () => {
+    const preferences = await shownPreferences();
+    await hideWindowsForCapture();
+    expect(visibility(preferences)).toEqual(HIDDEN_TRANSPARENT);
+
+    // Delayed occlusion notification from an earlier show() arriving after hide().
+    preferences.emit('show');
+    expect(visibility(preferences)).toEqual(HIDDEN_TRANSPARENT);
+
+    // A genuine subsequent show() still restores full opacity.
+    preferences.show();
+    expect(visibility(preferences)).toEqual(SHOWN_OPAQUE);
   });
 
   it('a window that fails to hide stays opaque', async () => {
@@ -619,4 +647,158 @@ describe('capture sessions', () => {
       reason: 'screen-permission',
     });
   });
+});
+
+describe('overlay window bounds and stacking', () => {
+  const PRIMARY_DISPLAY = {
+    id: 1,
+    bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+    workArea: { x: 0, y: 30, width: 1920, height: 1050 },
+    scaleFactor: 1,
+  };
+  const SECONDARY_DISPLAY = {
+    id: 2,
+    bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+    workArea: { x: 1920, y: 30, width: 1920, height: 1050 },
+    scaleFactor: 1,
+  };
+  const originalPlatform = process.platform;
+
+  const setPlatform = (platform: typeof process.platform) => {
+    Object.defineProperty(process, 'platform', {
+      value: platform,
+      configurable: true,
+    });
+  };
+
+  const setupDualDisplays = (focused: typeof PRIMARY_DISPLAY) => {
+    (screen.getAllDisplays as jest.Mock).mockReturnValue([
+      PRIMARY_DISPLAY,
+      SECONDARY_DISPLAY,
+    ]);
+    (screen.getPrimaryDisplay as jest.Mock).mockReturnValue(PRIMARY_DISPLAY);
+    (screen.getDisplayNearestPoint as jest.Mock).mockReturnValue(focused);
+    (desktopCapturer.getSources as jest.Mock).mockImplementation(
+      async (options: {
+        types: string[];
+        thumbnailSize: { width: number; height: number };
+      }) => {
+        const { width, height } = options.thumbnailSize;
+        if (!options.types.includes('screen')) return [];
+        return [PRIMARY_DISPLAY, SECONDARY_DISPLAY].map((d, i) => ({
+          id: `screen:${d.id}:0`,
+          name: `Screen ${i + 1}`,
+          display_id: String(d.id),
+          appIcon: null,
+          thumbnail: fakeImage(`display-${d.id}`, width, height),
+        }));
+      },
+    );
+  };
+
+  afterEach(() => {
+    setPlatform(originalPlatform);
+  });
+
+  it.each([
+    ['primary', PRIMARY_DISPLAY],
+    ['secondary', SECONDARY_DISPLAY],
+  ])(
+    'macOS covers full display bounds above the menu bar on both displays when %s is focused',
+    async (_label, focusedDisplay) => {
+      setPlatform('darwin');
+      setupDualDisplays(focusedDisplay);
+      shownEditor();
+
+      expect(await startCapture('hotkey')).toBe(true);
+      const created = overlays();
+      expect(created).toHaveLength(2);
+
+      // Emit unfocused first, then focused (the ordering that triggers menu-bar clamping).
+      const unfocused = created.find(
+        (w) => !w.url.includes(`displayId=${focusedDisplay.id}&`),
+      )!;
+      const focused = created.find((w) =>
+        w.url.includes(`displayId=${focusedDisplay.id}&`),
+      )!;
+      unfocused.emit('ready-to-show');
+      focused.emit('ready-to-show');
+
+      [
+        { win: created[0], display: PRIMARY_DISPLAY },
+        { win: created[1], display: SECONDARY_DISPLAY },
+      ].forEach(({ win, display }) => {
+        expect(win.options).toMatchObject({
+          ...display.bounds,
+          frame: false,
+          hasShadow: false,
+          roundedCorners: false,
+          enableLargerThanScreen: true,
+          fullscreenable: false,
+        });
+        expect(win.options).not.toHaveProperty('titleBarStyle');
+        expect(win.setSimpleFullScreen).not.toHaveBeenCalled();
+        expect(win.setFullScreen).not.toHaveBeenCalled();
+        expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver');
+        expect(win.setAlwaysOnTop).not.toHaveBeenCalledWith(true, 'floating');
+        expect(win.setBounds).toHaveBeenCalledWith(display.bounds);
+
+        const expectedBoundsCall = `bounds:${display.bounds.x},${display.bounds.y},${display.bounds.width}x${display.bounds.height}`;
+        const showCall =
+          display.id === focusedDisplay.id ? 'show' : 'showInactive';
+        const showIndex = win.ops.indexOf(showCall);
+        expect(showIndex).toBeGreaterThan(-1);
+        expect(win.ops.indexOf(expectedBoundsCall)).toBeGreaterThan(-1);
+        expect(win.ops.indexOf(expectedBoundsCall)).toBeLessThan(showIndex);
+        expect(win.ops.lastIndexOf(expectedBoundsCall)).toBeGreaterThan(
+          showIndex,
+        );
+      });
+
+      expect(focused.focus).toHaveBeenCalledTimes(1);
+      expect(unfocused.focus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('showScreenshotOverlays uses screen-saver level', async () => {
+    setPlatform('darwin');
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [overlay] = overlays();
+    overlay.setAlwaysOnTop.mockClear();
+
+    showScreenshotOverlays();
+
+    expect(overlay.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver');
+  });
+
+  it.each(['win32', 'linux'] as const)(
+    'keeps focused-display fullscreen and screen-saver stacking on %s',
+    async (platform) => {
+      setPlatform(platform);
+      setupDualDisplays(SECONDARY_DISPLAY);
+      shownEditor();
+
+      expect(await startCapture('hotkey')).toBe(true);
+      const created = overlays();
+      expect(created).toHaveLength(2);
+      created.forEach((w) => w.emit('ready-to-show'));
+
+      const [primaryWin, secondaryWin] = created;
+      created.forEach((win) => {
+        expect(win.options).toMatchObject({
+          frame: false,
+          hasShadow: false,
+          roundedCorners: false,
+          enableLargerThanScreen: true,
+          fullscreenable: true,
+        });
+        expect(win.options).not.toHaveProperty('titleBarStyle');
+        expect(win.setSimpleFullScreen).not.toHaveBeenCalled();
+        expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver');
+      });
+      expect(secondaryWin.setFullScreen).toHaveBeenCalledWith(true);
+      expect(primaryWin.setFullScreen).not.toHaveBeenCalled();
+    },
+  );
 });

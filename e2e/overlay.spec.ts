@@ -3,6 +3,7 @@ import { expect, test, type Locator } from '@playwright/test';
 import {
   HIDDEN,
   SHOWN,
+  displayCount,
   editorFor,
   launchPackagedApp,
   openOverlays,
@@ -54,6 +55,67 @@ async function preferencesVisible(
   }
 }
 
+interface OverlayGeometry {
+  displayId: number;
+  visible: boolean;
+  bounds: { x: number; y: number; width: number; height: number };
+  contentBounds: { x: number; y: number; width: number; height: number };
+  displayBounds: { x: number; y: number; width: number; height: number } | null;
+  isSimpleFullScreen: boolean;
+}
+
+async function overlayGeometries(
+  packaged: PackagedApp,
+  attempt = 1,
+): Promise<OverlayGeometry[]> {
+  try {
+    return await packaged.app.evaluate(({ BrowserWindow, screen }) => {
+      const displays = screen.getAllDisplays();
+      return BrowserWindow.getAllWindows()
+        .filter(
+          (win) =>
+            !win.webContents.isDestroyed() &&
+            win.webContents.getURL().includes('#/screenshot'),
+        )
+        .map((win) => {
+          const url = win.webContents.getURL();
+          const queryIndex = url.indexOf('?');
+          const params = new URLSearchParams(
+            queryIndex >= 0 ? url.slice(queryIndex + 1) : '',
+          );
+          const displayId = Number(params.get('displayId'));
+          const display = displays.find((d) => d.id === displayId);
+          return {
+            displayId,
+            visible: win.isVisible(),
+            bounds: win.getBounds(),
+            contentBounds: win.getContentBounds(),
+            displayBounds: display?.bounds ?? null,
+            isSimpleFullScreen:
+              process.platform === 'darwin' ? win.isSimpleFullScreen() : false,
+          };
+        });
+    });
+  } catch (error) {
+    const lost = String(error).includes(PLAYWRIGHT_LOST_RESULT);
+    if (!lost || attempt >= 3) throw error;
+    return overlayGeometries(packaged, attempt + 1);
+  }
+}
+
+async function stubFocusedDisplay(
+  { app }: PackagedApp,
+  index: number,
+): Promise<void> {
+  await app.evaluate(({ screen }, targetIndex) => {
+    const target = screen.getAllDisplays()[targetIndex];
+    if (!target) {
+      throw new Error(`No display at index ${targetIndex}`);
+    }
+    Object.assign(screen, { getDisplayNearestPoint: () => target });
+  }, index);
+}
+
 /** Mean RGB brightness (0-255) of the image an <img> shows. */
 async function brightnessOf(image: Locator): Promise<number> {
   return image.evaluate(async (img: HTMLImageElement) => {
@@ -103,6 +165,73 @@ test.describe('capture overlays', () => {
     await overlays[0].keyboard.down('Escape');
 
     await expect.poll(() => overlayPages(current).length).toBe(0);
+  });
+
+  test('every overlay covers its full display bounds regardless of which display is active', async () => {
+    const current = packaged as PackagedApp;
+    await stubScreenAccess(current, 'granted');
+    await stubOverlaySources(current);
+    // Wait for the editor's initial ready-to-show so each iteration hides and
+    // restores it cleanly instead of racing with cancel cleanup.
+    await expect
+      .poll(async () => (await windowLooks(current)).editor)
+      .toEqual(SHOWN);
+    const totalDisplays = await displayCount(current);
+    const displayIndices = Array.from({ length: totalDisplays }, (_, i) => i);
+
+    await displayIndices.reduce(async (previous, focusedIndex) => {
+      await previous;
+      await stubFocusedDisplay(current, focusedIndex);
+      const overlays = await openOverlays(current);
+      expect((await windowLooks(current)).editor).toEqual(HIDDEN);
+
+      let finalGeos: OverlayGeometry[] = [];
+      await expect(async () => {
+        finalGeos = await overlayGeometries(current);
+        expect(finalGeos).toHaveLength(totalDisplays);
+        finalGeos.forEach((geo) => {
+          expect(geo.visible).toBe(true);
+          expect(geo.displayBounds).not.toBeNull();
+          expect(geo.bounds).toEqual(geo.displayBounds);
+          expect(geo.contentBounds).toEqual(geo.displayBounds);
+          if (process.platform === 'darwin') {
+            expect(geo.isSimpleFullScreen).toBe(false);
+          }
+        });
+      }).toPass({ timeout: 10_000 });
+
+      await Promise.all(
+        overlays.map(async (overlay) => {
+          const layout = await overlay.evaluate(() => {
+            const dock = document.querySelector('[data-quick-dock="1"]');
+            const rect = dock?.getBoundingClientRect();
+            return {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              dockTop: rect?.top ?? -1,
+              dockBottom: rect?.bottom ?? Number.POSITIVE_INFINITY,
+            };
+          });
+          const queryIndex = overlay.url().indexOf('?');
+          const params = new URLSearchParams(
+            queryIndex >= 0 ? overlay.url().slice(queryIndex + 1) : '',
+          );
+          const displayId = Number(params.get('displayId'));
+          const geo = finalGeos.find((g) => g.displayId === displayId);
+          expect(geo?.displayBounds).toBeTruthy();
+          expect(layout.width).toBe(geo?.displayBounds?.width);
+          expect(layout.height).toBe(geo?.displayBounds?.height);
+          expect(layout.dockTop).toBeGreaterThanOrEqual(0);
+          expect(layout.dockBottom).toBeLessThanOrEqual(layout.height);
+        }),
+      );
+
+      await overlays[0].getByRole('button', { name: 'Cancel' }).click();
+      await expect.poll(() => overlayPages(current).length).toBe(0);
+      await expect
+        .poll(async () => (await windowLooks(current)).editor)
+        .toEqual(SHOWN);
+    }, Promise.resolve());
   });
 
   test('Preferences is hidden during a capture and comes back after', async () => {
