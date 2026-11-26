@@ -1,6 +1,19 @@
 export const emailRegex = /[a-zA-Z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g;
-export const obfuscatedEmailRegex =
-  /\b[A-Za-z0-9._%+-]+\s*(?:\(|\[)?at(?:\)|\])\s*[A-Za-z0-9.-]+\s*(?:\(|\[)?dot(?:\)|\])\s*[A-Za-z]{2,}\b/gi;
+const bracketedSep = (word: string) =>
+  String.raw`\s*(?:\(${word}\)|\[${word}\])\s*`;
+const bareSep = (word: string) => String.raw`\s+${word}\s+`;
+const obfuscatedSep = (word: string) =>
+  String.raw`(?:${bracketedSep(word)}|${bareSep(word)})`;
+const commonTld = String.raw`(?:com|org|net|edu|gov|mil|int|io|co|ai|app|dev|me|us|uk|ca|de|fr|au|jp|nl|eu|info|biz|xyz|gg|tv|cc|sh|to)`;
+const obfuscatedLocal = String.raw`[A-Za-z0-9._%+-]+`;
+const obfuscatedDomain = (dotSep: string) =>
+  String.raw`[A-Za-z0-9.-]+(?:${dotSep}[A-Za-z0-9-]+)*${dotSep}`;
+// Bracketed forms accept any 2+ letter TLD; bare whitespace-delimited forms
+// require a common TLD so ordinary prose ("looked at the dot matrix") is ignored.
+export const obfuscatedEmailRegex = new RegExp(
+  String.raw`\b${obfuscatedLocal}(?:${bracketedSep('at')}${obfuscatedDomain(bracketedSep('dot'))}[A-Za-z]{2,}|${obfuscatedSep('at')}${obfuscatedDomain(obfuscatedSep('dot'))}${commonTld})\b`,
+  'gi',
+);
 // Separators between digit groups are required, so unbroken digit runs
 // (epoch timestamps, order numbers) never match; the lookarounds keep the
 // pattern from matching part of a longer dotted or grouped number (IPs,
@@ -111,8 +124,11 @@ export const dobLabelRegex = /(dob|date\s*of\s*birth|birthday)/i;
 export const zipUSRegex = /\b\d{5}(?:-\d{4})?\b/g;
 export const postalCARegex =
   /\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b/g;
-export const postalUKRegex =
-  /\b([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z]{2}[0-9]{1,2})|([A-Za-z][0-9][A-Za-z])|([A-Za-z]{2}[0-9][A-Za-z])))[ ]?[0-9][A-Za-z]{2})\b/g;
+const ukOutward = String.raw`(?:[A-Za-z][0-9]{1,2}|[A-Za-z]{2}[0-9]{1,2}|[A-Za-z][0-9][A-Za-z]|[A-Za-z]{2}[0-9][A-Za-z])`;
+export const postalUKRegex = new RegExp(
+  String.raw`\b(?:[Gg][Ii][Rr] 0[Aa]{2}|${ukOutward} ?[0-9][A-Za-z]{2})\b`,
+  'g',
+);
 export const uuidRegex =
   /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b/g;
 export const macRegex = /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g;

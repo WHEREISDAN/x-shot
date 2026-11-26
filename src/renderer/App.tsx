@@ -19,6 +19,8 @@ import type { CaptureFailure } from '../shared/ipc-types';
 import TitleBar from './components/TitleBar';
 import PreferencesWindow from './components/preferences/PreferencesWindow';
 import { checkAndMigrateIfNeeded } from './utils/migrate-preferences';
+import openPreferencesWindow from './utils/open-preferences';
+import { isTextEntryElement } from './hooks/use-editor-shortcuts';
 import { useCaptureResult } from './hooks/use-capture-result';
 import { SUCCESS_TOAST_MS, useExportActions } from './hooks/use-export-actions';
 import removeLegacyPiiMaskKeys from './hooks/pii/legacy-mask-storage';
@@ -49,6 +51,24 @@ function Hello() {
   useEffect(() => {
     checkAndMigrateIfNeeded();
     removeLegacyPiiMaskKeys();
+  }, []);
+
+  // Fallback for Windows/Linux when the native menu bar is hidden.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key === ','
+      ) {
+        if (isTextEntryElement(document.activeElement)) return;
+        event.preventDefault();
+        openPreferencesWindow();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   return (

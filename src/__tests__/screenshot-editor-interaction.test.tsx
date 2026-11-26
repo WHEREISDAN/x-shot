@@ -183,6 +183,83 @@ describe('ScreenshotEditor interaction', () => {
     expect(stage().querySelectorAll('ellipse')).toHaveLength(0);
   });
 
+  it('stops right-click panning on pointerup even when contextmenu fires afterward (Windows sequence)', async () => {
+    await renderEditor();
+    const svg = stage();
+    const setPointerCapture = jest.fn();
+    svg.setPointerCapture = setPointerCapture;
+    const exportStage = document.querySelector(
+      '[data-stage-mode] > div',
+    ) as HTMLElement;
+
+    fireEvent.pointerDown(svg, {
+      pointerId: 7,
+      button: 2,
+      clientX: 100,
+      clientY: 100,
+    });
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+
+    fireEvent.pointerMove(svg, {
+      pointerId: 7,
+      button: 2,
+      clientX: 140,
+      clientY: 125,
+    });
+    expect(exportStage.style.transform).toContain('translate(40px, 25px)');
+
+    fireEvent.pointerUp(svg, {
+      pointerId: 7,
+      button: 2,
+      clientX: 140,
+      clientY: 125,
+    });
+    // Windows emits contextmenu on right-button release (after pointerup).
+    const contextMenuAllowed = fireEvent.contextMenu(svg, {
+      clientX: 140,
+      clientY: 125,
+    });
+    expect(contextMenuAllowed).toBe(false);
+
+    // Moving the pointer afterwards must NOT keep panning.
+    fireEvent.pointerMove(svg, {
+      pointerId: 7,
+      clientX: 260,
+      clientY: 260,
+    });
+    expect(exportStage.style.transform).toContain('translate(40px, 25px)');
+  });
+
+  it('stops right-click panning on pointercancel', async () => {
+    await renderEditor();
+    const svg = stage();
+    const exportStage = document.querySelector(
+      '[data-stage-mode] > div',
+    ) as HTMLElement;
+
+    fireEvent.pointerDown(svg, {
+      pointerId: 3,
+      button: 2,
+      clientX: 50,
+      clientY: 50,
+    });
+    fireEvent.pointerMove(svg, {
+      pointerId: 3,
+      button: 2,
+      clientX: 80,
+      clientY: 70,
+    });
+    expect(exportStage.style.transform).toContain('translate(30px, 20px)');
+
+    fireEvent.pointerCancel(svg, { pointerId: 3 });
+    fireEvent.pointerMove(svg, {
+      pointerId: 3,
+      clientX: 200,
+      clientY: 200,
+    });
+    expect(exportStage.style.transform).toContain('translate(30px, 20px)');
+  });
+
   it('removes a text left empty, without an undo entry', async () => {
     await renderEditor();
     clickTool('Text');

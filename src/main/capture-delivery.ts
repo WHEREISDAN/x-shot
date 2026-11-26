@@ -6,6 +6,7 @@ import { captureAssets } from './capture-assets';
 import { CaptureError, toCaptureSuccess } from './capture-result';
 import {
   closeScreenshotOverlays,
+  ensureMainWindowLoaded,
   ensureMainWindowReady,
   hideWindowsForCapture,
 } from './windows';
@@ -93,8 +94,9 @@ export const deliverWindowCapture = async (
   if (!isSessionCurrent(session)) return;
 
   // Thumbnails are scaled to fill the requested box, so the window is
-  // requested at its measured native size.
-  const editor = await ensureMainWindowReady();
+  // requested at its measured native size. Keep the editor hidden until the
+  // window capture completes so X-Shot never appears in the captured window.
+  const editor = await ensureMainWindowLoaded({ show: false });
   const measureStart = Date.now();
   const nativeSize = await measureWindowSource(editor.webContents, sourceId);
   if (!isSessionCurrent(session)) return;

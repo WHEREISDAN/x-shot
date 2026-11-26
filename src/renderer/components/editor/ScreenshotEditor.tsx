@@ -361,15 +361,14 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         }
         return;
       }
-      // Middle button or spacebar to pan
-      if (e.button === 1 || isSpacePressed) {
+      // Middle button, right button, or spacebar to pan
+      if (e.button === 1 || e.button === 2 || isSpacePressed) {
         captureStagePointer(e.currentTarget, e.pointerId);
         setIsPanning(true);
         panLast.current = { x: e.clientX, y: e.clientY };
         return;
       }
-      // The right button opens the pan gesture via onContextMenu; it never
-      // selects or draws.
+      // Only the left button selects or draws.
       if (e.button !== 0) return;
       const { x, y } = toImageCoords(e.clientX, e.clientY);
       captureStagePointer(e.currentTarget, e.pointerId);
@@ -677,8 +676,6 @@ const ScreenshotEditor = memo(function ScreenshotEditor({
         }}
         onContextMenu={(e) => {
           e.preventDefault();
-          setIsPanning(true);
-          panLast.current = { x: e.clientX, y: e.clientY };
         }}
         shapes={state.shapes}
         piiMasks={pii.maskShapes}

@@ -167,6 +167,7 @@ export type MainToRendererEvents = {
   'capture-result': CaptureResult;
   'window-state': WindowState;
   'flush-preferences': FlushPreferencesRequest;
+  'preferences-changed': AppPreferences;
 };
 
 export interface IpcInvokes {

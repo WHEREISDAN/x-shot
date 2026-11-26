@@ -109,4 +109,71 @@ describe('useEditorState gestures and undo', () => {
     act(() => result.current.redo());
     expect(result.current.shapes).toHaveLength(1);
   });
+
+  it('composes multiple synchronous shape mutations in one frame without stale closures', () => {
+    const rect2: RectShape = { ...rect, id: 'rect-2', x: 50, y: 60 };
+    const { result } = renderHook(() => useEditorState());
+
+    act(() => {
+      result.current.addShape(rect);
+      result.current.addShape(rect2);
+      result.current.addShapes([text]);
+      result.current.updateTextShape(text.id, 'Updated');
+      result.current.updateShape(
+        rect2.id,
+        (s) => ({ ...s, width: 150 }) as RectShape,
+      );
+      result.current.selectShape(rect.id);
+      result.current.moveSelectedShapeBy(5, 3);
+      result.current.moveSelectedShapeBy(7, 2);
+      result.current.deleteShapeById(rect2.id);
+    });
+
+    expect(result.current.shapes).toHaveLength(2);
+    expect(result.current.getShapeById(rect.id)).toMatchObject({
+      x: 22,
+      y: 25,
+    });
+    expect(result.current.getShapeById(text.id)).toMatchObject({
+      text: 'Updated',
+    });
+    expect(result.current.getShapeById(rect2.id)).toBeUndefined();
+  });
+
+  it('clears stale selectedShapeId and open gestureBaseRef on undo and redo', () => {
+    const rect2: RectShape = { ...rect, id: 'rect-2', x: 40, y: 40 };
+    const { result } = renderHook(() => useEditorState());
+
+    act(() => {
+      result.current.addShape(rect);
+    });
+    act(() => {
+      result.current.addShape(rect2);
+      result.current.selectShape(rect2.id);
+    });
+    expect(result.current.selectedShapeId).toBe(rect2.id);
+
+    // Start a gesture then undo before ending it.
+    act(() => {
+      result.current.beginGesture();
+      result.current.moveSelectedShapeBy(15, 0);
+    });
+    act(() => result.current.undo());
+
+    // rect2 is no longer in restored shapes, so selectedShapeId must be cleared.
+    expect(result.current.shapes.map((s) => s.id)).toEqual([rect.id]);
+    expect(result.current.selectedShapeId).toBeNull();
+
+    // Ending the interrupted gesture must not push a bogus undo entry.
+    act(() => result.current.endGesture());
+    act(() => result.current.undo());
+    expect(result.current.shapes).toEqual([]);
+
+    // Redo restores [rect]; selecting rect and undoing clears it too.
+    act(() => result.current.redo());
+    act(() => result.current.selectShape(rect.id));
+    expect(result.current.selectedShapeId).toBe(rect.id);
+    act(() => result.current.undo());
+    expect(result.current.selectedShapeId).toBeNull();
+  });
 });

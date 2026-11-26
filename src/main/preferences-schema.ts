@@ -5,6 +5,7 @@ import type {
 import { isBackgroundId } from '../shared/capture-asset';
 import { isBuiltinBackgroundId } from '../shared/builtin-backgrounds';
 import { isPlainObject, type PlainRecord } from '../shared/deep-merge';
+import PRESENTATION_BOUNDS from '../shared/presentation-bounds';
 
 export { deepMerge, isPlainObject } from '../shared/deep-merge';
 
@@ -248,14 +249,14 @@ function sanitizePresentation(
         w: finiteNumber(
           aspect.custom.w,
           fallback.aspect.custom?.w ?? 16,
-          1,
-          100,
+          PRESENTATION_BOUNDS.customAspect.min,
+          PRESENTATION_BOUNDS.customAspect.max,
         ),
         h: finiteNumber(
           aspect.custom.h,
           fallback.aspect.custom?.h ?? 9,
-          1,
-          100,
+          PRESENTATION_BOUNDS.customAspect.min,
+          PRESENTATION_BOUNDS.customAspect.max,
         ),
       }
     : fallback.aspect.custom;
@@ -275,18 +276,53 @@ function sanitizePresentation(
       source.backgroundImage,
       fallback.backgroundImage,
     ),
-    padding: finiteNumber(source.padding, fallback.padding, 0, 512),
-    inset: finiteNumber(source.inset, fallback.inset, 0, 256),
-    radius: finiteNumber(source.radius, fallback.radius, 0, 512),
+    padding: finiteNumber(
+      source.padding,
+      fallback.padding,
+      PRESENTATION_BOUNDS.padding.min,
+      PRESENTATION_BOUNDS.padding.schemaMax,
+    ),
+    inset: finiteNumber(
+      source.inset,
+      fallback.inset,
+      PRESENTATION_BOUNDS.inset.min,
+      PRESENTATION_BOUNDS.inset.schemaMax,
+    ),
+    radius: finiteNumber(
+      source.radius,
+      fallback.radius,
+      PRESENTATION_BOUNDS.radius.min,
+      PRESENTATION_BOUNDS.radius.schemaMax,
+    ),
     shadow: {
       enabled:
         typeof shadow.enabled === 'boolean'
           ? shadow.enabled
           : fallbackShadow.enabled,
-      x: finiteNumber(shadow.x, fallbackShadow.x, -200, 200),
-      y: finiteNumber(shadow.y, fallbackShadow.y, -200, 200),
-      blur: finiteNumber(shadow.blur, fallbackShadow.blur, 0, 300),
-      spread: finiteNumber(shadow.spread, fallbackShadow.spread, -100, 100),
+      x: finiteNumber(
+        shadow.x,
+        fallbackShadow.x,
+        PRESENTATION_BOUNDS.shadowX.schemaMin,
+        PRESENTATION_BOUNDS.shadowX.schemaMax,
+      ),
+      y: finiteNumber(
+        shadow.y,
+        fallbackShadow.y,
+        PRESENTATION_BOUNDS.shadowY.schemaMin,
+        PRESENTATION_BOUNDS.shadowY.schemaMax,
+      ),
+      blur: finiteNumber(
+        shadow.blur,
+        fallbackShadow.blur,
+        PRESENTATION_BOUNDS.shadowBlur.min,
+        PRESENTATION_BOUNDS.shadowBlur.schemaMax,
+      ),
+      spread: finiteNumber(
+        shadow.spread,
+        fallbackShadow.spread,
+        PRESENTATION_BOUNDS.shadowSpread.schemaMin,
+        PRESENTATION_BOUNDS.shadowSpread.schemaMax,
+      ),
       color: colorValue(shadow.color, fallbackShadow.color),
     },
     aspect: preset === 'custom' ? { preset, custom } : { preset },

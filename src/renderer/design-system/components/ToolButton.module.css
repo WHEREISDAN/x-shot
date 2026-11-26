@@ -19,9 +19,15 @@
   display: block;
 }
 
-.toolButton:hover {
+.toolButton:hover:not(:disabled) {
   background: var(--color-raise-strong);
   color: var(--color-text);
+}
+
+.toolButton:disabled {
+  color: var(--color-text-faint);
+  opacity: 0.55;
+  cursor: default;
 }
 
 .active,

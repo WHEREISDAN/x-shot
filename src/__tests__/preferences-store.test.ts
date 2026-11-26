@@ -134,15 +134,72 @@ describe('writes', () => {
       store.update({ export: { filenamePattern: 'after' } }),
     ).rejects.toThrow('disk full');
     expect(readDisk().export.filenamePattern).toBe('before');
+    expect((await store.load()).export.filenamePattern).toBe('before');
     expect(tempFiles()).toEqual([]);
 
-    // Later writes still go through.
+    // Later writes build on the last persisted copy, not the failed one.
     failRename = false;
     await store.update({ export: { autoSave: true } });
     expect(readDisk().export).toMatchObject({
-      filenamePattern: 'after',
+      filenamePattern: 'before',
       autoSave: true,
     });
+  });
+
+  it('rolls back cache on a failed replace so load() returns prior persisted prefs', async () => {
+    let failRename = false;
+    const fileOps: AtomicFileOps = {
+      ...nodeFileOps,
+      rename: (from, to) =>
+        failRename
+          ? Promise.reject(new Error('read-only filesystem'))
+          : nodeFileOps.rename(from, to),
+    };
+    const store = makeStore({ fileOps });
+    await store.update({ export: { filenamePattern: 'persisted' } });
+
+    failRename = true;
+    await expect(
+      store.replace({
+        ...DEFAULTS,
+        export: { ...DEFAULTS.export, filenamePattern: 'unpersisted-reset' },
+      }),
+    ).rejects.toThrow('read-only filesystem');
+
+    expect((await store.load()).export.filenamePattern).toBe('persisted');
+    expect(readDisk().export.filenamePattern).toBe('persisted');
+  });
+
+  it('keeps a newer queued write when an earlier write fails', async () => {
+    let attempts = 0;
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const fileOps: AtomicFileOps = {
+      ...nodeFileOps,
+      rename: async (from, to) => {
+        attempts += 1;
+        if (attempts === 2) {
+          await firstBlocked;
+          throw new Error('transient failure');
+        }
+        return nodeFileOps.rename(from, to);
+      },
+    };
+    const store = makeStore({ fileOps });
+    await store.update({ export: { filenamePattern: 'v1' } });
+
+    const failing = store.update({ export: { filenamePattern: 'v2' } });
+    const succeeding = store.update({ export: { filenamePattern: 'v3' } });
+    releaseFirst();
+
+    await expect(failing).rejects.toThrow('transient failure');
+    await expect(succeeding).resolves.toMatchObject({
+      export: { filenamePattern: 'v3' },
+    });
+    expect((await store.load()).export.filenamePattern).toBe('v3');
+    expect(readDisk().export.filenamePattern).toBe('v3');
   });
 
   it('survives a crash mid-write: the previous file stays intact', async () => {

@@ -7,6 +7,7 @@ import {
   PanelRight,
   Plus,
   Redo2,
+  Settings,
   Trash2,
   Undo2,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ import {
   IslandSeparator,
   Switch,
 } from '../../design-system';
+import openPreferencesWindow from '../../utils/open-preferences';
 import styles from './TopBar.module.css';
 
 interface TopBarProps {
@@ -36,6 +38,7 @@ interface TopBarProps {
   onSave: () => void | Promise<void>;
   /** Set while the Presentation panel is hidden, to show it again. */
   onShowPanel?: () => void;
+  onOpenPreferences?: () => void;
 }
 
 /** The two islands under the title strip: history and view, and actions. */
@@ -55,6 +58,7 @@ const TopBar = memo(function TopBar({
   onCopy,
   onSave,
   onShowPanel,
+  onOpenPreferences = openPreferencesWindow,
 }: TopBarProps) {
   return (
     <>
@@ -115,6 +119,11 @@ const TopBar = memo(function TopBar({
             tooltipAlign="start"
           />
         )}
+        <IconButton
+          label="Preferences"
+          icon={<Settings />}
+          onClick={onOpenPreferences}
+        />
         <IconButton
           label="Delete"
           icon={<Trash2 />}

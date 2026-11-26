@@ -1,13 +1,45 @@
-import { useCallback } from 'react';
-import type { AppPreferences } from '../../../shared/ipc-types';
+import { useCallback, useEffect, useState } from 'react';
+import type { AppPreferences, WindowState } from '../../../shared/ipc-types';
 import type { UpdatePreferences } from '../../hooks/use-preferences';
 import { Button, Select, Switch } from '../../design-system';
 import { createRendererLogger } from '../../utils/logger';
 import HotkeyRecorder from './HotkeyRecorder';
 import { tildePath, useHomeFolder } from './home-folder';
 import SettingsCard from './SettingsCard';
-import SettingsRow, { PathText } from './SettingsRow';
+import SettingsRow, { descriptionId, PathText } from './SettingsRow';
 import controls from './PreferenceControls.module.css';
+
+function initialPlatform(): WindowState['platform'] | null {
+  const fromPreload = window?.electron?.platform;
+  if (fromPreload) return fromPreload;
+  if (typeof navigator !== 'undefined' && /linux/i.test(navigator.platform)) {
+    return 'linux';
+  }
+  return null;
+}
+
+function usePlatform(): WindowState['platform'] | null {
+  const [platform, setPlatform] = useState<WindowState['platform'] | null>(
+    initialPlatform,
+  );
+  useEffect(() => {
+    if (platform) return () => {};
+    const api = window?.electron?.windowControls;
+    if (!api) return () => {};
+    let active = true;
+    api
+      .getState()
+      .then((state) => {
+        if (active && state?.platform) setPlatform(state.platform);
+        return state;
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [platform]);
+  return platform;
+}
 
 const logger = createRendererLogger('preferences-general');
 
@@ -35,6 +67,7 @@ export default function GeneralSection({
 }: GeneralSectionProps) {
   const { capture, system } = preferences;
   const home = useHomeFolder();
+  const launchAtStartupSupported = usePlatform() !== 'linux';
 
   const handleHotkeyChange = useCallback(
     (hotkey: string) => onUpdate({ capture: { hotkey } }),
@@ -143,10 +176,21 @@ export default function GeneralSection({
         <SettingsRow
           labelId="launch-startup-label"
           label="Launch X-Shot at system startup"
+          description={
+            launchAtStartupSupported
+              ? undefined
+              : 'Not supported on Linux. Configure autostart in your desktop environment.'
+          }
         >
           <Switch
             aria-labelledby="launch-startup-label"
-            checked={system.launchAtStartup}
+            aria-describedby={
+              launchAtStartupSupported
+                ? undefined
+                : descriptionId('launch-startup-label')
+            }
+            checked={launchAtStartupSupported ? system.launchAtStartup : false}
+            disabled={!launchAtStartupSupported}
             onChange={(launchAtStartup) =>
               onUpdate({ system: { launchAtStartup } })
             }

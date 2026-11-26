@@ -14,6 +14,7 @@ import {
   type PackagedApp,
 } from './packaged-app';
 import { REDO, UNDO, drawEllipse, stageEllipses } from './editor-actions';
+import { stubCaptureSources } from './capture-stubs';
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'ocr-pii.png');
 
@@ -108,6 +109,10 @@ test.describe('capture result and editor lifecycle', () => {
     await page.keyboard.press(REDO);
     await expect(stageEllipses(page, imageA)).toHaveCount(1);
 
+    await stubCaptureSources(packaged, {
+      screenPng: FIXTURE_PATH,
+      window: { noise: { width: 64, height: 64 } },
+    });
     await triggerFailedCapture(packaged);
 
     await expect(page.getByRole('alert')).toBeVisible();

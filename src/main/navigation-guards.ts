@@ -5,11 +5,19 @@ import { resolveHtmlPath } from './util';
 
 const logger = getLogger('security');
 
+/** Decodes percent-escapes per segment while preserving encoded slashes. */
+function normalizePathname(pathname: string): string {
+  return pathname
+    .split('/')
+    .map((segment) => decodeURIComponent(segment).replace(/\//g, '%2F'))
+    .join('/');
+}
+
 /** A page URL without its query and route, comparable across encodings. */
 function pageOf(raw: string): string | null {
   try {
     const url = new URL(raw);
-    const page = `${url.protocol}//${url.host}${decodeURI(url.pathname)}`;
+    const page = `${url.protocol}//${url.host}${normalizePathname(url.pathname)}`;
     return process.platform === 'win32' ? page.toLowerCase() : page;
   } catch {
     return null;

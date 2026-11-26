@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AppPreferences,
   BackgroundImageRef,
   PreferencesUpdate,
   PresentationPreferences,
 } from '../../shared/ipc-types';
 import { deepMerge } from '../../shared/deep-merge';
+import PRESENTATION_BOUNDS from '../../shared/presentation-bounds';
 import { createRendererLogger } from '../utils/logger';
 import usePreferencesWriter from './use-preferences-writer';
 
@@ -82,21 +84,52 @@ export function usePresentationState(): [
     }
   });
 
+  const lastDefaultScaleRef = useRef<number | null>(null);
+
   useEffect(() => {
     const api = window?.electron?.ipcRenderer;
-    if (!api) return;
+    if (!api) return () => {};
+    let active = true;
+
+    const applyIncoming = (preferences: AppPreferences, initial: boolean) => {
+      if (!active || !preferences?.presentation) return;
+      const pendingPresentation = writer.getPending()?.presentation;
+      const presentation = pendingPresentation
+        ? deepMerge(preferences.presentation, pendingPresentation)
+        : preferences.presentation;
+      const incomingScale = preferences.export?.defaultScale;
+      const scaleChanged =
+        incomingScale !== undefined &&
+        (initial || incomingScale !== lastDefaultScaleRef.current);
+      if (incomingScale !== undefined) {
+        lastDefaultScaleRef.current = incomingScale;
+      }
+      setSettings((current) => ({
+        ...presentation,
+        exportScale: scaleChanged
+          ? clampExportScale(incomingScale)
+          : current.exportScale,
+      }));
+    };
+
     const load = async () => {
       const preferences = await api.invoke('get-preferences', {});
-      if (!preferences?.presentation) return;
-      setSettings({
-        ...preferences.presentation,
-        exportScale: clampExportScale(preferences.export.defaultScale),
-      });
+      applyIncoming(preferences, true);
     };
     load().catch((error) =>
       logger.warn('Failed to load presentation preferences', error),
     );
-  }, []);
+
+    const unsubscribe =
+      typeof api.on === 'function'
+        ? api.on('preferences-changed', (next) => applyIncoming(next, false))
+        : undefined;
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [writer]);
 
   /** Applies a change now; saves it at once or after a pause. */
   const change = useCallback(
@@ -148,8 +181,14 @@ export function usePresentationState(): [
             aspect: {
               preset: 'custom',
               custom: {
-                w: Math.max(1, Math.round(w)),
-                h: Math.max(1, Math.round(h)),
+                w: Math.min(
+                  PRESENTATION_BOUNDS.customAspect.max,
+                  Math.max(PRESENTATION_BOUNDS.customAspect.min, Math.round(w)),
+                ),
+                h: Math.min(
+                  PRESENTATION_BOUNDS.customAspect.max,
+                  Math.max(PRESENTATION_BOUNDS.customAspect.min, Math.round(h)),
+                ),
               },
             },
           },

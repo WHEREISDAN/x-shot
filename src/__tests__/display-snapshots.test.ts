@@ -122,4 +122,22 @@ describe('findDisplaySnapshot', () => {
     releaseDisplaySnapshots();
     expect(findDisplaySnapshot({ displayId: 1 })).toBeUndefined();
   });
+
+  it('propagates desktopCapturer errors and releases partial snapshots', async () => {
+    (desktopCapturer.getSources as jest.Mock)
+      .mockImplementationOnce(async () => [
+        {
+          id: 'screen:1:0',
+          display_id: '1',
+          thumbnail: image(2880, 1800),
+        },
+      ])
+      .mockRejectedValueOnce(new Error('Failed to get sources'));
+
+    await expect(prepareDisplaySnapshots('session-err')).rejects.toThrow(
+      'Failed to get sources',
+    );
+    expect(findDisplaySnapshot({ displayId: 1 })).toBeUndefined();
+    expect(findDisplaySnapshot({ displayId: 2 })).toBeUndefined();
+  });
 });

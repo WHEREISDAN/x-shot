@@ -11,23 +11,46 @@ function usePiiPreferences(): PiiPreferencesState {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    const api = window?.electron?.ipcRenderer;
+    let active = true;
+
+    const applyPii = (
+      pii:
+        | {
+            autoDetect: boolean;
+            defaultStyle: 'blur' | 'black';
+            detectors?: PiiDetectors | null;
+          }
+        | undefined,
+    ) => {
+      if (!active || !pii) return;
+      setCensorPIIState(pii.autoDetect);
+      setDefaultStyle(pii.defaultStyle);
+      setDetectors(pii.detectors ?? null);
+    };
+
     const loadPiiPreferences = async () => {
       try {
-        const api = window?.electron?.ipcRenderer;
         if (!api) return;
         const preferences = await api.invoke('get-preferences', {});
-        if (preferences?.pii) {
-          setCensorPIIState(preferences.pii.autoDetect);
-          setDefaultStyle(preferences.pii.defaultStyle);
-          setDetectors(preferences.pii.detectors ?? null);
-        }
+        applyPii(preferences?.pii);
       } catch (error) {
         logger.warn('Failed to load PII preferences', error);
       } finally {
-        setLoaded(true);
+        if (active) setLoaded(true);
       }
     };
     loadPiiPreferences();
+
+    const unsubscribe =
+      typeof api?.on === 'function'
+        ? api.on('preferences-changed', (next) => applyPii(next?.pii))
+        : undefined;
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const setCensorPII = useCallback(async (enabled: boolean) => {

@@ -83,6 +83,10 @@ const overlayViewport = () => ({
   height: window.innerHeight,
 });
 
+const GRID_SIZE = 8;
+const MIN_SELECTION_SIZE = 10;
+const snapToGrid = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
+
 export function useSelection({
   offsetX,
   offsetY,
@@ -94,6 +98,11 @@ export function useSelection({
   const [isSelecting, setSelecting] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const startRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const resizeStartRef = useRef<{
+    startX: number;
+    startY: number;
+    initialRect: SelectionArea;
+  } | null>(null);
   const moveOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const isPointInSelection = useCallback(
@@ -124,7 +133,11 @@ export function useSelection({
         if (handle) {
           setResizing(true);
           setResizeHandle(handle);
-          startRef.current = { x, y };
+          resizeStartRef.current = {
+            startX: x,
+            startY: y,
+            initialRect: { ...selection },
+          };
           e.preventDefault();
           return;
         }
@@ -141,6 +154,7 @@ export function useSelection({
       setResizing(false);
       setSelecting(true);
       setResizeHandle(null);
+      resizeStartRef.current = null;
       startRef.current = { x, y };
       setSelection({ x, y, width: 0, height: 0 });
       e.preventDefault();
@@ -152,63 +166,72 @@ export function useSelection({
     (e: React.MouseEvent) => {
       const currentX = e.clientX;
       const currentY = e.clientY;
-      const grid = 8;
-      const snap = (v: number) => Math.round(v / grid) * grid;
 
-      if (isResizing && selection && resizeHandle) {
-        const dx = currentX - startRef.current.x;
-        const dy = currentY - startRef.current.y;
-        let { x, y, width, height } = selection;
-        switch (resizeHandle) {
-          case 'top-left':
-            x += dx;
-            y += dy;
-            width -= dx;
-            height -= dy;
-            break;
-          case 'top-right':
-            y += dy;
-            width += dx;
-            height -= dy;
-            break;
-          case 'bottom-left':
-            x += dx;
-            width -= dx;
-            height += dy;
-            break;
-          case 'bottom-right':
-            width += dx;
-            height += dy;
-            break;
-          case 'top-middle':
-            y += dy;
-            height -= dy;
-            break;
-          case 'bottom-middle':
-            height += dy;
-            break;
-          case 'left-middle':
-            x += dx;
-            width -= dx;
-            break;
-          case 'right-middle':
-            width += dx;
-            break;
-          default:
-            break;
+      if (isResizing && resizeStartRef.current && resizeHandle) {
+        const { startX, startY, initialRect } = resizeStartRef.current;
+        const dx = currentX - startX;
+        const dy = currentY - startY;
+        const initialRight = initialRect.x + initialRect.width;
+        const initialBottom = initialRect.y + initialRect.height;
+
+        let left = initialRect.x;
+        let top = initialRect.y;
+        let right = initialRight;
+        let bottom = initialBottom;
+
+        const movesLeft =
+          resizeHandle === 'top-left' ||
+          resizeHandle === 'bottom-left' ||
+          resizeHandle === 'left-middle';
+        const movesRight =
+          resizeHandle === 'top-right' ||
+          resizeHandle === 'bottom-right' ||
+          resizeHandle === 'right-middle';
+        const movesTop =
+          resizeHandle === 'top-left' ||
+          resizeHandle === 'top-right' ||
+          resizeHandle === 'top-middle';
+        const movesBottom =
+          resizeHandle === 'bottom-left' ||
+          resizeHandle === 'bottom-right' ||
+          resizeHandle === 'bottom-middle';
+
+        if (movesLeft) {
+          left = Math.min(
+            snapToGrid(initialRect.x + dx),
+            initialRight - MIN_SELECTION_SIZE,
+          );
         }
+        if (movesRight) {
+          right = Math.max(
+            snapToGrid(initialRight + dx),
+            initialRect.x + MIN_SELECTION_SIZE,
+          );
+        }
+        if (movesTop) {
+          top = Math.min(
+            snapToGrid(initialRect.y + dy),
+            initialBottom - MIN_SELECTION_SIZE,
+          );
+        }
+        if (movesBottom) {
+          bottom = Math.max(
+            snapToGrid(initialBottom + dy),
+            initialRect.y + MIN_SELECTION_SIZE,
+          );
+        }
+
         setSelection(
           clampToViewport(
             {
-              x: snap(x),
-              y: snap(y),
-              width: Math.max(10, snap(width)),
-              height: Math.max(10, snap(height)),
+              x: left,
+              y: top,
+              width: right - left,
+              height: bottom - top,
             },
             overlayViewport(),
           ),
         );
-        startRef.current = { x: currentX, y: currentY };
         return;
       }
 
@@ -217,8 +240,8 @@ export function useSelection({
           keepInViewport(
             {
               ...selection,
-              x: snap(currentX - moveOffsetRef.current.x),
-              y: snap(currentY - moveOffsetRef.current.y),
+              x: snapToGrid(currentX - moveOffsetRef.current.x),
+              y: snapToGrid(currentY - moveOffsetRef.current.y),
             },
             overlayViewport(),
           ),
@@ -235,10 +258,10 @@ export function useSelection({
         setSelection(
           clampToViewport(
             {
-              x: snap(left),
-              y: snap(top),
-              width: snap(width),
-              height: snap(height),
+              x: snapToGrid(left),
+              y: snapToGrid(top),
+              width: snapToGrid(width),
+              height: snapToGrid(height),
             },
             overlayViewport(),
           ),
@@ -253,6 +276,7 @@ export function useSelection({
     setResizing(false);
     setSelecting(false);
     setResizeHandle(null);
+    resizeStartRef.current = null;
   }, []);
 
   const clear = useCallback(() => {
@@ -261,6 +285,7 @@ export function useSelection({
     setResizing(false);
     setSelecting(false);
     setResizeHandle(null);
+    resizeStartRef.current = null;
   }, []);
 
   const overlayRects = useMemo(() => {

@@ -54,6 +54,17 @@ import {
 } from '../capture-coordinator';
 
 export default function registerScreenshotIpcHandlers() {
+  // Tracks active preview assets per session, overlay sender, and source type
+  // so re-listing replaces only that overlay's old previews without evicting
+  // other displays' overlays or the other tab.
+  const sessionPreviewAssets = new Map<string, Set<string>>();
+
+  const previewKey = (
+    sessionId: string,
+    senderId: number | string,
+    type: 'window' | 'screen',
+  ) => `${sessionId}:${senderId}:${type}`;
+
   // The editor shows the failure but keeps whatever the user is editing.
   const sendCaptureFailure = async (
     session: CaptureSessionRef,
@@ -79,7 +90,16 @@ export default function registerScreenshotIpcHandlers() {
     }
     await hideWindowsForCapture();
     if (!isSessionCurrent(session)) return;
-    await prepareDisplaySnapshots(session.id);
+    try {
+      await prepareDisplaySnapshots(session.id);
+    } catch (error) {
+      if (isSessionCurrent(session)) {
+        await sendCaptureFailure(session, error).catch((sendError) =>
+          log.error('Failed to report capture failure:', sendError),
+        );
+      }
+      throw error;
+    }
     if (!isSessionCurrent(session)) return;
     enableScreenSaverMode();
     await createScreenshotOverlays();
@@ -115,7 +135,7 @@ export default function registerScreenshotIpcHandlers() {
   ipcMain.handle(
     'list-capture-sources',
     async (
-      _event,
+      event,
       args?: IpcInvokes['list-capture-sources']['req'],
     ): Promise<IpcInvokes['list-capture-sources']['res']> => {
       try {
@@ -123,21 +143,34 @@ export default function registerScreenshotIpcHandlers() {
         const session = getActiveSession();
         if (!session) return [];
         const requestType = sanitizeCaptureType(args);
+        const senderId = event?.sender?.id ?? 'default';
         const sources = await desktopCapturer.getSources({
           types: [requestType],
-          thumbnailSize: { width: 1024, height: 1024 },
+          thumbnailSize: { width: 640, height: 640 },
         });
+        if (!isSessionCurrent(session)) return [];
+
+        const key = previewKey(session.id, senderId, requestType);
+        const previousIds = sessionPreviewAssets.get(key);
+        if (previousIds && previousIds.size > 0) {
+          captureAssets.releaseWhere((asset) => previousIds.has(asset.assetId));
+        }
+        const nextIds = new Set<string>();
+        sessionPreviewAssets.set(key, nextIds);
+
         const preview = (image: NativeImage | null | undefined) => {
           if (!image || image.isEmpty()) return null;
           const { width, height } = image.getSize();
-          return captureAssets.add({
+          const { assetId } = captureAssets.add({
             sessionId: session.id,
             kind: 'preview',
             width,
             height,
             scaleFactor: 1,
             encode: () => image.toPNG(),
-          }).assetId;
+          });
+          nextIds.add(assetId);
+          return assetId;
         };
         // A live screen thumbnail would show this overlay, so a screen with
         // a session snapshot is previewed from the snapshot.
@@ -250,6 +283,10 @@ export default function registerScreenshotIpcHandlers() {
         beginCaptureSession(session.source, session.id),
       onSessionEnd: (session, outcome) => {
         releaseDisplaySnapshots();
+        const sessionPrefix = `${session.id}:`;
+        Array.from(sessionPreviewAssets.keys()).forEach((key) => {
+          if (key.startsWith(sessionPrefix)) sessionPreviewAssets.delete(key);
+        });
         // Overlay images go with the session; a capture only if it was
         // never delivered.
         captureAssets.releaseWhere(

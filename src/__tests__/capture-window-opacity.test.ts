@@ -136,6 +136,8 @@ class FakeWindow extends EventEmitter {
 
   readonly webContents = {
     isLoading: () => false,
+    isDestroyed: () => this.destroyed,
+    executeJavaScript: jest.fn(async () => ({ width: 800, height: 600 })),
     once: jest.fn(),
     on: jest.fn(),
     send: jest.fn(),
@@ -442,5 +444,179 @@ describe('capture sessions', () => {
     expect(overlays()).toHaveLength(1);
     expect(overlays()[0].options).toMatchObject({ frame: false });
     expect(overlays()[0].options).not.toHaveProperty('titleBarStyle');
+  });
+
+  it('keeps the editor hidden during window capture measurement and getSources', async () => {
+    const editor = shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+
+    let visibilityDuringMeasure: { visible: boolean; opacity: number } | null =
+      null;
+    let visibilityDuringGetSources: {
+      visible: boolean;
+      opacity: number;
+    } | null = null;
+
+    editor.webContents.executeJavaScript.mockImplementationOnce(async () => {
+      visibilityDuringMeasure = visibility(editor);
+      return { width: 800, height: 600 };
+    });
+    (desktopCapturer.getSources as jest.Mock).mockImplementationOnce(
+      async (options) => {
+        visibilityDuringGetSources = visibility(editor);
+        return sourcesShowing('target')(options);
+      },
+    );
+
+    expect(
+      await confirmCapture({ kind: 'window', sourceId: 'window:1:0' }),
+    ).toBe(true);
+
+    expect(visibilityDuringMeasure).toEqual(HIDDEN_TRANSPARENT);
+    expect(visibilityDuringGetSources).toEqual(HIDDEN_TRANSPARENT);
+    expect(visibility(editor)).toEqual(SHOWN_OPAQUE);
+    expect(lastCaptureResult(editor)).toMatchObject({
+      ok: true,
+      screenshot: { sourceId: 'window:1:0', isWindowCapture: true },
+    });
+  });
+
+  it('keeps the editor hidden during a failed window capture and restores it afterward', async () => {
+    const editor = shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+
+    let visibilityDuringGetSources: {
+      visible: boolean;
+      opacity: number;
+    } | null = null;
+    (desktopCapturer.getSources as jest.Mock).mockImplementationOnce(
+      async () => {
+        visibilityDuringGetSources = visibility(editor);
+        return [];
+      },
+    );
+
+    expect(
+      await confirmCapture({ kind: 'window', sourceId: 'window:1:0' }),
+    ).toBe(false);
+
+    expect(visibilityDuringGetSources).toEqual(HIDDEN_TRANSPARENT);
+    expect(visibility(editor)).toEqual(SHOWN_OPAQUE);
+    expect(lastCaptureResult(editor)).toMatchObject({
+      ok: false,
+      reason: 'source-unavailable',
+    });
+  });
+
+  it('registers zero preview assets if list-capture-sources resolves after session end', async () => {
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [, listSources] = (ipcMain.handle as jest.Mock).mock.calls.find(
+      ([channel]) => channel === 'list-capture-sources',
+    );
+
+    let resolveSources!: (value: unknown) => void;
+    (desktopCapturer.getSources as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSources = resolve;
+        }),
+    );
+
+    const pending = listSources({}, { type: 'window' });
+    expect(await cancelCapture('escape')).toBe(true);
+    expect(captureAssets.size()).toBe(0);
+
+    resolveSources([
+      {
+        id: 'window:1:0',
+        name: 'Stale Window',
+        display_id: '',
+        appIcon: fakeImage('icon', 32, 32),
+        thumbnail: fakeImage('thumb', 640, 480),
+      },
+    ]);
+
+    expect(await pending).toEqual([]);
+    expect(captureAssets.size()).toBe(0);
+  });
+
+  it('requests 640x640 previews and releases previous previews on re-list', async () => {
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [, listSources] = (ipcMain.handle as jest.Mock).mock.calls.find(
+      ([channel]) => channel === 'list-capture-sources',
+    );
+    (desktopCapturer.getSources as jest.Mock).mockClear();
+
+    const first: ListCaptureSourcesResponse = await listSources(
+      {},
+      { type: 'window' },
+    );
+    expect(desktopCapturer.getSources).toHaveBeenCalledWith({
+      types: ['window'],
+      thumbnailSize: { width: 640, height: 640 },
+    });
+    const firstId = first[0].thumbnailAssetId as string;
+    expect(captureAssets.get(firstId)).toBeDefined();
+    const sizeAfterFirst = captureAssets.size();
+
+    const second: ListCaptureSourcesResponse = await listSources(
+      {},
+      { type: 'window' },
+    );
+    const secondId = second[0].thumbnailAssetId as string;
+    expect(secondId).not.toBe(firstId);
+    expect(captureAssets.get(firstId)).toBeUndefined();
+    expect(captureAssets.get(secondId)).toBeDefined();
+    expect(captureAssets.size()).toBe(sizeAfterFirst);
+  });
+
+  it('scopes preview release per overlay sender so multi-monitor overlays do not evict each other', async () => {
+    shownEditor();
+    expect(await startCapture('hotkey')).toBe(true);
+    const [, listSources] = (ipcMain.handle as jest.Mock).mock.calls.find(
+      ([channel]) => channel === 'list-capture-sources',
+    );
+    const senderA = { sender: { id: 101 } };
+    const senderB = { sender: { id: 202 } };
+
+    const firstA: ListCaptureSourcesResponse = await listSources(senderA, {
+      type: 'window',
+    });
+    const firstB: ListCaptureSourcesResponse = await listSources(senderB, {
+      type: 'window',
+    });
+    const aFirstId = firstA[0].thumbnailAssetId as string;
+    const bFirstId = firstB[0].thumbnailAssetId as string;
+
+    // Sender B listing must not release sender A's cached preview assets.
+    expect(captureAssets.get(aFirstId)).toBeDefined();
+    expect(captureAssets.get(bFirstId)).toBeDefined();
+
+    // Sender A re-listing releases only sender A's prior previews, keeping sender B's intact.
+    const secondA: ListCaptureSourcesResponse = await listSources(senderA, {
+      type: 'window',
+    });
+    const aSecondId = secondA[0].thumbnailAssetId as string;
+    expect(captureAssets.get(aFirstId)).toBeUndefined();
+    expect(captureAssets.get(aSecondId)).toBeDefined();
+    expect(captureAssets.get(bFirstId)).toBeDefined();
+  });
+
+  it('aborts prepareSession with screen-permission failure and zero overlays when getSources throws', async () => {
+    const editor = shownEditor();
+    (desktopCapturer.getSources as jest.Mock).mockRejectedValueOnce(
+      new Error('Failed to get sources'),
+    );
+
+    expect(await startCapture('hotkey')).toBe(false);
+
+    expect(overlays()).toHaveLength(0);
+    expect(visibility(editor)).toEqual(SHOWN_OPAQUE);
+    expect(lastCaptureResult(editor)).toMatchObject({
+      ok: false,
+      reason: 'screen-permission',
+    });
   });
 });

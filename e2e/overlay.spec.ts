@@ -21,6 +21,12 @@ import {
 
 const SCREEN_FIXTURE = path.join(__dirname, 'fixtures', 'ocr-pii-screen.png');
 
+const stubOverlaySources = (packaged: PackagedApp) =>
+  stubCaptureSources(packaged, {
+    screenPng: SCREEN_FIXTURE,
+    window: { noise: { width: 64, height: 64 } },
+  });
+
 const SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
 
@@ -85,6 +91,7 @@ test.describe('capture overlays', () => {
   test('every overlay has Cancel and Escape closes them all', async () => {
     const current = packaged as PackagedApp;
     await stubScreenAccess(current, 'granted');
+    await stubOverlaySources(current);
     const overlays = await openOverlays(current);
 
     await Promise.all(
@@ -101,6 +108,7 @@ test.describe('capture overlays', () => {
   test('Preferences is hidden during a capture and comes back after', async () => {
     const current = packaged as PackagedApp;
     await stubScreenAccess(current, 'granted');
+    await stubOverlaySources(current);
     await current.window.evaluate(() =>
       window.electron.ipcRenderer.invoke('open-preferences-window', undefined),
     );
@@ -174,6 +182,7 @@ test.describe('capture overlays', () => {
   test('an empty selection is reported, not ignored', async () => {
     const current = packaged as PackagedApp;
     await stubScreenAccess(current, 'granted');
+    await stubOverlaySources(current);
     const [overlay] = await openOverlays(current);
 
     // A click without a drag leaves a zero-size selection.

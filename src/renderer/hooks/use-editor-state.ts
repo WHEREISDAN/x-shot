@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import type { EditorPreferences } from '../../shared/ipc-types';
 import { createRendererLogger } from '../utils/logger';
 
 const logger = createRendererLogger('use-editor-state');
@@ -221,33 +222,78 @@ export function useEditorState(): UseEditorStateResult {
   );
   const [undoStack, setUndoStack] = useState<EditorShape[][]>([]);
   const [redoStack, setRedoStack] = useState<EditorShape[][]>([]);
-  // The newest shapes, including an update React has not rendered yet, so
-  // several changes in one event build on each other.
+  // The newest shapes and selection, including updates React has not rendered
+  // yet, so several changes in one event build on each other.
   const latestShapesRef = useRef(shapes);
   latestShapesRef.current = shapes;
+  const selectedShapeIdRef = useRef(selectedShapeId);
+  selectedShapeIdRef.current = selectedShapeId;
   // Shapes from before the open gesture, or null when none is open.
   const gestureBaseRef = useRef<EditorShape[] | null>(null);
 
-  // Load editor preferences on initialization
+  const lastEditorPrefsRef = useRef<EditorPreferences | null>(null);
+
+  // Load editor preferences and keep changed defaults in sync across windows.
   useEffect(() => {
+    const api = window?.electron?.ipcRenderer;
+    if (!api) return () => {};
+    let active = true;
+
+    const applyEditorPrefs = (
+      editor: EditorPreferences | undefined,
+      initial: boolean,
+    ) => {
+      if (!active || !editor) return;
+      const prev = lastEditorPrefsRef.current;
+      if (
+        initial ||
+        !prev ||
+        editor.defaultStrokeColor !== prev.defaultStrokeColor
+      ) {
+        setStrokeColor(editor.defaultStrokeColor);
+      }
+      if (
+        initial ||
+        !prev ||
+        editor.defaultFillColor !== prev.defaultFillColor
+      ) {
+        setFillColor(editor.defaultFillColor);
+      }
+      if (
+        initial ||
+        !prev ||
+        editor.defaultStrokeWidth !== prev.defaultStrokeWidth
+      ) {
+        setStrokeWidth(editor.defaultStrokeWidth);
+      }
+      if (initial || !prev || editor.defaultTextSize !== prev.defaultTextSize) {
+        setTextSize(editor.defaultTextSize);
+      }
+      lastEditorPrefsRef.current = editor;
+    };
+
     const loadPreferences = async () => {
       try {
-        const api = window?.electron?.ipcRenderer;
-        if (!api) return;
-
         const preferences = await api.invoke('get-preferences', {});
-        if (preferences?.editor) {
-          setStrokeColor(preferences.editor.defaultStrokeColor);
-          setFillColor(preferences.editor.defaultFillColor);
-          setStrokeWidth(preferences.editor.defaultStrokeWidth);
-          setTextSize(preferences.editor.defaultTextSize);
-        }
+        applyEditorPrefs(preferences?.editor, true);
       } catch (error) {
         logger.warn('Failed to load editor preferences', error);
       }
     };
 
     loadPreferences();
+
+    const unsubscribe =
+      typeof api.on === 'function'
+        ? api.on('preferences-changed', (next) =>
+            applyEditorPrefs(next?.editor, false),
+          )
+        : undefined;
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const pushUndo = useCallback((entry: EditorShape[]) => {
@@ -289,6 +335,7 @@ export function useEditorState(): UseEditorStateResult {
   const commitProvisionalShape = useCallback(() => {
     if (!provisionalShape) return;
     snapshot([...latestShapesRef.current, provisionalShape]);
+    selectedShapeIdRef.current = provisionalShape.id;
     setSelectedShapeId(provisionalShape.id);
     setProvisionalShape(null);
   }, [provisionalShape, snapshot]);
@@ -298,14 +345,16 @@ export function useEditorState(): UseEditorStateResult {
   }, []);
 
   const selectShape = useCallback((id: string | null) => {
+    selectedShapeIdRef.current = id;
     setSelectedShapeId(id);
   }, []);
 
   const moveSelectedShapeBy = useCallback(
     (dx: number, dy: number) => {
-      if (!selectedShapeId) return;
-      const next = shapes.map((s) => {
-        if (s.id !== selectedShapeId) return s;
+      const targetId = selectedShapeIdRef.current;
+      if (!targetId) return;
+      const next = latestShapesRef.current.map((s) => {
+        if (s.id !== targetId) return s;
         switch (s.type) {
           case 'rect':
             return { ...s, x: s.x + dx, y: s.y + dy } as RectShape;
@@ -333,66 +382,87 @@ export function useEditorState(): UseEditorStateResult {
       });
       snapshot(next);
     },
-    [selectedShapeId, shapes, snapshot],
+    [snapshot],
   );
 
   const updateTextShape = useCallback(
     (id: string, text: string) => {
-      const next = shapes.map((s) =>
+      const next = latestShapesRef.current.map((s) =>
         s.id === id && s.type === 'text' ? ({ ...s, text } as TextShape) : s,
       );
       snapshot(next);
     },
-    [shapes, snapshot],
+    [snapshot],
   );
 
   const deleteSelectedShape = useCallback(() => {
-    if (!selectedShapeId) return;
-    const next = shapes.filter((s) => s.id !== selectedShapeId);
+    const targetId = selectedShapeIdRef.current;
+    if (!targetId) return;
+    const next = latestShapesRef.current.filter((s) => s.id !== targetId);
     snapshot(next);
+    selectedShapeIdRef.current = null;
     setSelectedShapeId(null);
-  }, [selectedShapeId, shapes, snapshot]);
+  }, [snapshot]);
 
   const deleteShapesByIds = useCallback(
     (ids: string[]) => {
       if (ids.length === 0) return;
       const idSet = new Set(ids);
-      const next = shapes.filter((s) => !idSet.has(s.id));
-      if (next.length === shapes.length) return;
+      const { current } = latestShapesRef;
+      const next = current.filter((s) => !idSet.has(s.id));
+      if (next.length === current.length) return;
       snapshot(next);
-      if (selectedShapeId && idSet.has(selectedShapeId))
+      if (selectedShapeIdRef.current && idSet.has(selectedShapeIdRef.current)) {
+        selectedShapeIdRef.current = null;
         setSelectedShapeId(null);
+      }
     },
-    [shapes, snapshot, selectedShapeId],
+    [snapshot],
   );
 
   const deleteShapeById = useCallback(
     (id: string) => {
-      const next = shapes.filter((s) => s.id !== id);
+      const next = latestShapesRef.current.filter((s) => s.id !== id);
       snapshot(next);
-      if (selectedShapeId === id) setSelectedShapeId(null);
+      if (selectedShapeIdRef.current === id) {
+        selectedShapeIdRef.current = null;
+        setSelectedShapeId(null);
+      }
     },
-    [selectedShapeId, shapes, snapshot],
+    [snapshot],
   );
 
   const clearAllShapes = useCallback(() => {
-    if (shapes.length === 0) return;
+    if (latestShapesRef.current.length === 0) return;
     snapshot([]);
+    selectedShapeIdRef.current = null;
     setSelectedShapeId(null);
-  }, [shapes, snapshot]);
+  }, [snapshot]);
 
   const updateShape = useCallback(
     (id: string, updater: (shape: EditorShape) => EditorShape) => {
-      const idx = shapes.findIndex((s) => s.id === id);
+      const { current } = latestShapesRef;
+      const idx = current.findIndex((s) => s.id === id);
       if (idx < 0) return;
-      const next = shapes.map((s, i) => (i === idx ? updater(s) : s));
+      const next = current.map((s, i) => (i === idx ? updater(s) : s));
       snapshot(next);
     },
-    [shapes, snapshot],
+    [snapshot],
   );
+
+  const syncSelectionAfterRestore = useCallback((restored: EditorShape[]) => {
+    if (
+      selectedShapeIdRef.current &&
+      !restored.some((s) => s.id === selectedShapeIdRef.current)
+    ) {
+      selectedShapeIdRef.current = null;
+      setSelectedShapeId(null);
+    }
+  }, []);
 
   const undo = useCallback(() => {
     if (undoStack.length === 0) return;
+    gestureBaseRef.current = null;
     const previous = undoStack[undoStack.length - 1];
     setUndoStack(undoStack.slice(0, -1));
     setRedoStack(
@@ -400,10 +470,12 @@ export function useEditorState(): UseEditorStateResult {
     );
     latestShapesRef.current = previous;
     setShapes(previous);
-  }, [undoStack, redoStack]);
+    syncSelectionAfterRestore(previous);
+  }, [undoStack, redoStack, syncSelectionAfterRestore]);
 
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
+    gestureBaseRef.current = null;
     const [next, ...rest] = redoStack;
     setRedoStack(rest);
     setUndoStack(
@@ -411,33 +483,34 @@ export function useEditorState(): UseEditorStateResult {
     );
     latestShapesRef.current = next;
     setShapes(next);
-  }, [undoStack, redoStack]);
+    syncSelectionAfterRestore(next);
+  }, [undoStack, redoStack, syncSelectionAfterRestore]);
 
   const hasUndo = useMemo(() => undoStack.length > 0, [undoStack.length]);
   const hasRedo = useMemo(() => redoStack.length > 0, [redoStack.length]);
 
   const getShapeById = useCallback(
-    (id: string) => shapes.find((s) => s.id === id),
-    [shapes],
+    (id: string) => latestShapesRef.current.find((s) => s.id === id),
+    [],
   );
 
   const addShape = useCallback(
     (shape: EditorShape) => {
-      const next = [...shapes, shape];
+      const next = [...latestShapesRef.current, shape];
       snapshot(next);
       return shape.id;
     },
-    [shapes, snapshot],
+    [snapshot],
   );
 
   const addShapes = useCallback(
     (newShapes: EditorShape[]) => {
       if (newShapes.length === 0) return [];
-      const next = [...shapes, ...newShapes];
+      const next = [...latestShapesRef.current, ...newShapes];
       snapshot(next);
       return newShapes.map((s) => s.id);
     },
-    [shapes, snapshot],
+    [snapshot],
   );
 
   return {
